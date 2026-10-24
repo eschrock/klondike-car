@@ -843,7 +843,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     lumberAllowanceUsd += t.allowanceBf * price.usd;
     lumberAltUsd += r2(t.purchaseBf) * (alt ?? price).usd;
     return line('Lumber', t.board, `White oak ${t.board}, rough, whole boards`, r2(t.purchaseBf), price, {
-      notes: `By width: ${widthListText(t).join('; ')} (widths rounded up to a whole inch; a wider board rips down). Priced as whole boards: ${t.summary.join('; ')}. ${r2(t.netBf)} bf net on nominal thickness (${r2(t.allowanceBf)} bf with the ${Math.round(oak.wasteAllowance * 100)}% waste allowance); the boards come to ${r2(t.plannedBf)} bf.` +
+      notes: `By width: ${widthListText(t).join('; ')} (widths rounded up to a whole inch; a wider board rips down; yards sell random lengths, so buy boards at least as long as the longest piece that add up to the total). Priced as 6, 8 or 10 ft boards, an estimate: ${t.summary.join('; ')}. ${r2(t.netBf)} bf net on nominal thickness (${r2(t.allowanceBf)} bf with the ${Math.round(oak.wasteAllowance * 100)}% waste allowance); the boards come to ${r2(t.plannedBf)} bf.` +
         (alt ? ` Alternative: ${alt.source} $${alt.usd.toFixed(2)}/bf = $${(r2(t.purchaseBf) * alt.usd).toFixed(2)} for these boards (${alt.url}).` : '') +
         (t.layersIn ? ` The face-laminated parts (${laminatedText(oak.laminated, built)}) take their layers from the stocked boards.` : ''),
     });

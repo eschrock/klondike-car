@@ -158,7 +158,7 @@ Everything is a pure function of the parameters.
 |---|---|
 | Verify | the checks to make on real parts before ordering (wheel hub, sheet thickness, axle steel, and so on); with removable knees, a refit check (flat seat, a slip of paper at the joint, the backing plate in its recess, no washer pressed into the oak, bolts after the first outing, the chock cord eye, wobble) |
 | Cut list | the actual cuts (an edge-glued panel is its boards, then the glue-up), rough sizes rounded up to 1/8", laminate allowances, board yields, a bandsaw resaw check; each plywood row says whether the laser cuts it (plain rectangles are sawn) |
-| Nesting | plywood layouts on 4' × 8' sheets; the oak shopping list as linear feet by whole-inch width per thickness (any board at least that wide rips down), then the whole-board plan the BOM prices and the board feet |
+| Nesting | plywood layouts on 4' × 8' sheets; the oak shopping list as linear feet by whole-inch width per thickness, with the longest piece (any board at least that wide and long enough rips down; yards sell random lengths), then the whole-board plan the BOM prices and the board feet |
 | BOM | priced lines with vendor links, quoted vs estimated, Standard vs Extreme; the price research is in docs/price-research/price-research-2026-10.md and docs/price-research/price-research-standard-2026-10.md |
 | Shaper | SVG files for every flat part (outside, inside, pocket, guide conventions) |
 | Laser | full-size SVGs for the XTool S1 (D-86): the shaped thin parts that fit the bed (the webs), the lid's lettering (engrave only) and every 1/4" template and pattern, with red cuts and blue scores (plain rectangles are sawn); the rail form's counter-form is here |

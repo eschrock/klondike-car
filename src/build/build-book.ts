@@ -218,7 +218,7 @@ function boardsSection(d: BuildData): string {
   const out: string[] = ['<p class="muted small">Take this page to the lumber yard. Boards are rough, kiln-dried white oak; ask for the thick boards first, then see what is left for the thinner parts. Widths shown are minimums.</p>'];
   out.push('<h3>Oak to buy, by width</h3>');
   out.push(table([['Thickness'], ['Width and linear feet']], o.thicknesses.map((t) => [td(`<strong>${esc(t.board)}</strong>`), td(widthListText(t).map(esc).join('<br>'))])));
-  out.push('<p class="muted small">Each piece\'s width is rounded up to a whole inch and the lengths include the saw kerf. Take any board at least that wide: a wider board rips down to the narrower widths. Add a little for defects.</p>');
+  out.push('<p class="muted small">Each piece\'s width is rounded up to a whole inch and the lengths include the saw kerf. Take any board at least that wide and at least as long as the longest piece; boards of any length add up to the total, and a wider board rips down to the narrower widths. Add a little for defects.</p>');
   out.push('<h3>Oak boards to buy</h3>');
   out.push(table([['Thickness'], ['Buy'], ['Net bf', 'num'], [`+${Math.round(o.wasteAllowance * 100)}%`, 'num'], ['Boards bf', 'num']], [
     ...o.thicknesses.map((t) => [td(`<strong>${esc(t.board)}</strong><div class="muted small">${t.pieces} pieces</div>`), td(t.summary.map(esc).join('<br>')), td(num(t.netBf), 'num'), td(num(t.allowanceBf), 'num'), td(num(t.plannedBf), 'num')]),

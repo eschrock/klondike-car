@@ -103,8 +103,8 @@ describe('bom', () => {
     expect(lumber).toEqual(['4/4', '5/4', '8/4']); // Peach State has no 6/4; 8/4 is bought for the solid blocks, and the 2-1/8" parts are face-laminated from 4/4 (D-70, D-79, D-95)
   });
 
-  it('leads each lumber note with the linear feet by whole-inch width, then the whole boards it is priced on', () => {
-    for (const l of b.sections.find((x) => x.id === 'lumber')!.lines) expect(l.notes, l.key).toMatch(/^By width: (\d+" wide: [\d.]+ ft(; )?)+ \(widths rounded up to a whole inch; a wider board rips down\)\. Priced as whole boards: /);
+  it('leads each lumber note with the linear feet by whole-inch width, then the 6, 8 or 10 ft boards it is priced on', () => {
+    for (const l of b.sections.find((x) => x.id === 'lumber')!.lines) expect(l.notes, l.key).toMatch(/^By width: (\d+" wide: [\d.]+ ft in all, longest piece [\d.]+ ft(; )?)+ \(widths rounded up to a whole inch; a wider board rips down; yards sell random lengths, so buy boards at least as long as the longest piece that add up to the total\)\. Priced as 6, 8 or 10 ft boards, an estimate: /);
   });
 
   it('prices the oak as the whole boards to buy (nesting.ts), not net x 1.3', () => {

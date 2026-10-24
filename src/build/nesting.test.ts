@@ -286,6 +286,16 @@ describe('oakBoardFeet: the shopping list by width (linear feet at a whole-inch 
       expect(t.byWidth.reduce((a, q) => a + q.linearFt, 0), t.board).toBeGreaterThanOrEqual(need - 1e-9);
     }
   });
+  it('gives the longest piece at each width, never more than the total and at least as long as every piece in the line', () => {
+    for (const t of o.thicknesses) {
+      const cuts = t.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts));
+      for (const q of t.byWidth) {
+        expect(q.longestFt, `${t.board} ${q.widthIn}`).toBeLessThanOrEqual(q.linearFt);
+        const lens = [...cuts.filter((c) => Math.ceil(c.widthIn - 1e-9) === q.widthIn).map((c) => c.lengthIn), ...t.resawBoards.filter((r) => r.widthIn === q.widthIn).map((r) => r.lengthIn)];
+        expect(q.longestFt * 12, `${t.board} ${q.widthIn}`).toBeGreaterThanOrEqual(Math.max(...lens) - 1e-9);
+      }
+    }
+  });
   it('rounds 2-1/2" and 2-3/4" pieces up to a 3" line', () => {
     const t = o.thicknesses.find((q) => q.board === '4/4')!;
     const ws = t.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts.map((c) => c.widthIn))).filter((w) => w > 2 && w <= 3);
