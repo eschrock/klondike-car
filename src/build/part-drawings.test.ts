@@ -290,13 +290,13 @@ describe('part drawings read their sizes from the cut list (readability round 2)
   it('uses the cut list\'s sizes for the final size: T × W × L for a board, thick × tall × across for the brake knee block, a diameter for a rod', () => {
     const knee = sheets.find((s) => s.partNo === 'brake-knee')!;
     const fin = cl.finished.find((f) => f.ids.includes('brake-knee-L'))!;
-    expect(fin.finalText).toBe('2-1/8" thick × 9-1/2" tall × 3-11/16" across');
+    expect(fin.finalText).toBe('2-1/8" thick × 9-9/16" tall × 3-11/16" across'); // (2026-10-24: 13 mm deck as bought; 9-1/2" tall under the 12 mm deck)
     expect(head(knee.svg)).toContain(`final ${fin.finalText}`);
     expect(head(knee.svg)).not.toContain(`${fin.finalText} (T × W × L`);
     for (const s of sheets) {
       const f = cl.finished.find((q) => q.ids.includes(s.partId));
       if (f && f.partNo !== 'brake-knee' && f.partNo !== 'sign-standoff') expect(head(s.svg), s.partId).toContain(`final ${f.finalText} (T × W × L`);
-      if (f && f.partNo === 'sign-standoff') expect(head(s.svg), s.partId).toMatch(/final 3\/4(&quot;|")? dia × 1\/4/); // a disc reads as a diameter and a thickness
+      if (f && f.partNo === 'sign-standoff') expect(head(s.svg), s.partId).toMatch(/final 3\/4(&quot;|")? dia × 9\/32/); // a disc reads as a diameter and a thickness (2026-10-24: 9/32" with the 5 mm white oak sides as bought; 1/4" before)
     }
     const d = partDims(parts.find((x) => x.id === 'brake-knee-L')!, parts, p);
     expect(d.size).toBe(fin.finalText);

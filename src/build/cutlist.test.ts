@@ -7,7 +7,7 @@ import { assemblySteps } from './assembly';
 import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, boardFinishedIn, finalFrac, roughFrac, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, fabText, glueUpName, groupedName, isBuilt, ribFillers, ribFillerSource, sizeText, laminationText, makeLanes, packLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
 
 // D-72/D-73: this file's resaw and sheet numbers (0.234 in bands in 0.359 -> 3/8 in rough pools, the 4 mm sheet, the tube) are the 4 mm okoume design: PRE_D72. The white oak / rod cut list is in d72.test.ts.
-const p = { ...defaultParams(), ...PRE_D72 };
+const p = { ...defaultParams(), ...PRE_D72, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472 }; // the 4 mm okoume and the 12 mm deck of PRE_D72 (2026-10-24: the defaults are now the 5 mm white oak plywood and 13 mm deck as bought)
 const parts = buildModel(p);
 const cl = cutList(parts, p);
 
@@ -636,7 +636,7 @@ describe('review round: names, the tall knee block, the rib fillers', () => {
 
   it('writes the brake knee block as thick x tall x across, and its grain by layer', () => {
     const knee = dc.finished.find((f) => f.partNo === 'brake-knee')!;
-    expect(knee.finalText).toBe('2-1/8" thick \u00d7 9-1/2" tall \u00d7 3-11/16" across');
+    expect(knee.finalText).toBe('2-1/8" thick \u00d7 9-9/16" tall \u00d7 3-11/16" across'); // (2026-10-24: 13 mm deck as bought; 9-1/2" tall under the 12 mm deck)
     expect(knee.grainWord).toBe('face layers: grain upright; center layer: across the sled');
     const g = dc.glueUps.find((x) => x.partNo === 'brake-knee')!;
     expect(g.finalText).toBe(knee.finalText);

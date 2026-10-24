@@ -13,7 +13,7 @@ import { runChecks, type AnalysisCheck } from './index';
 import { bumpCases, cornerWeightLb, peakVertical } from './bump';
 import { PRE_D71, PRE_D60, PRE_D66 } from '../test-fixtures';
 
-const defaults = { ...defaultParams(), ...PRE_D71, ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5 }; // the hand-calc fixture keeps the 35.5 in tracks of 3c-3 (D-58 narrowed them to 34 1/2 front, 32 rear; the new tracks are tested in track-d58.test.ts); the 7/8 in hangers are the D-58 default
+const defaults = { ...defaultParams(), ...PRE_D71, ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, deckPlyIn: 0.472 }; // 2026-10-24: the hand calculations are for the 12 mm deck (the defaults are the 13 mm sheet as bought); the hand-calc fixture keeps the 35.5 in tracks of 3c-3 (D-58 narrowed them to 34 1/2 front, 32 rear; the new tracks are tested in track-d58.test.ts); the 7/8 in hangers are the D-58 default
 const cs = runChecks(defaults, { includeTruck: false });
 const byId = (c: AnalysisCheck[], id: string) => c.find((x) => x.id === id)!;
 const det = (c: AnalysisCheck[], id: string, name: string) => byId(c, id).details!.find((d) => d.name.includes(name))!;

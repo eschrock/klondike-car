@@ -11,14 +11,15 @@ import { PRE_D71, PRE_D60, PRE_D66, PRE_D72 } from '../test-fixtures';
 
 const OLD = { frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 };
 // D-66 moved the defaults on (30 in tracks, the derived taper); this file records D-58, so its "new" design is the D-58 default restored with PRE_D66. The D-66 numbers are in d66.test.ts.
-const run = (q: Partial<Params>) => runChecks({ ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66, ...PRE_D60, ...q } as Params, { includeTruck: false });
+// 2026-10-24: the D-58 study is for the 12 mm deck (the defaults are the 13 mm sheet as bought)
+const run = (q: Partial<Params>) => runChecks({ ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66, ...PRE_D60, deckPlyIn: 0.472, ...q } as Params, { includeTruck: false });
 const row = (cs: ReturnType<typeof run>, id: string) => cs.find((c) => c.id === id)!;
 const nw = run({});
 const old = run(OLD);
 
 describe('the D-58 tracks', () => {
   it('front 34 1/2 in, rear 32 in; the front is the least track (rounded to 1/8 in) that keeps the tire 3/4 in off the body at the 20 degree lock', () => {
-    const p = { ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66, ...PRE_D60 } as Params;
+    const p = { ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66, ...PRE_D60, deckPlyIn: 0.472 } as Params;
     expect(p.frontTrackIn).toBe(34.5);
     expect(p.rearTrackIn).toBe(32);
     const sg = steerGeometry(p);
@@ -75,7 +76,7 @@ describe('tip angles before (35.5 / 35.5 in) and after (34 1/2 / 32 in), the str
 
 describe('truck fit, brake and overall width at the new tracks', () => {
   const fitAt = (q: Partial<Params>) => {
-    const p = { ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66, ...PRE_D60, ...q } as Params;
+    const p = { ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66, ...PRE_D60, deckPlyIn: 0.472, ...q } as Params;
     return checkTruckFit(p, (v) => buildModel(p, v));
   };
   it('the overall width falls 40.5 -> 39.5 in (set by the front axle ends: front track + tire + stub ends); the sled still fits beside in the bed in all three configurations', () => {

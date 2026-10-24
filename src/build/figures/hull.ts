@@ -699,7 +699,7 @@ function endClose(which: 'transom' | 'bulkhead'): FigFn {
     const tenon = railJ?.type === 'mortise-tenon' ? /^([\d/]+) × ([\d/]+)/.exec(railJ.size ?? '') : null;
     // A Domino mortise on the face: the cutter's width across, about 3/4 of an inch tall (drawing only).
     const tw = tenon ? parseInchText(tenon[1]) : 0.24, th = tenon ? parseInchText(tenon[2]) : 0.8;
-    const backers = rear ? c.parts.filter((q) => /^transom-backer-[LR]$/.test(q.id)).map((q) => worldAABB(q)) : [];
+    const backers = rear ? c.parts.filter((q) => /^transom-backer-[LR]\d$/.test(q.id)).map((q) => worldAABB(q)) : [];
     const name = rear ? 'transom' : 'bulkhead';
     const yRo = S.yo, yRi = yRo - c.p.railThicknessIn;
     const rz0 = rear ? L.railTop - c.p.railDepthIn : L.railTop - L.railDepthF;
@@ -749,11 +749,12 @@ function endClose(which: 'transom' | 'bulkhead'): FigFn {
     const sockPts = rear && sock ? jointPts(sock, (j) => j.type === 'bolt' && j.to === 'transom-rear').map((q) => [q[1], q[2]] as Vec2) : [];
     for (const [u, v] of sockPts) for (const s of [1, -1]) { F.circle(A(s * u, v), 5.5, { fill: '#fff', stroke: MAT.steel.stroke, width: 1.6 }); F.circle(A(s * u, v), 2.2, { fill: MAT.steel.stroke }); }
     const sTop = sockPts.slice().sort((a, b) => a[1] - b[1])[0];
-    if (sTop) F.label(A(sTop[0] + 0.15, sTop[1]), [xr, yA(sTop[1]) + 4], ['handle-socket screw holes;', 'T-nuts in the backers'], T12);
+    if (sTop) F.label(A(sTop[0] + 0.15, sTop[1]), [xr, yA(sTop[1]) + 4], ['handle-socket screw holes;', 'T-nuts in the backer blocks'], T12);
     F.label(A(-(S.yo + S.yWo) / 2, (S.gunBot + S.sheer) / 2), [xl, yA(S.sheer) + 24], ['band ends butt the', 'face here (dark)'], T12);
     F.label(A(webU * 0.55, L.deckBot + deckDadoH / 2), [xr, yA(rz0) - 14], ['deck dado: the deck', `edge goes ${f16(into)} in`], T12);
     F.label(A(webU, (L.chineBot + S.sheer) / 2 + (rear ? 0 : 0.6)), [xr, yA((L.chineBot + S.sheer) / 2) + 20], ['web dado, open at the', 'edge: the web end', 'goes in from there'], T12);
-    if (backers[0]) F.label(A(backers[0].min[1] * Math.sign(backers[0].min[1]) - 0.3, (backers[0].min[2] + backers[0].max[2]) / 2 + 3), [xr, yA(vMax) - 10], ['backers, glued on', 'the day before'], T12);
+    const bkHi = backers.filter((b) => b.min[1] > 0).sort((a, b) => b.min[2] - a.min[2])[0]; // the upper block on the +y side, nearest the label
+    if (bkHi) F.label(A((bkHi.min[1] + bkHi.max[1]) / 2, (bkHi.min[2] + bkHi.max[2]) / 2), [xr, yA(vMax) - 10], ['backer blocks, glued', 'on the day before'], T12);
     else if (hold) F.label(A(0, Math.max(...hold.map((q) => q[1]))), [A(0, 0)[0], yA(vMax) + 30], 'lift hand-hold: keep epoxy out of it', { ...T12, anchor: 'middle' });
     F.text([A(0, 0)[0], yA(Math.min(vMin, rz0)) - 8], 'bottom edge (up, for now)', { size: 11.5, anchor: 'middle', color: MUTED });
 

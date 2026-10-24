@@ -7,7 +7,8 @@
  * records are added in joinery.ts after all parts exist.
  */
 import { SIGN_PROUD_IN, HULL_STEP, STEP, box, cylinder, frac64, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx, stainless } from './build-utils';
-import { handleGeometry } from './handle';
+import { handleGeometry, socketScrewZ } from './handle';
+import { SCREW_DIA_IN } from './rear-mount';
 import { transformPoint } from './bounds';
 import { innerHalfWidth, samples, sideSlopeAt, sideTopAt, type Layout } from './layout';
 import { planWallGeometry } from './plan-wall';
@@ -18,6 +19,40 @@ import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './t
 
 /** Shop clearance: the rear transom backers stop this far in from the inner band's face, so a band end standing a hair proud does not hold the transom off (round 2 fix). */
 export const TRANSOM_BACKER_BAND_CLEAR_IN = 1 / 16;
+
+/** One rear-transom backer block, on the +y side (mirror for the right): its |y| and z ranges, and the T-nut and cord-eye centers it carries ([|y|, z]). */
+export interface TransomBackerBlock { n: 1 | 2; pos: 'low' | 'high'; y: [number, number]; z: [number, number]; tnut: Vec2; eye: Vec2 }
+
+/**
+ * The two backer blocks behind each push-handle socket (Eric 2026-10-24; grain across the sled, like the transom): the lower one carries the low socket screw's T-nut and the
+ * stop-cord eye, the upper one the high T-nut and the shock-cord eye. Each is sized to its two fasteners with transomBackerMarginIn of oak past the T-nut's flange counterbore and the
+ * #10 eye's shank, edges on the 1/16" grid; the outer edge stops TRANSOM_BACKER_BAND_CLEAR_IN in from the inner band, the lower block stays 1/2" above the deck (the deck-dado corner
+ * fillet) and the upper one ends at the socket top. Blocks that would meet are one block.
+ */
+export function transomBackerBlocks(p: Params, L: Layout): TransomBackerBlock[] {
+  const hg = handleGeometry(p, L);
+  const bg = brakeGeometry(p, L);
+  const [zLo, zHi] = socketScrewZ(hg);
+  const rT = p.handleTNutFlangeDiaIn / 2 + p.transomBackerMarginIn;
+  const rE = SCREW_DIA_IN[10] / 2 + p.transomBackerMarginIn;
+  const down = (v: number): number => Math.floor(v * 16 + 1e-9) / 16;
+  const up = (v: number): number => Math.ceil(v * 16 - 1e-9) / 16;
+  const yOut = L.hwC - TRANSOM_BACKER_BAND_CLEAR_IN;
+  const eyeY = bg.stop.S[1];
+  const yIn = Math.max(0.5, down(Math.min(hg.yPost - rT, hg.yPost - hg.socketY / 2, eyeY - rE)));
+  const tnLo: Vec2 = [hg.yPost, zLo], tnHi: Vec2 = [hg.yPost, zHi];
+  const eyeLo: Vec2 = [eyeY, bg.stop.S[2]], eyeHi: Vec2 = [bg.bungee.A[1], bg.bungee.A[2]];
+  const low: TransomBackerBlock = {
+    n: 1, pos: 'low', y: [yIn, yOut], tnut: tnLo, eye: eyeLo,
+    z: [Math.max(L.deckTop + 0.5, down(Math.min(zLo - rT, eyeLo[1] - rE))), up(Math.max(zLo + rT, eyeLo[1] + rE))],
+  };
+  const high: TransomBackerBlock = {
+    n: 2, pos: 'high', y: [yIn, yOut], tnut: tnHi, eye: eyeHi,
+    z: [down(Math.min(zHi - rT, eyeHi[1] - rE)), Math.min(hg.zTop, up(Math.max(zHi + rT, eyeHi[1] + rE)))],
+  };
+  if (high.z[0] <= low.z[1]) return [{ ...low, z: [low.z[0], high.z[1]] }];
+  return [low, high];
+}
 
 /** Cosmetic sampling of the curved outlines (D-44): transom crown, rounded corners; the sloped sides and the curl. */
 const CROWN_SEGMENTS = 16;
@@ -440,19 +475,19 @@ export function buildBody(ctx: Ctx): Part[] {
       notes: `${tT}" oak, edge-glued from boards (the cut list gives how many; no board is ${(zt - zb).toFixed(0)}" wide; keep the glue lines clear of the slot), as tall as the rear side of the sheer (${p.sideHeightRearIn}" above the deck, D-54, D-57). Lift hand-hold ${rs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${rs.barIn}" of oak above it; routed 3/8" roundovers both faces. The top edge is a ${p.transomCrownIn}" crown (arc) with ${p.transomCornerRadiusIn}" rounded corners (D-44). Deck dado ${dd}" deep × ${(L.ply + ds).toFixed(3)}" (deck + ${ds}" clearance) on the front face, run out at each end into the dados for the side panels (one continuous pocket at each corner, D-35, D-37); those web dados start at the chine and run out through the top edge (open at the top, so no thin wall is left at the rounded corner); the dados are vented with ${p.ventHoleIn}" holes through the transom (4 holes: bung or epoxy-fill them after the glue-up). `
         + `THE TRANSOM IS CLOSED FIRST (M4, 3c S1; the bulkhead follows with a second batch): it slides in X onto the deck edge, both web ends (in their dados) and the rail tenons, and the chine and gunwale band ends butt against it with an epoxy fillet (a 0.234" band takes no Domino) in one glue-up of about a dozen joints (use 120-minute slow epoxy, rehearse twice); the corner backers and the handle-socket holes are done on the bench first.`,
     }));
-    // Backers behind the handle sockets (build review S13, D-43): the bolts pull on them from the outside. Their outer edge stands TRANSOM_BACKER_BAND_CLEAR_IN in from the inner band's
-    // face (round 2 fix: flush, the band end and the backer edge met in one line and the backer could not slide past a proud band).
-    const hg = handleGeometry(p, L);
+    // Backers behind the handle sockets: the socket screws pull on them from the outside. Each side has TWO short blocks with the grain ACROSS the sled, like the transom, so the
+    // full-face glue line moves with it (Eric 2026-10-24: one tall upright backer was cross-grain to the transom and could crack it along the deck dado). The lower block carries the
+    // low T-nut and the stop-cord eye, the upper one the high T-nut and the shock-cord eye; nothing between. transomBackerBlocks sizes them.
     const bkT = p.blockingThickIn;
     const bkGlue = p.weatherSpec === WEATHER_SPEC.extreme ? 'epoxy' : 'Titebond III'; // D-73
     for (const { s, tag } of SIDES) {
-      const yHi = L.hwC - TRANSOM_BACKER_BAND_CLEAR_IN, yLo = Math.max(0.5, hg.yPost - hg.socketY / 2 - 0.5);
-      const bz0 = Math.max(L.deckTop + 0.5, hg.zBot - 0.5), bz1 = hg.zTop;
-      parts.push(box(ctx, {
-        id: `transom-backer-${tag}`, partNo: 'transom-backer', name: `Rear transom backer ${tag}`, group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'z',
-        ...span([rearTx, rearTx + bkT], [s * yLo, s * yHi].sort((x, y) => x - y) as [number, number], [bz0, bz1]),
-        notes: `${bkT}" oak backer glued (${bkGlue}, full face) to the INSIDE of the rear transom behind the push-handle socket: the socket bolts (1/4-20 button-head screws into ${stainless(p)} T-nuts set in it, no nuts behind the box) pull on ${tT + bkT}" of oak instead of ${tT}". Glue it on the bench before the transom goes on; a rear storage box starts ${bkT}" farther forward (Layout.rearLane).`,
-      }));
+      for (const b of transomBackerBlocks(p, L)) {
+        parts.push(box(ctx, {
+          id: `transom-backer-${tag}${b.n}`, partNo: `transom-backer-${b.pos}`, name: `${b.pos === 'low' ? 'Lower' : 'Upper'} rear transom backer ${tag}`, group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'y',
+          ...span([rearTx, rearTx + bkT], [s * b.y[0], s * b.y[1]].sort((x, y) => x - y) as [number, number], b.z),
+          notes: `${bkT}" oak block, grain ACROSS the sled like the transom's, glued (${bkGlue}, full face) to the INSIDE of the rear transom behind the ${b.pos === 'low' ? 'lower' : 'upper'} push-handle socket screw: that screw (a 1/4-20 button-head into a ${stainless(p)} T-nut set in this block, flange counterbored flush with its inside face; no nut behind the box) pulls on ${tT + bkT}" of oak instead of ${tT}", and the ${b.pos === 'low' ? 'stop' : 'shock'}-cord screw eye's pilot runs on into it. Sized to those two with ${frac64(p.transomBackerMarginIn)}" of oak around the T-nut counterbore; its outer edge stands ${frac64(TRANSOM_BACKER_BAND_CLEAR_IN)}" in from the inner band. Glue it on the bench before the transom goes on; a rear storage box starts ${bkT}" farther forward (Layout.rearLane).`,
+        }));
+      }
     }
   }
 

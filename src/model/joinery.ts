@@ -360,12 +360,11 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   void deck;
 
   // ── Rear transom backers (S13): glued to the transom (D-73 glue rule), the handle-socket screws pass through both into T-nuts ──
-  for (const { s, tag } of SIDES) {
-    const bk = byId.get(`transom-backer-${tag}`);
+  for (const { tag } of SIDES) for (const n of [1, 2]) {
+    const bk = byId.get(`transom-backer-${tag}${n}`);
     if (!bk) continue;
     const bb = worldAABB(bk);
-    add({ a: bk.id, b: 'transom-rear', typeA: 'glue', size: `${p.weatherSpec === WEATHER_SPEC.extreme ? 'epoxy' : 'Titebond III'}, full face (D-73); the handle-socket screws pass through both into T-nuts set in the backer`, pts: [[bb.min[0], (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2]], noteA: 'Glue on the bench before the transom goes on.' });
-    void s;
+    add({ a: bk.id, b: 'transom-rear', typeA: 'glue', size: `${p.weatherSpec === WEATHER_SPEC.extreme ? 'epoxy' : 'Titebond III'}, full face (D-73), grain matched to the transom's (both across the sled); the handle-socket screw passes through both into a T-nut set in the block`, pts: [[bb.min[0], (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2]], noteA: 'Glue on the bench before the transom goes on.' });
   }
 
   // ── Scuppers through the chine sandwich (M7, D-62): inner band, web and outer band ──

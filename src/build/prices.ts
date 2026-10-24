@@ -148,6 +148,7 @@ export const isOakStocked = (nominal: string): boolean => OAK_STOCKED[nominal] !
  * Plywood, full 4 x 8 sheets. The key of the THIN sheet is its `ThinSheet.priceKey` (D-80: 'baltic-6mm', 'okoume-6mm', 'white-oak-1/4', 'baltic-3mm'); the 12 mm deck sheet is keyed '12 mm'.
  * The BOM prices the thin-sheet line by the priceKey of the sheet in effect, never by its thickness class.
  */
+const PLY12: Price = quoted(90, 'sheet', WOODYARD, '4 x 8 ft x 1/2" marine plywood; the deck and, from its offcut, the seat back. VERIFY the species is okoume: meranti marine ply is about 30% heavier (+3 lb on the deck). May be sourced elsewhere: ask Peach State or Randall Brothers (Atlanta) for 12 mm okoume BS 1088 (Boulter lists it at $150, 9 ply)', WOODYARD_PLYWOOD_URL);
 export const PLYWOOD_PRICE: Record<string, Price> = {
   'baltic-6mm': foundCP(49, 'sheet', 'Peach State Lumber, Kennesaw GA, plus tax', PEACH_STATE_PLYWOOD_URL, '4 x 8 ft x 6 mm (1/4") Baltic birch from the plywood list ("last updated 8/9"; the list gives no ply count and no glue type): the Standard thin sheet (sides, box, lid, signs). Count the plies at an edge (5 expected; the side-web margin assumes 5-ply), measure 6.0 to 6.5 mm, and ask the glue (probably interior, fine garage-kept once sealed). Toledo Plywood lists 4 x 8 BB/BB at $34.95 with exterior glue but delivers only within 80 miles'),
   'okoume-6mm': withAlts(
@@ -159,7 +160,9 @@ export const PLYWOOD_PRICE: Record<string, Price> = {
     quoted(113, 'sheet', WOODYARD, '4 x 8 ft x 1/4" white oak plywood (about 5.3 mm; interior / Type II glue, fine garage-kept once sealed; MEASURE the sheet); the sides, box, lid and signs if chosen', WOODYARD_PLYWOOD_URL),
     [foundCP(75, 'sheet', 'Peach State Lumber, Kennesaw GA', PEACH_STATE_PLYWOOD_URL, '1/4" B-2 white oak veneer-core plywood, 4 x 8 ft (the veneer grade is lower: look at the face before buying)')]),
   'baltic-3mm': quoted(40, 'sheet', WOODYARD, '5 x 5 ft x 1/8" (3 mm) Baltic birch plywood (exterior glue); the sides, box, lid and signs if chosen. Every part must nest on a 60 x 60 in sheet', WOODYARD_PLYWOOD_URL),
-  '12 mm': quoted(90, 'sheet', WOODYARD, '4 x 8 ft x 1/2" marine plywood; the deck and, from its offcut, the seat back. VERIFY the species is okoume: meranti marine ply is about 30% heavier (+3 lb on the deck). May be sourced elsewhere: ask Peach State or Randall Brothers (Atlanta) for 12 mm okoume BS 1088 (Boulter lists it at $150, 9 ply)', WOODYARD_PLYWOOD_URL),
+  '12 mm': PLY12,
+  // D-96: the deck sheet Eric bought calipers 13 mm; priced as the 12 mm sheet (same supplier class) until he gives the receipt.
+  '13 mm': { ...PLY12, note: '4 x 8 ft marine okoume, 13 mm as bought (D-96); priced as the 12 mm sheet. The deck and, from its offcut, the seat back.' },
 };
 
 // ── Metal stock ($/ft, cut to length) ─────────────────────────────────────────
@@ -300,12 +303,6 @@ export const modelCostNote = (partNo: string, spec: SpecName = 'extreme'): Model
 // ── Fasteners (316 stainless unless noted), matched on the BOM label ──────────
 
 const FAST = 'Fastener supplier (McMaster-Carr / Fastenal class), 316 stainless';
-/**
- * The seat-back hinge inserts (#10-32 x 5/16 in an 11/32 in blind hole, 1/8 in of back veneer left in the 12 mm panel, D-63): no wood insert that short is sold (search 2026-10-24).
- * The line keeps a placeholder price and asks Eric to choose; the sign inserts (in the oak ribs, which have room) are the 0.512 in flush insert below.
- */
-const SEAT_INSERT_SEARCH = 'NO #10-32 insert for wood 11/32" long or shorter was found (search 2026-10-24): the shortest are McMaster 92105A103 zinc, 0.391" installed, 9/32" drill, and Bolt Depot flanged #23860, 0.394"; the knife-thread hardwood inserts are 1/2" (McMaster 90016A021 brass, 95807A430 18-8). Short knurled mold-in inserts exist (PEM STKC-032-10, 300-series stainless, 0.312"; RAF 1032X312MT brass, 0.312") but no retail price was found. A 0.512" insert cannot go in the 15/32" panel';
-const SEAT_INSERT_DECISION = 'Seat-back hinge inserts: no #10-32 wood insert fits the 11/32" blind hole in the 12 mm panel. Choose: a short knurled stainless insert epoxied in (PEM STKC-032-10, 0.312", price on quote), #10-32 sex bolts (binding barrels) through the panel with their flat heads on the back face, or a 1/4" oak pad glued under each leaf so the 0.512" flush insert fits (about +0.05 lb)';
 const BD_SCREW_8 = 'https://boltdepot.com/Wood_screws_Phillips_flat_head_Stainless_steel_316_8';
 const BD_SCREW_10 = 'https://boltdepot.com/Wood_screws_Phillips_flat_head_Stainless_steel_316_10';
 const BD_SCREW_6 = 'https://boltdepot.com/Product-Details?product=16354';
@@ -338,7 +335,6 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /Heat-set insert M3/, price: foundPackCP(50, 5.95, 'ea', 'Adafruit', 'https://www.adafruit.com/product/4255', 'brass heat-set inserts for plastic, M3 x 4 mm, pack of 50 (product 4255; the M3 x 3 mm is out of stock), for the printed ASA clips') },
   { match: /Heat-set insert M4/, price: foundPackCP(50, 11.99, 'ea', 'Prusa (CNC Kitchen design)', 'https://www.prusa3d.com/product/heat-set-inserts-m4-standard-50-pcs/', 'brass heat-set inserts M4 standard, pack of 50: the smallest M4 pack found, for the printed ASA clips') },
   { match: /Heat-set insert/, price: packed(50, 12, 'ea', FAST, 'brass heat-set insert for the printed ASA clips; pack of 50') },
-  { match: /threaded insert #10-32 x 5\/16"/, price: withAlts(notFound(packed(25, 22, 'ea', FAST, `PLACEHOLDER: 316 epoxy-in insert, pack of 25, for the seat-back hinges. ${SEAT_INSERT_SEARCH}`)), [], SEAT_INSERT_DECISION) },
   { match: /threaded insert/, price: notFound(packed(25, 22, 'ea', FAST, '316 epoxy-in insert; pack of 25 (E-Z Lok stainless kit $31.49 at Tractor Supply is titled 10-24; brass 25-pack $13.52 on eBay). The 2026-10-14 research found only #10-32 pronged T-nuts (Bolts and Nuts 18-8, $1.05 each), not a screw-in insert for hardwood; Bolt Depot\'s stainless hardwood insert is #10-24')) },
   { match: /button-head cap screw 1\/4-20/, price: found(1.05, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Socket_button_head_Stainless_steel_316_1_4-20', '316 socket button head cap screw 1/4-20 x 2" (21746), $1.05 each, 34.94 per 50; the x 1-1/4" length was not read separately', true) },
   { match: /Thumb-knob/, price: withAlts(notFound(est(2.75, 'ea', FAST, 'thumb-knob screw #10-32 for the thin-sheet web: no 316 one found (316 thumb screws are not made in #10-32 as far as the research could see)')), [
@@ -349,6 +345,7 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /machine screw #8-32 x 2"/, price: foundCP(0.28, 'ea', BOLT_DEPOT, `${BD_PRODUCT}16902`, '316 Phillips flat-head machine screw #8-32 x 2" (#16902), $0.28 each (the pan head, #16819, is $0.37)') },
   { match: /fender washer #8/, price: foundCP(0.21, 'ea', BOLT_DEPOT, `${BD_PRODUCT}19564`, '316 fender washer #8 x 3/4" (#19564), $0.21 each') },
   { match: /lock nut #8-32/, price: foundCP(0.16, 'ea', BOLT_DEPOT, `${BD_PRODUCT}16005`, '316 hex nylon-insert lock nut #8-32 (#16005), $0.16 each (Bolts and Nuts $0.20)') },
+  { match: /flat-head machine screw #10-32 x 1\/2"/, price: est(0.14, 'ea', BOLT_DEPOT, 'ESTIMATE: 316 Phillips flat-head machine screw #10-32 x 1/2" for the seat-back hinges (into the 0.512" inserts), scaled from the 3/8" (#16938, $0.12 each); not read') },
   { match: /flat-head machine screw #10-32 x 3\/8"/, price: foundCP(0.12, 'ea', BOLT_DEPOT, `${BD_PRODUCT}16938`, '316 Phillips flat-head machine screw #10-32 x 3/8" (#16938), $0.12 each (Bolts and Nuts $0.18)') },
   { match: /machine screw/, price: packed(50, 11, 'ea', FAST, 'pack of 50') },
   // Wood screws: Bolt Depot 316 Phillips flat-head, by the 100 (the lengths the research read; the rest keep their estimate).
@@ -559,9 +556,7 @@ export const FASTENER_PRICE_STANDARD: Array<{ match: RegExp; price: Price }> = [
     { ...packed(2, 1.57, 'ea', 'Home Depot (Everbilt)', 'ESTIMATE (Standard spec): Everbilt 1/4" x 2" stainless screw eye, 2-piece pack at $1.57 (model 824351; 4 packs for the 8). The size is eye diameter x length, not a #10 shank, and the grade is not stated: check the package for 304 and that the eye takes the brake cord tie'), url: 'https://www.homedepot.com/s/stainless%20steel%20screw%20eye' },
     [withEach({ ...packed(20, 12.82, 'ea', BOLT_DEPOT, 'Bolt Depot 18-8 screw eye, trade size 8 (1/2" I.D., #15513): $1.08 each or 12.82 per 20; the smallest at Bolt Depot, bigger than a #10'), url: `${BD_PRODUCT}15513` }, 1.08),
      gap(foundPack(1, 2.79, 'ea', 'Ace Hardware (National Hardware)', 'https://www.acehardware.com/departments/hardware/screw-eyes/5700620', 'National Hardware stainless 5/8" screw eye, 75 lb, $2.79 each [S] (this listing and 5700554 were not told apart)', true), 'a 5/8" eye, not the #10 size')]) },
-  // The seat-back hinge inserts: nothing that short is sold (SEAT_INSERT_SEARCH): a placeholder at the flanged softwood insert's price, and a decision for Eric.
-  { match: /threaded insert #10-32 x 5\/16"/, price: withAlts(withEach(packed(100, 18.71, 'ea', BOLT_DEPOT, `PLACEHOLDER (Standard spec), priced like the Bolt Depot zinc softwood insert (0.25 each or 18.71 per 100); do not order it for this hole. ${SEAT_INSERT_SEARCH}`), 0.25), [], SEAT_INSERT_DECISION) },
-  // The sign inserts in the oak ribs: a flush (no-flange) insert, since it is turned in through the bore in the web; its length is the signInsertLenIn param.
+  // The sign inserts in the oak ribs (a flush, no-flange insert, turned in through the bore in the web; signInsertLenIn) and, since Eric 2026-10-24, the seat-back hinge inserts (seatBackInsertLenIn, in the panel and its oak pad): one line.
   { match: /threaded insert #10-32 x 33\/64"/, price: withEach({ ...quoted(14.71 / 100, 'ea', BOLT_DEPOT, 'Bolt Depot #23869, flush-mount softwood insert, Allen drive, die-cast zinc alloy, #10-32 x 0.512" (13 mm), no flange: $0.20 each, 14.71 per 100 (135.00 per 1,000). The drill size is not on the listing (McMaster lists 9/32" for its zinc 0.516"): drill a scrap of oak first. Zinc is fine in a dry garage [Bolt Depot, 2026-10-24; price read via search, confirm on the page]', `${BD_PRODUCT}23869`), packQty: 100, packUsd: 14.71 }, 0.2) },
   { match: /threaded insert/, price: withAlts(
     withEach({ ...packed(100, 18.71, 'ea', BOLT_DEPOT, 'ESTIMATE (Standard spec): zinc flanged softwood threaded insert, #10-32, Allen drive (#23861), 0.25 each or 18.71 per 100. The research (2026-10-12, and again 2026-10-14) found NO 18-8 or zinc #10-32 screw-in insert for hardwood at a readable price, only pronged T-nuts (Bolts and Nuts zinc #10-32 x 5/16 3-prong T-nut $0.24, hammer-in) and an 18-8 hardwood insert in #8-32 x 3/8" at 4.78 each; this one is a softwood type, 0.512" long (the model asks for 3/8" and 5/16"). Fine in a dry garage; confirm the drill size'), url: `${BD_PRODUCT}23861` }, 0.25),
@@ -578,6 +573,7 @@ export const FASTENER_PRICE_STANDARD: Array<{ match: RegExp; price: Price }> = [
   { match: /machine screw #8-32 x 2"/, price: bd18(1352, 'ea', '18-8 Phillips pan-head machine screw #8-32 x 2" (#1352); the flat head (#1254) is $0.27', 0.3, 100, 20.06) },
   { match: /lock nut #8-32/, price: bd18(2551, 'ea', '18-8 hex nylon-insert lock nut #8-32 (#2551)', 0.1, 100, 6.93) },
   { match: /fender washer #8/, price: bd18(7147, 'ea', '18-8 fender washer #8 x 3/4" (#7147)', 0.15, 100, 9.86) },
+  { match: /flat-head machine screw #10-32 x 1\/2"/, price: est(0.15, 'ea', BOLT_DEPOT, 'ESTIMATE: 18-8 Phillips flat-head machine screw #10-32 x 1/2" for the seat-back hinges (into the 0.512" inserts), scaled from the 3/8" (#1267, $0.13 each); not read') },
   { match: /flat-head machine screw #10-32 x 3\/8"/, price: foundCP(0.13, 'ea', BOLT_DEPOT, `${BD_PRODUCT}1267`, '18-8 Phillips flat-head machine screw #10-32 x 3/8" (#1267), $0.13 each') },
   { match: /^18-8 screw M3 x 8 mm$/, price: foundCP(0.05, 'ea', BOLT_DEPOT, `${BD_PRODUCT}6831`, '18-8 Phillips pan-head machine screw M3 x 0.5 x 8 mm (#6831), $0.05 each') },
   { match: /^18-8 screw M4 x 10 mm$/, price: foundCP(0.08, 'ea', BOLT_DEPOT, `${BD_PRODUCT}5167`, '18-8 Phillips pan-head machine screw M4 x 0.7 x 10 mm (#5167), $0.08 each') },

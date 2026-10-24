@@ -2,7 +2,7 @@
  * Ply sheets (D-62, D-68, D-80; Eric 2026-10-12): one FULL 4 x 8 ft sheet each of the 6 mm thin sheet and 12 mm okoume. Each side web is one piece; every ply blank fits its sheet.
  */
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, defaultParams } from '../params';
+import { PARAM_DEFS, THIN_SHEET, defaultParams } from '../params';
 import { buildModel } from '.';
 import { NEST_KERF_IN, allPlyBlanks, isPly, isThinPly, plySheets, thinPlyBlanks } from './sheets';
 
@@ -31,9 +31,10 @@ describe('full 4 x 8 ft sheets of 4 mm and 12 mm okoume (local supplier), one-pi
     for (const b of blanks) expect(b.fits, `${b.id} ${b.l.toFixed(2)} x ${b.w.toFixed(2)}`).toBe(true);
     expect(thinPlyBlanks(parts).length).toBe(blanks.length - 2); // not the deck, not the 12 mm seat back
   });
-  it('rough sheet count at the default: one sheet of 4 mm and ONE 12 mm sheet (the deck, with the 12 mm frameless seat back cut from its offcut); no 6 mm sheet at all (D-62)', () => {
+  it('rough sheet count at the default: one thin sheet and ONE deck sheet (the deck, with the frameless seat back cut from its offcut, D-62)', () => {
     const n = plySheets(allPlyBlanks(parts));
-    expect(n).toEqual({ 6: 1, 12: 1 }); // D-80: the thin sheet is the 6 mm Baltic birch by default (and the 6 mm okoume under Extreme); { 5: 1, 12: 1 } with the 1/4 in white oak plywood, { 3: 1, 12: 1 } with the 3 mm Baltic birch
+    expect(n).toEqual({ 5: 1, 13: 1 }); // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought; the seat back comes from the deck offcut, so it is 13 mm too.) D-80: { 6: 1, 12: 1 } on the follow-the-weather 6 mm sheet and the 12 mm deck, { 3: 1, ... } with the 3 mm Baltic birch
+    expect(plySheets(allPlyBlanks(buildModel({ ...defaults, thinSheetMaterial: THIN_SHEET.followWeather, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472 })))).toEqual({ 6: 1, 12: 1 }); // (2026-10-24: D-96/97/98) the old sheets set explicitly
     expect(isThinPly(parts.find((x) => x.id === 'seat-back-panel')!)).toBe(false);
     expect(NEST_KERF_IN).toBeGreaterThan(0);
   });

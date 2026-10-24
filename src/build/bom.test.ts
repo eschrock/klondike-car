@@ -10,7 +10,7 @@ import { oakBoardFeet } from './nesting';
 import { EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, EPOXY_PUMPS_USC_2TO1, FASTENER_PRICE, FASTENER_PRICE_STANDARD, FILLERS, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_PRICE_PER_FT, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, OWNED_NOTE, PEACH_STATE_LUMBER_URL, PLYWOOD_PRICE, PURCHASED_PRICE, PURCHASED_PRICE_STANDARD, RESEARCH_DATE, RESEARCH_DATE_COST_PASS, SEARCH_READ_NOTE, TITEBOND_OWNED, type Price } from './prices';
 
 // D-72/D-73: this file's counts and prices are the 4 mm okoume / 4×20 Domino / DOM tube configuration (PRE_D72); the BOM for the white oak plywood and the solid rod follows the weather spec (bom.ts).
-const p = { ...defaultParams(), ...PRE_D72, weatherSpec: 1 }; // the EXTREME weather spec (316, Sipo, epoxy everywhere, marine varnish); the Standard spec is tested in weather-spec.test.ts
+const p = { ...defaultParams(), ...PRE_D72, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472, weatherSpec: 1 }; // the EXTREME weather spec (316, Sipo, epoxy everywhere, marine varnish); the Standard spec is tested in weather-spec.test.ts. PRE_D72's 4 mm okoume goes with its 12 mm deck (2026-10-24: the default deck is the 13 mm sheet as bought).
 const parts = buildModel(p);
 const b = bom(parts, p);
 const cl = cutList(parts, p);
@@ -215,7 +215,7 @@ describe('bom', () => {
     expect(qtyOf(f, /shaft collar/)).toBe(wheels);
     expect(qtyOf(f, /cotter pin 5\/32" x 1-1\/2"/)).toBe(wheels); // the 0.156" cross hole takes a 5/32 pin
     expect(qtyOf(f, /end plug for 5\/8" OD/)).toBe(6); // three axle tubes, two ends each
-    expect(qtyOf(f, /machine screw #10-32 x 3\/8"/)).toBe(6); // seat hinge leaves into the six inserts
+    expect(qtyOf(f, /machine screw #10-32 x 1\/2"/)).toBe(6); // seat hinge leaves into the six 0.512" inserts (Eric 2026-10-24: 1/2", so they cannot bottom)
     expect(qtyOf(f, /stainless rod 1\/4" x 2-1\/4"/)).toBe(2); // handlebow pins (1/4": 7/32" walls in the post)
     expect(qtyOf(f, /wood screw #6 x 3-1\/2"/)).toBe(0); // D-72: one rail-to-chine length now
     expect(qtyOf(f, /wood screw #6 x 2-1\/2"/)).toBe(0); // D-82: no stainless #6 that long exists

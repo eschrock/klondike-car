@@ -72,7 +72,7 @@ describe('storage lid swing in 3D (D-89, D-93)', () => {
     const get = (id: string) => worldAABB(parts.find((x) => x.id === id)!);
     expect(get('storage-rim-end-aft').min[0]).toBeCloseTo(g.x0 + defaults.storageLidAftGapIn, 9);
     expect(get('storage-rim-side-L').min[0]).toBeCloseTo(g.lidX0, 9);
-    for (const id of ['transom-backer-L', 'storage-turn-block-L']) expect(get('storage-rim-end-aft').min[0] - get(id).max[0], id).toBeGreaterThanOrEqual(defaults.storageLidAftGapIn - 1e-9);
+    for (const id of ['transom-backer-L1', 'storage-turn-block-L']) expect(get('storage-rim-end-aft').min[0] - get(id).max[0], id).toBeGreaterThanOrEqual(defaults.storageLidAftGapIn - 1e-9);
     const gk = get('storage-gasket-end-aft'), rim = get('storage-rim-end-aft'), coam = get('storage-coaming-end-aft');
     expect(gk.min[0]).toBeGreaterThanOrEqual(rim.min[0] - 1e-9); // under the aft rail
     expect(gk.max[0]).toBeLessThanOrEqual(rim.max[0] + 1e-9);

@@ -201,7 +201,7 @@ describe('the kingpin stack (D-56, D-58)', () => {
       expect(b.max[2]).toBeCloseTo(L.deckBot, 9);
       expect(b.min[2]).toBeCloseTo(L.deckBot - defaults.railDepthIn, 9);
     }
-    expect(L.railDepthF).toBeCloseTo(1.8655, 4); // D-71: 1/16 in deeper on the 5/8 in tube (1.803 at 3/4 in). D-62: the beam top is 0.05 in lower, the tube stands 0.05 proud and the clearance over the tube is beamRailClearIn 0.35 (was 0.4) for the catalog 1/4 in roll pad
+    expect(L.railDepthF).toBeCloseTo(1.8255, 4); // 2026-10-24: 1.8255 under the 13 mm deck as bought (1.8655 under the 12 mm; the clearance over the tube is unchanged). D-71: 1/16 in deeper on the 5/8 in tube (1.803 at 3/4 in). D-62: the beam top is 0.05 in lower, the tube stands 0.05 proud and the clearance over the tube is beamRailClearIn 0.35 (was 0.4) for the catalog 1/4 in roll pad
     expect(L.railStepX).toBeLessThan(kx);
     expect(L.deckBot - L.railDepthF - L.beamF.top - defaults.axleProudIn).toBeCloseTo(defaults.beamRailClearIn, 6); // the rail bottom over the tube top
   });

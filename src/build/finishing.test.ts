@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
-import { defaultParams } from '../params';
+import { THIN_SHEET, defaultParams } from '../params';
 import type { Part } from '../model/types';
 import { finalFrac } from './units';
 import { containers, DOMINO_FLOZ, endGrainAreaIn2, EPOXY_BUY_RE, EPOXY_COVERAGE, EPOXY_RESIN_PARTS, EPOXY_SYSTEM, epoxyTimeFactor, finishAreas, finishMaterial, finishingSchedule, GLUE_FLOZ_PER_FT2, glueEpoxyFlOz, glueJointEstimates, showRuleOf, surfaceAreaIn2, VARNISH_COVERAGE } from './finishing';
 
-// D-73: this file's numbers are the EXTREME weather spec (epoxy saturation coat on all the plywood, marine varnish, 4 mm okoume thin sheet); the Standard spec is tested in weather-spec.test.ts.
-const p = { ...defaultParams(), weatherSpec: 1 };
+// D-73: this file's numbers are the EXTREME weather spec (epoxy saturation coat on all the plywood, marine varnish, an okoume thin sheet); the Standard spec is tested in weather-spec.test.ts.
+// The thin sheet follows the weather here (D-80: 6 mm okoume under Extreme); the default is now the 5 mm white oak plywood as bought in both specs (2026-10-24).
+const p = { ...defaultParams(), weatherSpec: 1, thinSheetMaterial: THIN_SHEET.followWeather };
 const parts = buildModel(p);
 const sched = finishingSchedule(parts, p);
 
@@ -108,7 +109,7 @@ describe('finishing areas', () => {
     expect(a.detail['storage-side-L'].showFraction).toBe(0.5);
     expect(a.detail['joist-2'].showFt2).toBe(0);
     expect(a.detail['rail-L'].showFt2).toBe(0);
-    expect(a.detail['transom-backer-L'].showFt2).toBe(0);
+    expect(a.detail['transom-backer-L1'].showFt2).toBe(0);
     expect(a.detail['side-L-gunwale'].hiddenFt2).toBe(0);
     // The web: outer face shows, inner face is hidden below the deck: between 0.5 and 1.
     expect(a.detail['side-L-web'].showFraction).toBeGreaterThan(0.5);

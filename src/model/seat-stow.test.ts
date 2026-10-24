@@ -35,7 +35,7 @@ const kit = installed.filter((x) => isStowedKitPart(x.id));
 describe('the seat kit (D-57)', () => {
   it('is the frameless 12 mm back panel (D-62), the pad, the cushion and the two latch pins; the wedges are fixed stop blocks now, no knobs, no plugs, no insert backers', () => {
     expect(kit.map((x) => x.id).sort()).toEqual([
-      'seat-back-pad', 'seat-back-panel', 'seat-cushion', 'seat-pin-L', 'seat-pin-R',
+      'seat-back-pad', 'seat-back-panel', 'seat-back-panel-pad-L', 'seat-back-panel-pad-R', 'seat-cushion', 'seat-pin-L', 'seat-pin-R', // the oak insert pads (Eric 2026-10-24) are glued to the panel and flip with it
     ]);
     expect(installed.some((x) => /^(seat-knob|seat-plug|storage-backer)/.test(x.id))).toBe(false);
     expect(get(installed, 'seat-wedge-L').removable).toBeFalsy();
@@ -170,7 +170,7 @@ describe('the flat (stowed) view state', () => {
     expect(st.max[2] - st.min[2]).toBeCloseTo(defaults.seatBackThickIn, 1);
     expect(st.min[2]).toBeCloseTo(L.deckTop, 6); // on the deck
     expect(st.min[0]).toBeGreaterThan(L.seat.Pr[0] - 1);
-    expect(plan.flat.zTop - L.deckTop).toBeCloseTo(defaults.seatBackThickIn, 1);
+    expect(plan.flat.zTop - L.deckTop).toBeCloseTo(defaults.seatBackThickIn + defaults.seatBackInsertPadThickIn, 6); // the highest point is the oak insert pad on the (now upward) back face, at the hinge end (Eric 2026-10-24)
     // the knuckle P stays where it is: the flipped back pivots about it
     const P2 = transformPoint(M, L.seat.P);
     expect(P2[0]).toBeCloseTo(L.seat.P[0], 9);

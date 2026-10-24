@@ -4,7 +4,7 @@
  * and the materials sourcing notes.
  */
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, axleGrooveDepthIn, defaultParams, handleInsertion, resolveParams, validateParams } from './params';
+import { PARAM_DEFS, THIN_SHEET, axleGrooveDepthIn, defaultParams, handleInsertion, resolveParams, validateParams } from './params';
 import { buildModel } from './model';
 import { computeLayout } from './model/layout';
 import { handleGeometry } from './model/handle';
@@ -93,13 +93,18 @@ describe('M2: one bridge plate per station, the tube 0.05 in proud', () => {
 
 describe('N-1: the 4 mm side web row', () => {
   it('passes with margin for the lean / kick and the cargo pressure, uses the tallest unsupported free web, and has teeth (a 100 lbf kick on a 6 in patch fails it)', () => {
-    const c = row('side-web');
+    // 2026-10-24: the row's behavior on the 6 mm Baltic birch web it was tuned on (follow the weather, Standard; 12 mm deck); the bought 5 mm combi-core white oak is marginal, below
+    const p6 = { ...defaults, thinSheetMaterial: THIN_SHEET.followWeather, deckPlyIn: 0.472 };
+    const c = runChecks(p6, { includeTruck: false }).find((x) => x.id === 'side-web')!;
     expect(c.group).toBe('Structure');
     expect(c.status).toBe('pass');
     expect(c.util!).toBeLessThan(0.9);
     expect(c.details!.some((d) => /kick/.test(d.name))).toBe(true);
     expect(c.details!.some((d) => /cargo pressure/.test(d.name))).toBe(true);
-    const hard = runChecks({ ...defaults, sideKickLbf: 150 }, { includeTruck: false }).find((x) => x.id === 'side-web')!;
+    // at the defaults (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought) the web is marginal, never failing
+    expect(row('side-web').status).toBe('marginal');
+    expect(row('side-web').util!).toBeLessThan(1);
+    const hard = runChecks({ ...p6, sideKickLbf: 150 }, { includeTruck: false }).find((x) => x.id === 'side-web')!;
     expect(hard.util!).toBeGreaterThan(c.util!);
     expect(hard.util!).toBeCloseTo(c.util! * 3, 1);
   });
@@ -117,10 +122,10 @@ describe('S-5: the cargo load-height rule', () => {
     expect(c.details![1].value).toBeGreaterThan(13);
     expect(c.details![1].value).toBeLessThan(14.5); // 13.9 in
     expect(c.how).toMatch(/keep the CENTER of the load under 10 in/);
-    expect(c.how).toMatch(/reaches its 35° limit at 15\.[1-6] in/);
-    expect(c.how).toMatch(/at 10 in 40\.[5-9]°/);
-    expect(c.how).toMatch(/at 18 in 32\.[4-9]°/);
-    expect(c.how).toMatch(/at 24 in 28\.[1-5]°/);
+    expect(c.how).toMatch(/reaches its 35° limit at 15\.[5-9] in/); // 15.7 in (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought); 15.1-15.6 before
+    expect(c.how).toMatch(/at 10 in (40\.[7-9]|41\.[0-3])°/); // 41.0 (2026-10-24, as bought); 40.5-40.9 before
+    expect(c.how).toMatch(/at 18 in 32\.[6-9]°/); // 32.9 (2026-10-24, as bought)
+    expect(c.how).toMatch(/at 24 in 28\.[3-8]°/); // 28.6 (2026-10-24, as bought); 28.1-28.5 before
   });
   it('the Simple view cargo card says it in plain words (D-66: 10 in above the floor; D-67: it tips at about 15 in)', () => {
     const t = cargoText(cargoCapacity(defaults));
@@ -182,7 +187,7 @@ describe('M3 / S11 / materials', () => {
   it('S4 (revised at D-63, 3c-8): the seat-back latch pin is a 1-1/2 in spring-detent pin and BOTH holes are blind with a detent groove (stop block upright, backer pad flat)', () => {
     expect(get('seat-pin-L').material).toMatch(/1-1\/2"/);
     expect(get('seat-wedge-L').joints!.find((j) => j.type === 'pin')!.size).toMatch(/detent groove/);
-    expect(get('seat-hinge-backer-L').joints!.find((j) => j.type === 'pin')!.size).toMatch(/blind hole 0\.625" deep/);
+    expect(get('seat-hinge-backer-L').joints!.find((j) => j.type === 'pin')!.size).toMatch(/blind hole 0\.5625" deep/); // 2026-10-24: 13 mm deck as bought (0.625 in under the 12 mm deck)
     expect(get('seat-hinge-backer-L').notes).toMatch(/BUTTS/);
   });
 });

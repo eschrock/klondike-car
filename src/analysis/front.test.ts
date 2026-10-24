@@ -23,7 +23,7 @@ import { PRE_D71, PRE_D60, PRE_D66 } from '../test-fixtures';
 import { catenaryLowZ, chainHang, chainKeeper, chainSweep } from '../model/chain-keeper';
 
 const RAD = Math.PI / 180;
-const defaults = { ...defaultParams(), ...PRE_D71, ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, cargoPayloadLb: 250 }; // the 3c-3 hand-calc fixture (35.5 in tracks, 250 lb cargo); D-58 narrowed the tracks, cargo is 200 lb; the new defaults are in the rows below and track-d58.test.ts
+const defaults = { ...defaultParams(), ...PRE_D71, ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, cargoPayloadLb: 250, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472 }; // 2026-10-24: the hand calculations are for the 12 mm deck (the defaults are the 13 mm sheet as bought); the 3c-3 hand-calc fixture (35.5 in tracks, 250 lb cargo); D-58 narrowed the tracks, cargo is 200 lb; the new defaults are in the rows below and track-d58.test.ts
 const mkCtx = (q: Partial<Params> = {}): Ctx => {
   const p = resolveParams({ ...defaults, ...q } as Params);
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }), buildModel(p, { rider: 'none', cargo: false, seat: 'stowed' }));
@@ -108,7 +108,7 @@ describe('washerContact (the roll couple on the UHMW thrust washer)', () => {
 describe('front wheel loads (the basis of every row)', () => {
   it('static front axle by hand: level W x/44 = 137 lb, nose down on 15 deg W cos(th) - N_r = 164 lb (M4: the worse governs); the heavier wheel takes 0.5 + |y|/35.5', () => {
     const w = wheelLoads(ctx, g);
-    expect(hw.level).toBeCloseTo(135.15, 0); // D-76: 135.15 (the side ribs, forward of the CG); D-74: 134.56 (2-1/8 in beams, knees and chocks: a lighter sled, the CG moves aft a little); 135.35 before; 138.1 before D-60 dropped the four foot-block cleats, 136.7 before D-62 (sandwich sides, frameless seat back, no shackle: the CG moves aft a little)
+    expect(hw.level).toBeCloseTo(135.82, 0); // (2026-10-24: D-96/97/98) 135.82: the lighter two-block transom backers (D-97) move the CG forward; D-76: 135.15 (the side ribs, forward of the CG); D-74: 134.56 (2-1/8 in beams, knees and chocks: a lighter sled, the CG moves aft a little); 135.35 before; 138.1 before D-60 dropped the four foot-block cleats, 136.7 before D-62 (sandwich sides, frameless seat back, no shackle: the CG moves aft a little)
     expect(hw.slope).toBeCloseTo(162.26, 0); // D-85: 162.26 (+0.7 lb, the rear ribs and rings); D-83: 161.74 (the EVA seat pads, the 6 mm sheet, the lighter lights); D-76: 162.50; D-74: 161.89 (162.84 before); // 164.3 before D-62 // 165.7 with the foot-block cleats
     expect(w.frontAxle).toBeCloseTo(hw.axle, 6);
     expect(w.frontWheel).toBeCloseTo(hw.wheel, 6);
@@ -190,9 +190,9 @@ describe('kingpin (grade 8)', () => {
     expect(det('kingpin', 'NORMAL: bolt bearing in the king beam bore').value).toBeCloseTo((150 + normal.H) / (0.625 * bore), 6);
     // at the defaults: about 9/16" of bore, about 806 psi against 1,700 (a full nylock's 1" slot left about 5/16" and about 1,490 psi)
     const dflt = runChecks(defaultParams()).find((q) => q.id === 'kingpin')!.details!.find((q) => q.name.includes('tow pull at the tie (x overload): bolt bearing in the king beam bore'))!;
-    expect(dflt.value).toBeGreaterThan(780);
-    expect(dflt.value).toBeLessThan(830);
-    expect(dflt.util).toBeLessThan(0.5);
+    expect(dflt.value).toBeGreaterThan(840); // 2026-10-24: about 868 psi (the 13 mm deck as bought leaves 0.04 in less bore); about 806 with the 12 mm deck
+    expect(dflt.value).toBeLessThan(900);
+    expect(dflt.util).toBeLessThan(0.55); // 2026-10-24: 0.51 (the 13 mm deck as bought); under 0.5 with the 12 mm deck
   });
   const Z = (Math.PI * 0.625 ** 3) / 32, As = (Math.PI * 0.625 ** 2) / 4;
   const kingMid = KING_BOT + KING_D / 2;
@@ -557,7 +557,7 @@ describe('D-56: the steering chain keepers', () => {
   const L0 = computeLayout(p0);
   const row = runChecks(p0, { includeTruck: false }).find((x) => x.id === 'steer-clear')!;
   it('at the defaults the bare chain\'s bight would hang 1.28 in off the ground at the opposite lock (under the 3 in rule); with the keeper cord its lowest point over the lock range is 3.57 in and the row passes', () => {
-    expect(chainSweep(p0, L0, false).lowZ).toBeCloseTo(1.28, 2);
+    expect(chainSweep(p0, L0, false).lowZ).toBeCloseTo(1.267, 2); // 2026-10-24: 1.267 (13 mm deck, 5 mm combi-core white oak sides as bought); 1.28 before
     const kept = chainSweep(p0, L0, true);
     expect(kept.lowZ).toBeGreaterThan(p0.minGroundClearanceIn * 1.1); // a clear pass, not marginal
     expect(kept.lowZ).toBeCloseTo(3.57, 1);

@@ -444,7 +444,7 @@ describe('what is gone with the old hull, the Ackermann front end and the swivel
       ['side-L-chine', 'side-L-chine-in', 'side-L-gunwale', 'side-L-gunwale-in', 'side-L-web', 'side-R-chine', 'side-R-chine-in', 'side-R-gunwale', 'side-R-gunwale-in', 'side-R-web'],
     );
     expect(parts.filter((x) => x.id.startsWith('rail-')).map((x) => x.id).sort()).toEqual(['rail-L', 'rail-R']);
-    expect(parts.filter((x) => x.id.startsWith('transom-')).map((x) => x.id).sort()).toEqual(['transom-backer-L', 'transom-backer-R', 'transom-rear']);
+    expect(parts.filter((x) => x.id.startsWith('transom-')).map((x) => x.id).sort()).toEqual(['transom-backer-L1', 'transom-backer-L2', 'transom-backer-R1', 'transom-backer-R2', 'transom-rear']);
     expect(parts.filter((x) => x.id.startsWith('bow-')).map((x) => x.id)).toEqual(['bow-bulkhead']);
   });
   it('the structural side height the checks read is the lowest section (the bow end)', () => {

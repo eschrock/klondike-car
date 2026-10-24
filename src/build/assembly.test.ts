@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { worldAABB } from '../model/bounds';
 import { HULL_STEP, STEP } from '../model/build-utils';
-import { defaultParams, KNEE_MOUNT } from '../params';
+import { defaultParams, KNEE_MOUNT, THIN_SHEET } from '../params';
 import { PRE_D72 } from '../test-fixtures';
 import type { Part } from '../model/types';
 import type { Params } from '../params';
@@ -18,7 +18,7 @@ import { verifyChecklist } from './verify';
 import { EPOXY_SYSTEM, finishingSchedule } from './finishing';
 
 // D-73: this file tests the EXTREME weather spec's text (316, epoxy, varnish); the Standard text is tested in weather-spec.test.ts.
-const p = { ...defaultParams(), weatherSpec: 1 }; // Extreme text on the Extreme spec's own geometry: 6 mm okoume thin sheet (D-80)
+const p = { ...defaultParams(), weatherSpec: 1 }; // Extreme text on the Extreme spec's own geometry: the 5 mm white oak plywood thin sheet and the 13 mm deck as bought (2026-10-24; it was the 6 mm okoume of D-80)
 const parts = buildModel(p);
 const built = parts.filter((x) => x.group !== 'reference' && x.kind !== 'reference' && !x.payload);
 const steps = assemblySteps(parts, p);
@@ -159,7 +159,7 @@ describe('assembly steps', () => {
     // D-81, D-82: the chine tie has NO Dominos. The screw counts come from the rail's joint list: 8 a rail, #8 × 2-1/2", up through the rail into the side sandwich in every gap.
     expect(get('rails').instructions.join(' ')).toContain('8 holes a rail, straight through from the bottom edge to the top edge, 11/64" clearance');
     expect(get('lower').instructions.join(' ')).toMatch(/8 screws a side, #8 × 2-1\/2" trim-heads, evenly spaced/);
-    expect(get('lower').instructions.join(' ')).toMatch(/7\/16" bearing face/); // outer band 0.2075 + web 0.236, to the nearest 1/32
+    expect(get('lower').instructions.join(' ')).toMatch(/13\/32" bearing face/); // outer band 0.214 + web 0.197, to the nearest 1/32 (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
     const okSteps = assemblySteps(buildModel({ ...p, ...PRE_D72 }, undefined), { ...p, ...PRE_D72 });
     expect(okSteps.find((s) => s.id === 'lower')!.instructions.join(' ')).toMatch(/8 screws a side, #8 × 2-1\/2"/);
     expect(okSteps.find((s) => s.id === 'lower')!.instructions.join(' ')).not.toMatch(/Domino/);
@@ -341,7 +341,7 @@ describe('D-81, D-82: the chine tie is an epoxy bed and screws, no Dominos (repl
     const t = dry.instructions.join(' ');
     expect(t).toMatch(/Drill the screw pilots in the bottom edge of each side, through the rail holes: 8 a side/);
     expect(t).toMatch(/7 pilots: 1\/8" pilot, 5\/8" deep/);
-    expect(t).toMatch(/1 pilot: 1\/8" pilot, 3\/4" deep/);
+    expect(t).toMatch(/1 pilot: 1\/8" pilot, 13\/16" deep/); // the forward rail is 1-13/16" deep under the 13 mm deck (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
     expect(t).toMatch(/glue line between the outer band and the web/);
     // the rail ends are marked in place before the pilots, then sawn on the horses after them (round 3: no saw beside the web edge)
     expect(dry.instructions.findIndex((l) => /Mark each rail end flush with the band ends/.test(l))).toBeLessThan(dry.instructions.findIndex((l) => /screw pilots/.test(l)));
@@ -806,7 +806,7 @@ describe('readability round 2 (steps)', () => {
       expect(t).toMatch(/3\/8" hole, 1-1\/16" deep/);
       expect(t).toMatch(/tilted 15°/);
       expect(t).toMatch(/75° from level/);
-      expect(t).toMatch(/Mouth: 1-9\/16" from the rear edge, 1-15\/16" from the bottom end/); // on the sloped face, where the drill enters
+      expect(t).toMatch(/Mouth: 1-17\/32" from the rear edge, 1-15\/16" from the bottom end/); // on the sloped face, where the drill enters (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
       expect(t).not.toMatch(/1\/8" blind|29\/32" deep/);
     });
 
@@ -817,7 +817,7 @@ describe('readability round 2 (steps)', () => {
       expect(fb).toMatch(/Clamp-plate bolts, 4 plates:[^\n]*1-1\/4", 6-3\/4", 20-3\/4" and 26-1\/4" from the left end/);
       expect(fb).toMatch(/Eye-bolt holes[^\n]*5-3\/4" and 21-3\/4" from the left end/);
       expect(fb).toMatch(/pilots, both pads:[^\n]*4" and 23-1\/2" from the left end/);
-      expect(text('storage-lid')).toMatch(/Centers 3-1\/2", 6-7\/32" and 8-31\/32" from the rear end of the frame[^\n]*butted to them/); // the battens butt the frame sides (no dados); D-89: the shorter lid behind the fixed strip
+      expect(text('storage-lid')).toMatch(/Centers 3-1\/2", 6-7\/32" and 8-31\/32" from the rear end of the frame[^\n]*butted to them/); // (2026-10-24: D-96/97/98) unchanged on the sheets as bought; the battens butt the frame sides (no dados); D-89: the shorter lid behind the fixed strip
       expect(text('transom')).toMatch(/Both sockets: centered 9-3\/8" either side of the centerline/);
     });
 
@@ -879,14 +879,14 @@ describe('build readability round 3: one recipe for the knee, one set of numbers
 
   it('D-77: step 1 cuts the pocket as a notch in the rear and center layers before the glue-up, and says where', () => {
     const mill = stepText('mill');
-    expect(mill).toMatch(/Cut the flap pocket in the rear layer \(layer 1\) and the center layer \(layer 2\) BEFORE the glue-up: a notch 1-3\/8" deep in from the outboard edge, 7" to 8-3\/4" up from the bottom edge of the finished knee/); // 6-31\/32" is a layout number: said to 1\/16"
+    expect(mill).toMatch(/Cut the flap pocket in the rear layer \(layer 1\) and the center layer \(layer 2\) BEFORE the glue-up: a notch 1-3\/8" deep in from the outboard edge, 7" to 8-13\/16" up from the bottom edge of the finished knee/); // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought) // 6-31\/32" is a layout number: said to 1\/16"
     expect(mill).toMatch(/Leave the front layer whole: the pocket is recessed about 1\/4" into it after the glue-up/);
     expect(mill).not.toMatch(/outboard ear|two ears/);
   });
 
-  it('D-77: the knee step is 9-1/2" tall, recesses the pocket into the front layer, and has no slot or ears', () => {
+  it('D-77: the knee step is 9-9/16" tall, recesses the pocket into the front layer, and has no slot or ears', () => {
     const knees = stepText('brake-knees');
-    expect(knees).toMatch(/The knee is 9-1\/2" tall/);
+    expect(knees).toMatch(/The knee is 9-9\/16" tall/); // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
     expect(knees).toMatch(/Recess the pocket about 1\/4" into the front layer, so it ends 1-21\/32" from the rear face/);
     expect(knees).toMatch(/the grain of the rear and front layers runs up the leg, and the center layer runs across the sled/);
     expect(knees).toMatch(/drilled with the stainless strap on and the flap tongue clamped in the pocket/);
@@ -980,7 +980,7 @@ describe('build readability round 3: one recipe for the knee, one set of numbers
     // the deck check: its ends on the rails' finished-end marks, its edge set in from the rails' outer faces, the rail spacing and diagonals (numbers from the model)
     const t = lines.slice(deck, hinge).join('\n');
     expect(t).toMatch(/rear edge stands 1\/4" behind the finished-end marks on both rails/);
-    expect(t).toMatch(/deck edge sits in from the rail's outer face by 1\/2" at every station/);
+    expect(t).toMatch(/deck edge sits in from the rail's outer face by 15\/32" at every station/); // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
     expect(t).toMatch(/Rail spacing over the outer faces: 24" at the finished rear ends and 18-1\/2" at the bow-end marks/);
     expect(t).toMatch(/Diagonals from the finished-end marks equal within 1\/16"/);
     expect(t).toMatch(/Never trim the deck/);
@@ -1069,7 +1069,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       // the sign: knob holes through the web and inserts in the ribs, the sign as the template, before the finish; the final fit only hangs it
       expect(rib).toMatch(/Sign knob holes and inserts: 4 a side, through the web into the rib behind it, with the sign as the drill template/);
       expect(rib).toMatch(/Rib shaft centers, from the transom's outer face, on both sides: 4-1\/2" \(the rear rib\) and 13" \(the box rib\) \(the stations they were set at\), within 1\/8"/); // to each rib's center, at the side-rib step's 1/8" stations
-      expect(rib).toMatch(/Bore each spot 5\/16", square to the side, 7\/8" deep from the web's outer face/); // the web, the 33/64" flush insert (signInsertLenIn) and 1/16"
+      expect(rib).toMatch(/Bore each spot 5\/16", square to the side, 13\/16" deep from the web's outer face/); // the web, the 33/64" flush insert (signInsertLenIn) and 1/16" (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
       expect(rib).toMatch(/#10-32 × 33\/64" [^\n]*threaded insert on epoxy/);
       expect(rib).toMatch(/Then the 8 oak standoff discs, one per hole/);
       expect(txt(get('final-fit'))).toMatch(/Through the 7\/32" holes, the standoff discs \(epoxied to the sign back\) and the web, into the inserts set at step \d+/);
@@ -1102,7 +1102,7 @@ describe('D-79..D-83: the cost-pass build text', () => {
     expect(outer).toMatch(/Before the web goes on the mirror ramp: drill the inner band through the web's own drain holes \(3\/8", made with the web\)/);
     expect(outer).toMatch(/Drill the drain holes on through the outer band once the cure is hard: 2 in each side, 3\/8", from the inside, through the holes already in the web and the inner band/);
     // ONE datum: the inner face of the rear transom (the web end sits 1/4" inside the transom dado), the same as the band drawing
-    expect(outer).toMatch(/3\/8" and 58" forward of the transom line \(a square line 1\/4" in from the rear end of the web\), 23\/32" up from the web's bottom edge/); // the numbers of the band and web drawings
+    expect(outer).toMatch(/3\/8" and 58" forward of the transom line \(a square line 1\/4" in from the rear end of the web\), 3\/4" up from the web's bottom edge/); // the numbers of the band and web drawings (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
     expect(outer).toMatch(/backer block on the outside of the outer band/);
     expect(outer).not.toMatch(/Drill the drain holes once the cure is hard/);
     expect(outer).toMatch(/Brush epoxy into each bore/);
@@ -1233,10 +1233,17 @@ describe('D-79..D-83: the cost-pass build text', () => {
   });
 
   it('the deck and web steps measure the real sheets before anything is cut from them; the thin sheet is named for the spec (no leftover 1/4 in white oak ply or 4 mm okoume wording)', () => {
-    expect(stepText(std, 'cut-deck')).toMatch(/Before you cut: measure the 12 mm sheet/);
-    expect(stepText(std, 'side-forms')).toMatch(/The web sheet \(6 mm Baltic birch\): count the plies at an edge and measure it/);
-    expect(stepText(ext, 'side-forms')).toMatch(/The web sheet \(6 mm okoume\): count the plies/);
-    for (const list of [std, ext]) expect(everything(list)).not.toMatch(/white oak ply|4 mm okoume|3 mm Baltic/i);
+    // the defaults (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
+    for (const list of [std, ext]) expect(stepText(list, 'side-forms')).toMatch(/The web sheet \(5 mm white oak plywood\): count the plies at an edge and measure it/);
+    for (const list of [std, ext]) expect(everything(list)).not.toMatch(/1\/4 in white oak ply|4 mm okoume|3 mm Baltic|6 mm Baltic|6 mm okoume/i);
+    // D-80's follow-the-weather sheet on the 12 mm deck
+    const fwStd = { ...pStd, thinSheetMaterial: THIN_SHEET.followWeather, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472 }, fwExt = { ...fwStd, weatherSpec: 1 };
+    const sFw = assemblySteps(buildModel(fwStd), fwStd), eFw = assemblySteps(buildModel(fwExt), fwExt);
+    expect(stepText(sFw, 'cut-deck')).toMatch(/Before you cut: measure the 12 mm sheet/);
+    expect(stepText(sFw, 'side-forms')).toMatch(/The web sheet \(6 mm Baltic birch\): count the plies at an edge and measure it/);
+    expect(stepText(eFw, 'side-forms')).toMatch(/The web sheet \(6 mm okoume\): count the plies/);
+    for (const list of [sFw, eFw]) expect(everything(list)).not.toMatch(/white oak ply|4 mm okoume|3 mm Baltic/i);
+    expect(stepText(std, 'cut-deck')).toMatch(/Before you cut: measure the 13 mm sheet/); // the deck as bought (2026-10-24)
   });
 
   it('the lights: the lamp clips are fitted to the real lights (re-measured before printing)', () => {
@@ -1556,7 +1563,7 @@ describe('D-94: every shop-cut part is cut to its final size in exactly one step
     const ends = stepText('ends');
     expect(ends).toMatch(/Before you cut: try the end templates on the hull/);
     expect(ends).toMatch(/24" over the outer bands at the rear and 18-1\/2" at the bow, within 1\/32"/);
-    expect(ends).toMatch(/the tenons sit 11-5\/8" either side of the centerline and 5\/8" below the deck's underside at the rear; the Dominos 8-7\/8" either side of the centerline and 15\/16" below the deck's underside at the bow/);
+    expect(ends).toMatch(/the tenons sit 11-5\/8" either side of the centerline and 5\/8" below the deck's underside at the rear; the Dominos 8-7\/8" either side of the centerline and 29\/32" below the deck's underside at the bow/); // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
     expect(ends).toMatch(/Dry-fit BOTH ends, with no glue, before any epoxy is mixed/);
     expect(ends.indexOf('Before you cut')).toBeLessThan(ends.indexOf('Cut the rear transom on the Shaper'));
     // the webs: a hardboard test web proves the forms, and the deck's edge is measured, before the sheet is cut

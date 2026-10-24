@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
-import { defaultParams } from '../params';
+import { THIN_SHEET, defaultParams } from '../params';
 import { SHAPER_MAX_DEPTH_IN, analyzeShaperPart, grainWords, shaperCutDepth, shaperFiles } from './shaper-svg';
 import { flatPattern } from './flat';
 
@@ -203,7 +203,7 @@ describe('Shaper SVG files', () => {
     const ins = d.features.filter((x) => x.kind === 'drill' && x.joint === 'screw');
     expect(ins.reduce((n, x) => n + x.count, 0)).toBe(6);
     for (const x of ins) {
-      expect(x.depthIn).toBeCloseTo(0.344, 3);
+      expect(x.depthIn).toBeCloseTo(0.594, 3); // 19/32 in from the front face: through the panel into the oak insert pad (Eric 2026-10-24)
       expect(x.label).toMatch(/Blind insert hole/);
       for (const [u, v] of x.at!) {
         expect(v).toBeGreaterThanOrEqual(0.5); // from the foot edge
@@ -212,7 +212,7 @@ describe('Shaper SVG files', () => {
     }
     const svg = fileOf('seat-back-panel').svg;
     expect(svg).not.toContain('position uncertain');
-    expect(svg).toMatch(/insert hole Ø[\d.]+ x 0\.344 deep \(x3\)/);
+    expect(svg).toMatch(/insert hole Ø[\d.]+ x 0\.594 deep \(x3\)/);
     expect(d.notes.some((n) => /fall outside the pattern/.test(n))).toBe(false);
   });
 
@@ -284,14 +284,17 @@ describe('Shaper SVG files', () => {
     const f = fileOf('seat-back-panel');
     const ins = f.features.filter((x) => x.kind === 'drill' && /insert hole/i.test(x.label));
     expect(ins.reduce((n, x) => n + x.count, 0)).toBe(6);
-    for (const x of ins) { expect(x.diaIn).toBeCloseTo(5 / 16, 6); expect(x.label).not.toMatch(/Ø0\.19\b/); expect(x.depthIn).toBeCloseTo(0.344, 3); }
-    expect(f.svg).toMatch(/insert hole Ø0\.3125 x 0\.344 deep \(x3\)/);
+    for (const x of ins) { expect(x.diaIn).toBeCloseTo(5 / 16, 6); expect(x.label).not.toMatch(/Ø0\.19\b/); expect(x.depthIn).toBeCloseTo(0.594, 3); }
+    expect(f.svg).toMatch(/insert hole Ø0\.3125 x 0\.594 deep \(x3\)/);
   });
 
-  it('names the bit for each feature: 1/4 in for the 0.281 web dado (6 mm Baltic birch + slop, D-80; it was 1/8 in for the 4 mm okoume) and the 0.512 deck dado and the outline, 1/8 in for the mortise', () => {
+  it('names the bit for each feature: 1/8 in for the narrow web dado (5 mm white oak plywood + slop; 1/4 in for the 0.281 dado of the 6 mm Baltic birch, D-80) and the mortise, 1/4 in for the deck dado and the outline', () => {
     const t = fileOf('transom-rear');
     const pk = t.features.filter((x) => x.kind === 'pocket');
-    expect(pk.find((x) => /web dado|side-L-web/.test(x.label) || x.to === 'side-L-web')!.bit).toBe('1/4 in');
+    expect(pk.find((x) => /web dado|side-L-web/.test(x.label) || x.to === 'side-L-web')!.bit).toBe('1/8 in'); // (2026-10-24: 5 mm combi-core white oak sides as bought; the dado is under 0.26 in, too narrow for the 1/4 in bit)
+    const fw = { ...p, thinSheetMaterial: THIN_SHEET.followWeather, deckPlyIn: 0.472 };
+    const tFw = shaperFiles(buildModel(fw), fw).find((x) => x.partIds.includes('transom-rear'))!;
+    expect(tFw.features.filter((x) => x.kind === 'pocket').find((x) => /web dado|side-L-web/.test(x.label) || x.to === 'side-L-web')!.bit).toBe('1/4 in'); // the 0.281 web dado of the 6 mm Baltic birch
     expect(pk.find((x) => x.to === 'deck')!.bit).toBe('1/4 in');
     expect(pk.find((x) => x.joint === 'mortise-tenon')!.bit).toBe('1/8 in');
     expect(t.features[0].bit).toBe('1/4 in');

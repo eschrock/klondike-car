@@ -1208,7 +1208,7 @@ const TEMPLATES_1: Template[] = [
       return {
         goal: 'Cut the 12 mm deck and the seat back from their files, before anything else is cut to size: the deck is the reference the frame and the sides are checked against.',
         items: [
-          I('Before you cut: measure the 12 mm sheet and check it lies flat.', [
+          I(`Before you cut: measure the ${Math.round(c.p.deckPlyIn * 25.4)} mm sheet and check it lies flat.`, [
             `Calipers at 4 places, 1" in from the edges: the design is ${fin64(ply)} (12 mm). Under 7/16" or over 1/2", return the sheet. Otherwise enter the average in the design (Advanced, parameters panel: ${PARAM_DEFS.deckPlyIn.label.toLowerCase()}) before anything is cut: the dados in the transom and the bulkhead, the deck slot under the chine bands and its spacer stick all follow it (Verify, plywood thickness).`,
             'Lay the sheet on a flat floor: it must lie down under its own weight. A sheet that stands more than 1/8" off the floor anywhere goes back: a bowed deck glues to the frame bowed.',
           ]),
@@ -2057,12 +2057,12 @@ const TEMPLATES_2: Template[] = [
   },
   {
     id: 'transom',
-    title: 'Close the rear: transom with its backers',
+    title: 'Close the rear: transom with its backer blocks',
     kind: 'build',
     steps: [HULL_STEP.transom],
     match: /^transom-/,
     view: 'iso',
-    why: 'The transom closes the rear of the hull and squares the box: the deck, the webs and the rails all lock into it. The two oak backers behind it carry the push-handle sockets.',
+    why: 'The transom closes the rear of the hull and squares the box: the deck, the webs and the rails all lock into it. The oak backer blocks behind it carry the push-handle socket screws and the brake-cord eyes.',
     tools: ['pipe clamps (2)', 'cauls', 'epoxy pumps', 'router', 'drill'],
     hardener: '556',
     build: (c) => {
@@ -2073,13 +2073,20 @@ const TEMPLATES_2: Template[] = [
       const sockAt = stations(sockHoles, 'BOTTOM end');
       const sockEdge = sockHoles ? new RegExp(`(${FR})" from the outboard edge`).exec((sockHoles.positions ?? []).join('; '))?.[1] : undefined;
       const place = socketOnTransom(c.parts);
-      const tnuts = feat(c, 'transom-backer-L', 'hole', (q) => /T-nut/i.test(q.purpose ?? q.text));
+      // The backer blocks of one side (lower, upper), grain across the sled like the transom: each carries one socket screw's T-nut.
+      const blocks = [1, 2].map((n) => ({ n, id: `transom-backer-L${n}`, box: c.by(`transom-backer-L${n}`) })).filter((b) => b.box);
+      const blockWord = (n: number): string => (blocks.length > 1 ? (n === 1 ? 'lower block' : 'upper block') : 'block');
+      const tnutsOf = blocks.map((b) => ({ ...b, f: feat(c, b.id, 'hole', (q) => /T-nut/i.test(q.purpose ?? q.text)) }));
+      const tnuts = tnutsOf.find((b) => b.f)?.f;
       const vents = transomVents(c.parts);
       const nVent = vents.places.length * 2;
       // Where each backer sits on the transom's inside face (from the two parts), and the rail-end loose tenons (from the rail's joint: both parts mortised).
-      const tr = c.by('transom-rear'), bk = c.by('transom-backer-L');
-      const tb = tr ? worldAABB(tr) : undefined, bb = bk ? worldAABB(bk) : undefined;
-      const backerAt = tb && bb ? `Each backer: its outer edge ${fin(tb.max[1] - bb.max[1])} in from the transom's side edge, its bottom end ${fin(bb.min[2] - tb.min[2])} up from the transom's bottom edge.` : false;
+      const tr = c.by('transom-rear');
+      const tb = tr ? worldAABB(tr) : undefined;
+      const backerAt = tb && blocks.length ? I('Where the blocks go on the transom\'s inside face (mirrored on the other side):', blocks.map((b) => {
+        const bb = worldAABB(b.box!);
+        return `${cap(blockWord(b.n))}, ${fin(bb.max[2] - bb.min[2])} tall and ${fin(bb.max[1] - bb.min[1])} across: its outboard end ${fin(tb.max[1] - bb.max[1])} in from the transom's side edge, its bottom edge ${fin(bb.min[2] - tb.min[2])} up from the transom's bottom edge.`;
+      })) : false;
       const tj = c.by('rail-L')?.joints?.find((j) => j.type === 'mortise-tenon' && j.to === 'transom-rear');
       const tm = tj ? new RegExp(`^(${FR}) × (${FR}) × (${FR}) deep`).exec(tj.size ?? '') : null;
       const nTenon = c.parts.filter((x) => /^rail-[LR]$/.test(x.id)).length;
@@ -2090,23 +2097,24 @@ const TEMPLATES_2: Template[] = [
       const sockClr = sockHoles ? new RegExp(`^(${FR})" clearance`).exec(sockHoles.size ?? '')?.[1] : undefined;
       const barrel = tnuts ? new RegExp(`^(${FR})"`).exec(tnuts.size ?? '')?.[1] : undefined;
       return {
-        goal: 'Close the rear of the hull: backers on the transom, then the transom onto the hull in one glue-up.',
+        goal: 'Close the rear of the hull: backer blocks on the transom, then the transom onto the hull in one glue-up.',
         items: [
-          I('Bench, the day before: clamp each backer in place dry on the inside of the {{transom-rear}}, then drill the handle-socket holes through transom and backer together.', [
-            I(`Cut the backers to their cut-list size first: ${tl(backers)}. They carry the handle sockets' screws, not built work, so they need no check.`, [], backers),
+          I(`Bench, the day before: clamp the ${numWord(backers.length).toLowerCase()} backer blocks in place dry on the inside of the {{transom-rear}}, then drill the handle-socket holes through transom and block together.`, [
+            I(`Cut the blocks to their cut-list size first: ${tl(backers)}. They carry the handle sockets' screws and the brake-cord eyes, not built work, so they need no check.`, [], backers),
+            'Lay each block with its grain across the sled, the same way as the transom\'s, so the glue line moves with the transom. Nothing goes between the two blocks of a side.',
             backerAt,
             place ? `Both sockets: centered ${fin(place.off)} either side of the centerline (the outer edge ${fin(place.inset)} in from the transom's side edge), the bottom end ${fin(place.up)} up from the transom's bottom edge.` : false,
             fileCutHole(c, 'transom-rear', (q) => /^handle-socket-/.test(q.to ?? ''))
-              ? `The transom's socket screw holes came with it (its Shaper file): hold a socket there to check they line up with its holes, then drill on through the backer from the transom's holes${sockClr ? `, ${sockClr}" clearance` : ''}, using them as the guide. Do not drill the transom again.`
-              : `Hold a socket there and drill through its screw holes${sockClr ? `: ${sockClr}" clearance through transom and backer together` : ''}.`,
-            barrel ? `Then open each backer hole to ${barrel}" from the backer's inside face, for the T-nut barrel.` : false,
-            'Unclamp, then brush epoxy into the socket bores of the transom and of each backer separately, wipe the faces clean (glue will not hold on a ring of cured epoxy), let it cure, and run the bit through again.',
+              ? `The transom's socket screw holes came with it (its Shaper file): hold a socket there to check they line up with its holes, then drill on through each block from the transom's holes${sockClr ? `, ${sockClr}" clearance` : ''}, using them as the guide. Do not drill the transom again.`
+              : `Hold a socket there and drill through its screw holes${sockClr ? `: ${sockClr}" clearance through transom and block together` : ''}.`,
+            barrel ? `Then open each block's hole to ${barrel}" from its inside face, for the T-nut barrel.` : false,
+            'Unclamp, then brush epoxy into the socket bores of the transom and of each block separately, wipe the faces clean (glue will not hold on a ring of cured epoxy), let it cure, and run the bit through again.',
             sockAt.length ? `On the socket the holes are ${list(sockAt)} up from its bottom end${sockEdge ? `, ${sockEdge}" from its outboard edge` : ''}.` : false,
             'Unclamp, set the T-nuts (next), then glue.',
           ]),
-          I('Set a captive 1/4-20 T-nut per socket screw in each backer, from its inside face, before the backer is glued.', [
-            tnuts?.positions?.length ? `T-nut barrel holes in each backer: ${(holeText(tnuts) ?? '').replace(/, in the rear face: /, `${/\bthrough\b/.test(tnuts.size ?? '') ? ', through the backer,' : ','} drilled from its inside face (the face toward the bow): `)}.` : false,
-            'Counterbore each flange flush with the backer\'s face first (the flange\'s own diameter and thickness, on the drill press with a Forstner bit): the storage box\'s aft wall sits flat against that face.',
+          I('Set a captive 1/4-20 T-nut in each block, from its inside face, before the block is glued.', [
+            ...tnutsOf.filter((b) => b.f?.positions?.length).map((b) => `T-nut barrel hole in the ${blockWord(b.n)}: ${(holeText(b.f) ?? '').replace(/, in the rear face: /, `${/\bthrough\b/.test(b.f!.size ?? '') ? ', through the block,' : ','} drilled from its inside face (the face toward the bow): `)}.`),
+            'Counterbore each flange flush with the block\'s face first (the flange\'s own diameter and thickness, on the drill press with a Forstner bit): the storage box\'s aft wall sits flat against that face.',
             'The socket screws then drive in from outside: no wrench ever has to reach behind the storage box.',
           ]),
           ...(vents.places.length
@@ -2115,12 +2123,12 @@ const TEMPLATES_2: Template[] = [
               'The Shaper file marks them; they let air and glue out as the transom is pushed on.',
             ])]
             : []),
-          I(`Glue the backers (3/4" oak) full-face to the inside of the transom with ${tbGlue}, at their dry-fit places: ${tl(backers)}.`, ['Clamp them with a caul and leave them overnight.']),
-          ...((eyes) => (eyes.length ? [I(`After the backers have cured: drill the ${eyes.length} brake-cord eye pilots in the transom's aft face, ${fin64(eyes[0].diaIn ?? 0.14)}, square to the face, through the transom and on into the backer behind.`, [
+          I(`Glue the backer blocks (${fin(c.p.blockingThickIn)} oak) full-face to the inside of the transom with ${tbGlue}, grain across the sled, at their dry-fit places: ${tl(backers)}.`, ['Clamp each with a caul and leave them overnight.']),
+          ...((eyes) => (eyes.length ? [I(`After the blocks have cured: drill the ${eyes.length} brake-cord eye pilots in the transom's aft face, ${fin64(eyes[0].diaIn ?? 0.14)}, square to the face, through the transom and on into the block behind.`, [
             ...[...new Set(eyes.map((q) => q.at![0][1]))].sort((x, y) => y - x).map((v, i) => `${i === 0 ? 'The high eyes (the shock cords)' : 'The low eyes (the stop cords)'}: ${near16(v)} up from the transom's bottom edge, ${near16(Math.min(...eyes.filter((q) => q.at![0][1] === v).map((q) => q.at![0][0])))} in from each side edge.`),
-            'The Shaper file only marked them; drill now, before the transom goes on, while the backer is still easy to reach. The screw eyes go in at the hang step, with a drop of epoxy in each pilot.',
+            'The high eyes land in the upper blocks, the low eyes in the lower ones. The Shaper file only marked them; drill now, before the transom goes on, while the blocks are still easy to reach. The screw eyes go in at the hang step, with a drop of epoxy in each pilot.',
           ])] : []))(shaperFeaturesOf(c, 'transom-rear').filter((q) => q.kind === 'drill' && q.joint === 'screw' && /^brake-(cord|stop)-/.test(q.to ?? '') && q.at?.length)),
-          I('Dry-fit the transom again with the backers on, before any epoxy is mixed: push it home dry.', ['The backers stand close to the inner bands. If one touches, plane its outer edge until the transom goes home without forcing.', 'Pull it back off and lay the parts out for the glue-up.']),
+          I('Dry-fit the transom again with the backer blocks on, before any epoxy is mixed: push it home dry.', ['The blocks stand close to the inner bands. If one touches, plane its outboard end until the transom goes home without forcing.', 'Pull it back off and lay the parts out for the glue-up.']),
           ...(tm ? [I(`Glue the ${plural(nTenon, 'loose tenon')} made at [[step:ends]] into the rails' rear ends first (thickened epoxy), half of each standing out.`)] : []),
           I('Close ONE end first: the transom.', [
             'The transom is pushed straight on: the deck edge, the web ends and the rail tenons all enter at once. The four band ends of each side butt against its face (no Dominos).',
@@ -2131,7 +2139,7 @@ const TEMPLATES_2: Template[] = [
             'Thickened epoxy in every joint of this glue-up: the dados, the tenons and the band ends (one glue for one glue-up).',
             `Epoxy (glue card), mixed in SMALL batches in a wide shallow container: the pot life is ${EPOXY_SYSTEM.potMin[0]}-${EPOXY_SYSTEM.potMin[1]} min, so do the fillets and the dado fills in the sequence you rehearsed, one batch at a time. You can do it alone.`,
             ...(vents.places.length ? ['Glue shows at the vent holes when the dados are full: fill them flush with thickened epoxy after the cure.'] : []),
-            'Once the transom is home, fillet the inside corners with thickened epoxy. The fillet stops at the backers, and stays out of the bottom 1" of each corner: the side drain hole is there.',
+            'Once the transom is home, fillet the inside corners with thickened epoxy. The fillet stops at the backer blocks, and stays out of the bottom 1" of each corner: the side drain hole is there.',
             'After the cure, run a 3/8" bit through each side drain from outside to clear any epoxy.',
           ]),
         ],
@@ -3113,6 +3121,7 @@ const TEMPLATES_2: Template[] = [
             cut?.angleDeg !== undefined && cutPts.length >= 2
               ? `Sloped end at ${cut.angleDeg}° from level: from ${cutPts[0][0]}" from the rear edge at the bottom end, up to ${cutPts[1][0]}" from the rear edge at ${cutPts[1][1]}" up.`
               : `Sloped end: ${SEE}.`,
+            ...((n) => (n ? [`Then the relief notch at the front foot, the full width of the block, so the oak pad behind the seat back's hinge clears it: ${n.replace(/^relief notch at the front foot, the full width of the block: /, '').replace(/, for the[\s\S]*$/, '')}. Bandsaw it and pare the corner square.`] : []))(c.by('seat-wedge-L')?.joints?.find((j) => /^relief notch/.test(j.size ?? ''))?.size),
           ], ['seat-wedge-L', 'seat-wedge-R']),
           I('Mark where the upright latch hole will go on each block: it is drilled later, through the seat back\'s own pin hole, once the back hangs on its hinges ([[step:seat-back]]).', [
             latchSize ? `It will be a ${latchSize[1]}" hole, ${latchSize[2]}" deep${tilt ? `, tilted ${tilt}° from the bottom-end line, square to the sloped face it enters` : ''}.` : '3/8" blind hole.',
@@ -3156,23 +3165,41 @@ const TEMPLATES_2: Template[] = [
       // The panel's latch-pin holes come with its Shaper file: no step drills them a second time. The deck's flat-position holes are NOT in the deck's file: they are drilled in place through
       // the panel's own pin holes, so the panel, the deck and the backer pad line up whatever the hinges do.
       const panelPinCut = fileCutHole(c, 'seat-back-panel', (q) => /^seat-pin-/.test(q.to ?? ''));
+      // The oak insert pads (Eric 2026-10-24) and the insert holes, from the model's own parts and joint text.
+      const insPad = c.by('seat-back-panel-pad-L');
+      const insSize = insPad?.geometry.type === 'box' ? insPad.geometry.size : undefined;
+      const sl = computeLayout(c.p).seat;
+      const padMid = insPad ? (insPad.transform[12] - sl.P[0]) * sl.col2[0] + (insPad.transform[14] - sl.P[2]) * sl.col2[2] : 0; // up the panel from the bottom edge
+      const panelW = c.by('seat-back-panel')?.stock?.w ?? 16;
+      const padOuter = insPad && insSize ? panelW / 2 - Math.abs(insPad.transform[13]) - insSize[0] / 2 : 0; // pad's outer end to the panel's side edge
+      const insJ = c.by('seat-back-panel')?.joints?.find((q) => q.to === 'seat-hinge-L');
+      const insLen = /#10-32 × (\d+\/\d+) /.exec(insJ?.size ?? '')?.[1];
+      const insHole = Number(/holes ([\d.]+)" deep/.exec(insJ?.size ?? '')?.[1] ?? NaN);
+      const intoPad = /bore (\d+\/\d+)" deep/.exec(c.by('seat-back-panel-pad-L')?.joints?.find((q) => q.type === 'hole')?.size ?? '')?.[1];
+      const hingeScrew = /^#10-32 × (\S+) /.exec(c.by('seat-hinge-L')?.joints?.find((q) => q.to === 'seat-back-panel')?.size ?? '')?.[1];
       return {
         goal: 'Make the seat back and fit its hinges, pins and the two foam pads (the hardware goes on for good after the finish).',
         glue: { epoxy: true, titebond: false },
         items: [
           I('Band the edge of the {{seat-back-panel}} (made with the deck at [[step:cut-deck]], its 2-1/2" radius top corners and all).', ['1/16" oak veneer banding round the edge, flush-trimmed and epoxy-sealed: no ply edge shows.']),
-          I(`Set the hinge inserts: 3 per hinge, #10-32 × 5/16" ${insertMat(c.p)}, hex-drive.`, [
-            'The insert must be no longer than 5/16": the hole is a blind 11/32" in a 15/32" panel. Settle which insert first (Verify, seat back): the common wood inserts are 3/8" to 1/2" long and will not fit.',
+          ...(insPad && insSize ? [I(`Cut the two oak insert pads, ${tl(['seat-back-panel-pad-L', 'seat-back-panel-pad-R'])}, and glue one to the BACK face behind each hinge, before the insert holes are drilled.`, [
+            `Each pad is ${fin(insSize[2])} × ${fin(insSize[1])} × ${fin(insSize[0])} oak, its grain along the ${fin(insSize[0])} length.`,
+            `Lay it on the back face with its length across the panel: its bottom edge ${fin(padMid - insSize[1] / 2)} up from the panel's bottom edge, its outer end ${fin(padOuter)} in from the side edge.`,
+            'Spread thickened epoxy over its whole face, clamp it with a block, and let it cure.',
+            'When the back stands up, each pad sits in the notch at the front foot of its stop block.',
+          ], ['seat-back-panel-pad-L', 'seat-back-panel-pad-R'])] : []),
+          I(`Set the hinge inserts: 3 per hinge, #10-32 × ${insLen ?? '33/64'}" ${insertMat(c.p)}, flush-mount, hex-drive.`, [
             `Hold each 2" butt hinge on the front face at the bottom edge, its knuckle at the edge${hingeB ? `, centered ${fin((hingeB.min[1] + hingeB.max[1]) / 2)} either side of the center` : ''}, and mark its 3 holes.${shaperFeaturesOf(c, 'seat-back-panel').some((q) => q.kind === 'drill' && /^seat-hinge-/.test(q.to ?? '')) ? ' The panel\'s Shaper file marked them too: the hinge\'s holes must fall on those marks; if they do not, go by the hinge.' : ''}`,
-            'Pull-test one insert in a scrap of the same plywood first (Verify).',
-            `Drill ${fin(INSERT_DRILL_IN)} blind holes 11/32" deep from the front face (drill stop), at least 1/2" from every edge, and epoxy the inserts in.`,
+            'Pull-test one insert first, in a scrap of the same plywood with an oak pad glued on (Verify).',
+            `Drill ${fin(INSERT_DRILL_IN)} holes ${Number.isFinite(insHole) ? fin(insHole) : SEE} deep from the front face (drill stop): through the panel${intoPad ? ` and ${intoPad}"` : ''} into the pad. Each is at least 1/2" from every edge.`,
+            'Epoxy the inserts in, flush with the front face.',
             'Leave them for the full cure before the first load.',
           ]),
           panelPinCut
             ? I('The latch-pin holes came with the panel (its Shaper file): do not drill them again.', [`Check them: ${panelClear ? `${panelClear}"` : '13/32"'} clearance, 7-3/8" either side of the center, 2" up from the hinge axis.`, 'Line them with epoxy.'])
             : I('Bore the latch-pin holes in the panel.', [`${panelClear ? `${panelClear}"` : '13/32"'} clearance, square, 7-3/8" either side of the center, 2" up from the hinge axis.`, 'Line them with epoxy.']),
           I('FIT AND DRILL now, hang later: the 2" butt hinges.', [
-            '#10-32 × 3/8" screws go in from the FRONT (forward) face, through the leaf, into the inserts. The hinge leaf, the inserts and the screws are all on that one face; nothing is drilled from the back face.',
+            `#10-32 × ${hingeScrew ?? '1/2'}" flat-head screws go in from the FRONT (forward) face, through the leaf, into the inserts. The hinge leaf, the inserts and the screws are all on that one face; nothing is drilled from the back face.`,
             `${screwOf(c, 'seat-hinge-L', /hinge-backer/)} through the deck into the oak backer pads (glued under the deck in [[step:frame]]), piloted through the leaf holes${pad ? ' (positions on the backer drawing)' : ''}.`,
           ], ['seat-hinge-L', 'seat-hinge-R', 'seat-hinge-backer-L', 'seat-hinge-backer-R']),
           I('After the inserts have cured, hang the back dry on its hinges and drill the latch holes through the panel\'s own pin holes, so they line up.', [

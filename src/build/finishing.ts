@@ -363,6 +363,7 @@ export const SHOW_RULES: ReadonlyArray<{ re: RegExp; show: number | 'web'; why: 
   { re: /^(king-beam|beam-F|beam-R)$/, show: 0, why: 'beams under the hull' },
   { re: /^bridle-tongue$/, show: 1, why: 'exposed and handled' },
   { re: /^seat-back-panel$/, show: 0.5, why: 'the padded face is covered' },
+  { re: /^seat-back-panel-pad-[LR]$/, show: 1, why: 'on the back face, in sight when the back lies flat' },
   { re: /^seat-(wedge|crest-strip|grip)/, show: 1, why: 'seat parts in view' },
   { re: /^storage-(side|end)-/, show: 0.5, why: 'box panel: outside shows, inside is hidden' },
   { re: /^storage-lid$/, show: 0.5, why: 'top shows, underside is hidden' },

@@ -12,6 +12,7 @@ import { computeLayout, innerHalfWidth } from '../model/layout';
 import { LASH_BOLTS, LASH_BOLT_DIA_IN, LASH_HOLE_DX_IN, LASH_PLATE, lashBoltLength, sideRibStations } from '../model/side-ribs';
 import { CARRIAGE_STOCK_IN, EYE_BOLT_STOCK_IN, stockBoltFit } from '../model/rear-mount';
 import { localBounds } from '../model/bounds';
+import { seatInsertHoleIn } from '../model/seat';
 import type { Part } from '../model/types';
 import { cutList } from './cutlist';
 import { OAK_PRICE_PER_BF } from './prices';
@@ -127,6 +128,8 @@ export function unusedVerifyKeys(p: Params): string[] {
 export function verifyParamKeys(): string[] {
   return Object.entries(PARAM_DEFS).filter(([, d]) => d.status === 'verify').map(([k]) => k);
 }
+
+const r64 = (v: number): number => Math.round(v * 64) / 64;
 
 export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
   const rate = p.bumpWheelRateLbIn;
@@ -315,7 +318,11 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       title: 'Seat back: detent pin, inserts, pin head vs cushion',
       how: [
         it('Spring-detent pin: with the real pin, measure the tip-to-ball distance and the head height.', ['The upright groove is 23/32" from the hole mouth, the flat groove 1/4" below the deck.', 'Cut both with a hook tool, 1/16" wide, 1/32" deep.']),
-        it(`Inserts: first choose the hinge insert (no #10-32 wood insert of 11/32" or less is sold; the BOM line lists the options), then epoxy one in a scrap of the ${f(p.seatBackPlyIn * 25.4, 0)} mm okoume.`, ['11/32" blind hole with a drill stop (the insert at least 1/32" shorter); let it cure.', 'Screw in a bolt and hang a bucket from it.']),
+        it(`Inserts: epoxy a ${fr(p.seatBackInsertPadThickIn)}" oak pad to a scrap of the ${f(p.seatBackPlyIn * 25.4, 0)} mm okoume (as on the seat back), then set one ${fr(p.seatBackInsertLenIn, 64)}" flush #10-32 insert from the ply face.`, [
+          `Drill the maker's hole size (5/16" assumed) ${fr(seatInsertHoleIn(p), 32)}" deep with a drill stop: through the ply and ${fr(seatInsertHoleIn(p) - p.seatBackPlyIn, 64)}" into the pad, leaving ${fr(p.seatBackPlyIn + p.seatBackInsertPadThickIn - seatInsertHoleIn(p), 64)}" of oak behind.`,
+          'Epoxy the insert in flush and let it cure.',
+          'Screw in a bolt and hang a bucket from it.',
+        ]),
         it('Hinge: confirm the 2" stainless butt hinge\'s screw-in-oak rating.'),
         it('Fit the pin in the panel and check the head clears the cushion (the cushion is set back 3/8").'),
       ],
@@ -325,7 +332,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         `Hinge allowable ≥ ${p.seatHingeLoadLbf} lbf each with #8 screws in oak; #10 wood screw lateral value ≥ ${p.woodScrewLateralLbf} lbf in wet oak.`,
         'The pin head clears the cushion (or notch the foam corners).',
       ],
-      ifFails: 'Move the insert holes or add a second row; if the pull-out is under 150 lbf use a thicker (9/16") back or through-bolts; get a pin with a longer ball offset.',
+      ifFails: 'Move the insert holes or add a second row; if the pull-out is under 150 lbf use a thicker oak pad with a longer insert, or through-bolts; get a pin with a longer ball offset.',
       partIds: ids(parts, /^(seat-pin|seat-hinge|seat-back|seat-wedge|seat-crest)/),
       paramKeys: verifyKeys(['seatInsertPulloutLbf', 'seatHingeLoadLbf', 'woodScrewLateralLbf']),
       when: 'before cutting',
@@ -542,15 +549,16 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       id: 'ply-thickness',
       title: 'Plywood thickness: measured at the deck step and the side-form step',
       how: [
-        it(`Measure the ${thin.nominal} ${thin.key === 1 ? 'white oak plywood' : thin.key === 3 || thin.key === 4 ? 'Baltic birch' : 'okoume'} and the 12 mm okoume deck sheet with calipers, at six or more points on the edges.`, [
+        it(`Measure the ${thin.nominal} ${thin.key === 1 ? 'white oak plywood' : thin.key === 3 || thin.key === 4 ? 'Baltic birch' : 'okoume'} and the ${Math.round(p.deckPlyIn * 25.4)} mm okoume deck sheet with calipers, at six or more points on the edges.`, [
           thin.key === 1 ? 'Nominal 1/4" white oak plywood runs about 7/32", and the veneer face varies.' : '',
           thin.key === 4 ? `Measure the sheet you will cut, not the listing: 6 mm Baltic birch is sold as "1/4 in" and runs from about 7/32" to 1/4". The design assumes ${fr(p.balticSixThickIn, 64)}".` : '',
           thin.key === 4 ? 'A typical "1/4 in" Baltic sheet measures a full 1/4", a little over the design figure: expect that case. Enter the measured value; the dado width follows it (the sheet plus the slop below), so no dado is cut to the nominal size.' : '',
-          'BS 1088 12 mm often runs to 31/64" or more, and the sealed sheet is a few thousandths thicker.',
+          `BS 1088 ${Math.round(p.deckPlyIn * 25.4)} mm often runs a little over its nominal, and the sealed sheet is a few thousandths thicker.`,
         ].filter(Boolean)),
         it('Compare with the dados the Shaper files will cut.', [
-          `Web dados: the thin sheet ${fr(thin.thicknessIn, 64)}" plus ${fr(p.grooveSlopIn, 64)}" of slop, so ${fr(thin.thicknessIn + p.grooveSlopIn, 64)}" wide (fit to the ply).`,
-          `Deck dado and the gap under the inner chine band: ${fr(p.deckPlyIn, 64)}" plus ${fr(p.deckSlopIn, 64)}" of slop, so ${fr(p.deckPlyIn + p.deckSlopIn, 64)}" wide (fit to the ply).`,
+          // Each sum is shown in 64ths that add up: the slop is the rounded total less the rounded sheet.
+          `Web dados: the thin sheet ${fr(thin.thicknessIn, 64)}" plus ${fr(r64(thin.thicknessIn + p.grooveSlopIn) - r64(thin.thicknessIn), 64)}" of slop, so ${fr(thin.thicknessIn + p.grooveSlopIn, 64)}" wide (fit to the ply).`,
+          `Deck dado and the gap under the inner chine band: ${fr(p.deckPlyIn, 64)}" plus ${fr(r64(p.deckPlyIn + p.deckSlopIn) - r64(p.deckPlyIn), 64)}" of slop, so ${fr(p.deckPlyIn + p.deckSlopIn, 64)}" wide (fit to the ply).`,
         ]),
         ...(thin.key === 1 ? [it('Check the glue-line type on the sheet (interior or Type II is what the Standard weather spec assumed); seal every face and edge.')] : []),
         ...(thin.key === 4 ? [it('Ask what glue the sheet carries (interior or exterior).', ['The sled is garage-kept and every face and edge is sealed, so an interior glue line is acceptable; ask anyway.'])] : []),

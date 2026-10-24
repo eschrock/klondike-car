@@ -14,7 +14,7 @@ import {
   GRIP_WASHER_LOW_OD_IN, GRIP_WASHER_OD_IN, HINGE_R_IN, PIN_HEAD_IN, PIN_LEN_IN, PIN_R_IN, gripFrame, seatBackSupport,
 } from '../../model/seat';
 import { atPose, brakeGeometry, type V2 } from '../../model/brake-layout';
-import { handleGeometry, SOCKET_ACCESS_HOLE_IN, SOCKET_SCREW_HEAD_IN } from '../../model/handle';
+import { handleGeometry, socketScrewZ, SOCKET_ACCESS_HOLE_IN, SOCKET_SCREW_HEAD_IN } from '../../model/handle';
 import { frac } from '../svg-util';
 import { ribFillers } from '../cutlist';
 import { roughFrac } from '../units';
@@ -424,7 +424,7 @@ const storageBox: FigFn = (c) => {
   const R = (x0: number, y0: number, x1: number, y1: number, s: Style): void => rectIn(F, pl, x0, y0, x1, y1, s);
   for (const s of [1, -1]) R(L.xSideStart, s * L.hwC, xEnd, s * (L.hwC + L.side), GHOST);
   R(L.xRear, -yMax + 0.2, L.xRear + L.transom, yMax - 0.2, GHOST);
-  for (const tag of ['L', 'R']) { const b = box(c, `transom-backer-${tag}`); if (b) R(b.min[0], b.min[1], b.max[0], b.max[1], GHOST); }
+  for (const tag of ['L', 'R']) for (const n of [1, 2]) { const b = box(c, `transom-backer-${tag}${n}`); if (b) R(b.min[0], b.min[1], b.max[0], b.max[1], GHOST); }
   for (const st of stations) for (const s of [1, -1]) R(st.x - hl / 2, s * (st.yIn - dep), st.x + hl / 2, s * st.yIn, GHOST);
   // the floor inside the walls, then the coaming on top of the walls
   R(g.x0, -g.hw, g.x1, g.hw, { fill: '#fbf8f0', stroke: 'none' });
@@ -942,7 +942,7 @@ const handleFig: FigFn = (c) => {
   const p = c.p;
   const L = computeLayout(p);
   const h = handleGeometry(p, L);
-  const tr = box(c, 'transom-rear'), bk = box(c, 'transom-backer-L'), bar = box(c, 'handle-bar');
+  const tr = box(c, 'transom-rear'), bk = box(c, 'transom-backer-L1'), bk2 = box(c, 'transom-backer-L2'), bar = box(c, 'handle-bar');
   if (!tr || !c.by('handle-post-L')) return null;
   const w = p.handleSocketWallIn;
   const sx0 = L.xRear - h.socketX, sx1 = L.xRear;
@@ -955,7 +955,7 @@ const handleFig: FigFn = (c) => {
   const fa = fit({ minX: sx0 - 2.4, minY: tr.min[2] - 0.6, maxX: bx1 + 2.6, maxY: zTopA }, { x: 120, y: 70, w: 110, h: 470 }, 1, 'center');
   const R = (a: number, b: number, c2: number, d: number, s: Style): void => rectIn(F, fa, a, b, c2, d, s);
   R(tr.min[0], tr.min[2], tr.max[0], tr.max[2], GHOST);
-  if (bk) R(bk.min[0], bk.min[2], bk.max[0], bk.max[2], GHOST);
+  for (const b of [bk, bk2]) if (b) R(b.min[0], b.min[2], b.max[0], b.max[2], GHOST);
   R(tr.max[0], L.deckBot, bx1 + 2.6, L.deckTop, mat('deck', { opacity: 0.7 }));
   // parked: the bow sinks parkDrop and rests just over the transom top
   const d = h.parkDropIn;
@@ -968,7 +968,7 @@ const handleFig: FigFn = (c) => {
   R(h.postX[0] - 0.3, bar0, h.postX[1] + 0.3, bar1, acc('oak'));
   F.circle(fa.at([h.xBar, h.zPin]), Math.max(3, (p.handlePinDiameterIn / 2) * fa.kx), acc('steel', { width: 1.2 }));
   F.circle(fa.at([h.xBar, h.zPin + d]), 2.5, { fill: '#ffffff', stroke: INK, width: 1 });
-  const screwsZ = [h.zBot + 1.2, h.zTop - 1.2];
+  const screwsZ = socketScrewZ(h);
   for (const z of screwsZ) F.line(fa.at([sx1 - w, z]), fa.at([bx1 - 0.05, z]), { stroke: MAT.steel.stroke, width: 2.4 });
   // dims: the socket's bottom above the transom's bottom edge, the pin above the socket bottom
   const xd1 = fa.at([sx0 - 0.6, 0])[0], xd2 = fa.at([sx0 - 1.8, 0])[0];
@@ -987,8 +987,8 @@ const handleFig: FigFn = (c) => {
   F.label(fa.at([h.postX[1] - 0.3, bar0 - d]), [xr, yOf(bar0 - d) + 18], 'parked bow, just over the transom', { size: 12, color: MUTED });
   F.label(fa.at([h.xBar, h.zPin]), [xr, yOf(h.zPin) + 22], [`${f16(p.handlePinDiameterIn)} clevis pin through both socket`, `walls and the post's lower hole,`, `${f16(h.zPin - h.zFoot)} up the post: to ride`], { size: 12 });
   F.label(fa.at([sx0 + 0.2, (h.zBot + h.zPin) / 2 - 3]), [xr, yOf((h.zBot + h.zPin) / 2) + 20], ['aluminum socket on the outside', 'of the transom (fitted, then off)'], { size: 12 });
-  if (bk) F.label(fa.at([(bk.min[0] + bk.max[0]) / 2, bk.min[2] + 2.2]), [xr, yOf(bk.min[2] + 2.2) + 2], 'oak backer inside the transom', { size: 12, color: MUTED });
-  F.label(fa.at([(sx1 + bx1) / 2, screwsZ[0]]), [xr, yOf(screwsZ[0]) + 52], ['2 screws a socket into', 'T-nuts in the backer (detail B)'], { size: 12 });
+  if (bk) F.label(fa.at([(bk.min[0] + bk.max[0]) / 2, (bk.min[2] + bk.max[2]) / 2]), [xr, yOf((bk.min[2] + bk.max[2]) / 2) + 2], ['oak backer blocks inside the', 'transom, one at each screw'], { size: 12, color: MUTED });
+  F.label(fa.at([(sx1 + bx1) / 2, screwsZ[0]]), [xr, yOf(screwsZ[0]) + 52], ['2 screws a socket into', 'T-nuts in the backer blocks (detail B)'], { size: 12 });
 
   // ── B. section at the lower socket screw
   F.sub([500, 52], 'B. A socket screw, the post out');
@@ -996,7 +996,7 @@ const handleFig: FigFn = (c) => {
   const fb = fit({ minX: sx0 - 0.15, minY: z0 - 1.1, maxX: bx1 + 0.3, maxY: z0 + 1.1 }, { x: 510, y: 80, w: 230, h: 170 }, 1, 'center');
   const S = (a: number, b: number, c2: number, dd: number, s: Style): void => rectIn(F, fb, a, b, c2, dd, s);
   S(L.xRear, z0 - 1.1, L.xRear + L.transom, z0 + 1.1, mat('oak', { opacity: 0.6 }));
-  S(L.xRear + L.transom, z0 - 1.1, bx1, z0 + 1.1, mat('oak', { opacity: 0.6 }));
+  S(L.xRear + L.transom, Math.max(z0 - 1.1, bk?.min[2] ?? -Infinity), bx1, Math.min(z0 + 1.1, bk?.max[2] ?? Infinity), mat('oak', { opacity: 0.6 })); // the lower backer block, its own height
   S(sx1 - w, z0 - 1.1, sx1, z0 + 1.1, { fill: ALU.fill, stroke: ACCENT, width: 1.4 });
   S(sx0, z0 - 1.1, sx0 + w, z0 + 1.1, { fill: ALU.fill, stroke: ACCENT, width: 1.4 });
   S(sx0, z0 - SOCKET_ACCESS_HOLE_IN / 2, sx0 + w, z0 + SOCKET_ACCESS_HOLE_IN / 2, { fill: '#ffffff', stroke: ALU.stroke, width: 1 });

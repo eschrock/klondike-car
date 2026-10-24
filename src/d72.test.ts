@@ -27,6 +27,10 @@ import { PRE_D72 } from './test-fixtures';
 const defaults = defaultParams();
 const withMat = (m: number): Params => ({ ...defaults, thinSheetMaterial: m });
 const OAK = THIN_SHEET.whiteOakPly, OKOUME = THIN_SHEET.okoumeMarine, BALTIC = THIN_SHEET.balticBirch3mm, BALTIC6 = THIN_SHEET.balticBirch6mm; // D-80: the default (Standard) thin sheet is the 6 mm Baltic birch
+// 2026-10-24: the defaults are now the sheets as bought (white oak thin sheet, 13 mm deck, 5 mm combi-core white oak values). The D-73 / D-80 thin-sheet rules
+// and the material comparisons are pinned on the design they were written for: follow the weather (Standard = 6 mm Baltic birch), the 12 mm deck and the D-73 white oak estimates
+const D80_SHEETS: Partial<Params> = { thinSheetMaterial: THIN_SHEET.followWeather, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472, whiteOakPlyThickIn: 0.21, whiteOakPlyDensityPcf: 40, whiteOakPlyMoePsi: 1100000, whiteOakPlyMorPsi: 5500, whiteOakPlyMoePerpPsi: 500000, whiteOakPlyMorPerpPsi: 2750 };
+const base80 = { ...defaults, ...D80_SHEETS } as Params;
 const sizeKey = (s: string): string | null => /^(?:\d+ [x×] )?(#\d+) [×x] ([\d-/]+)/.exec(s)?.slice(1, 3).join(' x ') ?? null;
 
 describe('D-72: three wood-screw sizes, every screw inside its stack with its bite', () => {
@@ -66,7 +70,7 @@ describe('D-72: three wood-screw sizes, every screw inside its stack with its bi
     expect(deep.fit!.lenIn - deep.fit!.gripIn).toBeCloseTo(0.5, 6);
     expect(deep.count).toBe(7); // D-81: a screw in every gap between the tie stations (there are no Dominos to skip); it was 4 in every other gap
     const shallow = js.find((j) => /no counterbore needed/.test(j.size!))!;
-    expect(shallow.fit!.lenIn - shallow.fit!.gripIn).toBeCloseTo(0.6345, 3);
+    expect(shallow.fit!.lenIn - shallow.fit!.gripIn).toBeCloseTo(0.6745, 3); // 2026-10-24: 0.6745 (13 mm deck as bought: the rail is 0.04 in shallower); 0.6345 with the 12 mm deck
   });
   it('pickWoodScrew takes the shortest standard length of the gauge that bites and stays inside', () => {
     expect(pickWoodScrew(8, 0.06, 0.75).lenIn).toBe(0.625); // a hinge leaf into a 3/4 in lid frame
@@ -94,7 +98,7 @@ describe('D-72: three wood-screw sizes, every screw inside its stack with its bi
   });
   it('the lash row passes (D-76: through-bolts; D-83: 0.61 at the 233 lbf D-ring rating, 0.77 at 300 lbf), and the brake pivot-block row too', () => {
     const cs = runChecks(defaults, { includeTruck: false });
-    expect(cs.find((c) => c.id === 'lash-load')!.util!).toBeCloseTo(0.664, 2); // D-85: 0.664 (the box rib moved aft, a softer base); D-83: 0.605 with the 233 lbf D-ring load (0.767 at 300 lbf)
+    expect(cs.find((c) => c.id === 'lash-load')!.util!).toBeCloseTo(0.673, 2); // 2026-10-24: 0.673 (13 mm deck, 5 mm combi-core white oak sides as bought); D-85: 0.664 (the box rib moved aft, a softer base); D-83: 0.605 with the 233 lbf D-ring load (0.767 at 300 lbf)
     expect(cs.find((c) => c.id === 'lash-load')!.status).toBe('pass');
     expect(cs.find((c) => c.id === 'brake-pivot')!.status).toBe('pass');
     expect(cs.find((c) => c.id === 'brake-flap')!.status).toBe('pass');
@@ -159,19 +163,22 @@ describe('D-72: bolts and eye bolts at stock lengths', () => {
 });
 
 describe('D-73: the thin-sheet material and the weather spec', () => {
+  const withMat = (m: number): Params => ({ ...base80, thinSheetMaterial: m }); // the D-80 design (D80_SHEETS), not the bought-sheet defaults
   it('the params: weatherSpec (Standard 0, Extreme 1) and thinSheetMaterial (follow the weather setting, white oak, okoume, 3 mm Baltic, 6 mm Baltic) with their notes and statuses', () => {
     expect(defaults.weatherSpec).toBe(WEATHER_SPEC.standard);
-    expect(defaults.thinSheetMaterial).toBe(THIN_SHEET.followWeather);
+    expect(defaults.thinSheetMaterial).toBe(THIN_SHEET.whiteOakPly); // 2026-10-24: the white oak sheet Eric bought (it was follow the weather)
+    expect(PARAM_DEFS.thinSheetMaterial.status).toBe('locked');
     expect(PARAM_DEFS.weatherSpec.options!.map((o) => o.value)).toEqual([0, 1]);
     expect(PARAM_DEFS.weatherSpec.note).toMatch(/garage-kept, used a few times a year, gets wet at most at a rainy derby \(Eric, 2026-10-12\)/);
     expect(PARAM_DEFS.weatherSpec.note).toMatch(/stored outside or near salt/);
     expect(PARAM_DEFS.thinSheetMaterial.options!.map((o) => o.label)).toEqual(['Follow the weather setting', '1/4" white oak plywood', '6 mm okoume marine', '1/8" (3 mm) Baltic birch', '6 mm (1/4") Baltic birch']); // D-80: the okoume option and the new 6 mm Baltic
-    expect(PARAM_DEFS.whiteOakPlyThickIn.default).toBe(0.21);
-    expect(PARAM_DEFS.whiteOakPlyThickIn.status).toBe('verify');
-    expect(PARAM_DEFS.whiteOakPlyThickIn.note).toMatch(/measure the sheet/i);
-    expect(PARAM_DEFS.whiteOakPlyDensityPcf.default).toBe(40);
-    expect(PARAM_DEFS.whiteOakPlyDensityPcf.note).toMatch(/core varies/);
-    expect(PARAM_DEFS.whiteOakPlyMoePsi.status).toBe('assumed');
+    // 2026-10-24: the sheet as bought: 5 mm measured (was 0.21 in, verify), the combi-core estimates (verify until a break test)
+    expect(PARAM_DEFS.whiteOakPlyThickIn.default).toBe(0.197);
+    expect(PARAM_DEFS.whiteOakPlyThickIn.status).toBe('locked');
+    expect(PARAM_DEFS.whiteOakPlyThickIn.note).toMatch(/calipers 4\.95 to 5\.00 mm/);
+    expect(PARAM_DEFS.whiteOakPlyDensityPcf.default).toBe(45);
+    expect(PARAM_DEFS.whiteOakPlyDensityPcf.note).toMatch(/combi-core/);
+    expect(PARAM_DEFS.whiteOakPlyMoePsi.status).toBe('verify');
     expect(PARAM_DEFS.whiteOakPlyMoePsi.note).toMatch(/ESTIMATE/);
     expect(PARAM_DEFS.whiteOakPlyMorPsi.note).toMatch(/ESTIMATE/);
     expect(PARAM_DEFS.balticThinThickIn.default).toBe(0.118);
@@ -186,17 +193,21 @@ describe('D-73: the thin-sheet material and the weather spec', () => {
     expect(defaults.birchDensityPcf).toBe(42);
   });
   it('"follow the weather setting": Standard is 6 mm Baltic birch (D-80; it was white oak plywood), Extreme weather is 6 mm okoume; an explicit choice wins', () => {
-    expect(thinSheetKey(defaults)).toBe(BALTIC6);
-    expect(thinSheetKey({ ...defaults, weatherSpec: WEATHER_SPEC.extreme })).toBe(OKOUME);
-    expect(thinSheetKey({ ...defaults, weatherSpec: WEATHER_SPEC.extreme, thinSheetMaterial: BALTIC })).toBe(BALTIC);
-    expect(thinSheetKey({ ...defaults, thinSheetMaterial: OAK, weatherSpec: WEATHER_SPEC.extreme })).toBe(OAK);
-    expect(thinSheet({ ...defaults, weatherSpec: WEATHER_SPEC.extreme }).thicknessIn).toBe(0.236);
-    expect(thinSheet(defaults)).toMatchObject({ thicknessIn: 0.236, densityPcf: 42, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'baltic-6mm' });
+    expect(thinSheetKey(defaults)).toBe(OAK); // 2026-10-24: the bought white oak is an explicit choice, so it wins in both specs
+    expect(thinSheetKey({ ...defaults, weatherSpec: WEATHER_SPEC.extreme })).toBe(OAK);
+    expect(thinSheet(defaults)).toMatchObject({ thicknessIn: 0.197, densityPcf: 45, priceKey: 'white-oak-1/4' });
+    expect(thinSheetKey(base80)).toBe(BALTIC6);
+    expect(thinSheetKey({ ...base80, weatherSpec: WEATHER_SPEC.extreme })).toBe(OKOUME);
+    expect(thinSheetKey({ ...base80, weatherSpec: WEATHER_SPEC.extreme, thinSheetMaterial: BALTIC })).toBe(BALTIC);
+    expect(thinSheetKey({ ...base80, thinSheetMaterial: OAK, weatherSpec: WEATHER_SPEC.extreme })).toBe(OAK);
+    expect(thinSheet({ ...base80, weatherSpec: WEATHER_SPEC.extreme }).thicknessIn).toBe(0.236);
+    expect(thinSheet(base80)).toMatchObject({ thicknessIn: 0.236, densityPcf: 42, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'baltic-6mm' });
     expect(thinSheet(withMat(OAK))).toMatchObject({ thicknessIn: 0.21, densityPcf: 40, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'white-oak-1/4' });
     expect(thinSheet(withMat(BALTIC))).toMatchObject({ thicknessIn: 0.118, densityPcf: 42, sheetWidthIn: 60, sheetLengthIn: 60, priceKey: 'baltic-3mm' });
     expect(thinSheet(withMat(OKOUME))).toMatchObject({ thicknessIn: 0.236, densityPcf: 33, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'okoume-6mm' });
-    expect(thinSheet({ ...defaults, ...PRE_D72 } as Params)).toMatchObject({ thicknessIn: 0.157, nominal: '4 mm', priceKey: 'okoume-6mm' }); // the 4 mm okoume (PRE_D72) is still built; the BOM prices it as 'okoume-4mm' (bom.ts)
-    expect(derived(defaults).thinPlyIn).toBe(0.236);
+    expect(thinSheet({ ...base80, ...PRE_D72 } as Params)).toMatchObject({ thicknessIn: 0.157, nominal: '4 mm', priceKey: 'okoume-6mm' }); // the 4 mm okoume (PRE_D72) is still built; the BOM prices it as 'okoume-4mm' (bom.ts)
+    expect(derived(base80).thinPlyIn).toBe(0.236);
+    expect(derived(defaults).thinPlyIn).toBe(0.197); // 2026-10-24: the bought 5 mm white oak
     expect(derived(defaults).plyDensityPcf).toBe(33); // the 12 mm deck and seat back stay marine okoume
   });
 
@@ -283,15 +294,15 @@ describe('D-73: the thin-sheet material and the weather spec', () => {
 
   it('the four materials side by side (empty mass, thin parts, web row): 6 mm Baltic (the default, D-80) 122.08 lb, white oak 120.75 lb, 6 mm okoume 119.99 lb, 3 mm Baltic 117.98 lb (D-83 removed the cushion vinyl and cover, the 2 in clamp plates added a little; D-77: +0.87 lb the pivot straps and the knee roofs; D-76: +0.96 lb the ribs)', () => {
     const rows = [BALTIC6, OAK, OKOUME, BALTIC].map((m) => {
-      const p = withMat(m);
+      const p = { ...base80, thinSheetMaterial: m }; // (2026-10-24: D-96/97/98) the D-80 comparison on its own sheets (D80_SHEETS), not the bought ones
       const parts = buildModel(p);
       const thin = parts.filter((x) => x.kind === 'sheet' && x.stock && x.stock.t < 0.3).reduce((a, x) => a + x.massLb, 0);
       return { total: totalMass(parts), thin, web: runChecks(p, { includeTruck: false }).find((c) => c.id === 'side-web')!.util! };
     });
-    expect(rows[0].total).toBeCloseTo(122.75, 1); // 122.68 before the build audit (the 8 sign standoff discs +0.105 lb, the motion-audit trims -0.037 lb); 122.59 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 122.94 before the storage turn-buttons (D-89, round 3); assembly review rounds 1-2 (D-88 to D-91): +0.14 lb; D-85: +0.72 lb (the rear ribs, rings and ties, less the sign strips); 122.08 before
-    expect(rows[1].total).toBeCloseTo(121.47, 1); // 121.40 before the sign standoff discs; 121.28 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 121.63 before the storage turn-buttons (D-89, round 3); 121.47 before the assembly review (D-88 to D-91); D-77: 121.09 with the old seat pads and 1.75 in plates
-    expect(rows[2].total).toBeCloseTo(120.73, 1); // 120.63 before the sign standoff discs; 120.66 before D-93 (the lid 1/8 in shorter at its aft end, the rounded 5/8 in turn-buttons, the 1-1/4 in flag blocks: -0.037 lb); 120.5 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 120.85 before the storage turn-buttons (D-89, round 3); 120.71 before the assembly review (D-88 to D-91); the 6 mm okoume (118.28 for the 4 mm before D-80)
-    expect(rows[3].total).toBeCloseTo(119.03, 1); // 118.95 before the sign standoff discs; 118.55 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); +0.014 lb: the 3/4 in thin-nylock kingpin slot keeps oak (D-88); 118.9 before the storage turn-buttons (D-89, round 3); 118.7 before the assembly review (D-88 to D-91)
+    expect(rows[0].total).toBeCloseTo(121.43, 1); // (2026-10-24: D-96/97/98) the two-block transom backers, -1.3 lb (D-97); 122.75 before; 122.68 before the build audit (the 8 sign standoff discs +0.105 lb, the motion-audit trims -0.037 lb); 122.59 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 122.94 before the storage turn-buttons (D-89, round 3); assembly review rounds 1-2 (D-88 to D-91): +0.14 lb; D-85: +0.72 lb (the rear ribs, rings and ties, less the sign strips); 122.08 before
+    expect(rows[1].total).toBeCloseTo(120.15, 1); // (2026-10-24: D-96/97/98) -1.3 lb (D-97); 121.47 before; 121.40 before the sign standoff discs; 121.28 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 121.63 before the storage turn-buttons (D-89, round 3); 121.47 before the assembly review (D-88 to D-91); D-77: 121.09 with the old seat pads and 1.75 in plates
+    expect(rows[2].total).toBeCloseTo(119.41, 1); // (2026-10-24: D-96/97/98) -1.3 lb (D-97); 120.73 before; 120.63 before the sign standoff discs; 120.66 before D-93 (the lid 1/8 in shorter at its aft end, the rounded 5/8 in turn-buttons, the 1-1/4 in flag blocks: -0.037 lb); 120.5 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 120.85 before the storage turn-buttons (D-89, round 3); 120.71 before the assembly review (D-88 to D-91); the 6 mm okoume (118.28 for the 4 mm before D-80)
+    expect(rows[3].total).toBeCloseTo(117.71, 1); // (2026-10-24: D-96/97/98) -1.3 lb (D-97); 119.03 before; 118.95 before the sign standoff discs; 118.55 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); +0.014 lb: the 3/4 in thin-nylock kingpin slot keeps oak (D-88); 118.9 before the storage turn-buttons (D-89, round 3); 118.7 before the assembly review (D-88 to D-91)
     expect(rows[0].thin).toBeCloseTo(11.30, 1); // 11.7 before the fixed lid strip (D-89) and the kingpin jam nut (D-88)
     expect(rows[1].thin).toBeCloseTo(9.81, 1); // 10.16 before the fixed lid strip (D-89) and the kingpin jam nut (D-88)
     expect(rows[2].thin).toBeCloseTo(9.30, 1); // 9.6 before the fixed lid strip (D-89) and the kingpin jam nut (D-88)
@@ -304,8 +315,9 @@ describe('D-73: the thin-sheet material and the weather spec', () => {
   });
 
   it('a thick custom okoume sheet (the old panelPlyIn) still works through the okoume option, and panelPlyIn is ignored by the others', () => {
-    expect(thinSheet({ ...defaults, thinSheetMaterial: OKOUME, panelPlyIn: 0.354 }).thicknessIn).toBe(0.354);
-    expect(thinSheet({ ...defaults, panelPlyIn: 0.354 }).thicknessIn).toBe(0.236); // the Standard default is the 6 mm Baltic birch (D-80), whatever panelPlyIn says
+    expect(thinSheet({ ...base80, thinSheetMaterial: OKOUME, panelPlyIn: 0.354 }).thicknessIn).toBe(0.354);
+    expect(thinSheet({ ...base80, panelPlyIn: 0.354 }).thicknessIn).toBe(0.236);
+    expect(thinSheet({ ...defaults, panelPlyIn: 0.354 }).thicknessIn).toBe(0.197); // 2026-10-24: the bought white oak ignores it too // the Standard default is the 6 mm Baltic birch (D-80), whatever panelPlyIn says
   });
 });
 
@@ -367,31 +379,34 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
   });
 });
 
-describe('the numbers at the defaults (weatherSpec Standard: 6 mm Baltic birch, the solid rod, the 3 wood-screw sizes)', () => {
+describe('the numbers at the defaults (2026-10-24: the bought 5 mm white oak and 13 mm deck; the D-80 6 mm Baltic birch design beside it; the solid rod, the 3 wood-screw sizes)', () => {
   it('empty mass 122.08 lb (D-84, D-80/D-83: the 6 mm Baltic sides, box and lid and the 2 in clamp plates, less the lighter EVA seat pads and lights; 121.09 lb with the 1/4 in white oak ply at D-77, +0.87 lb the pivot straps and knee roofs; D-76: +0.96 lb the side ribs; 115.95 lb at D-71)', () => {
-    const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
-    expect(m).toBeCloseTo(122.732, 2); // 122.754 before the 1/4 in handlebow pins and the deeper post relief groove (2026-10-24 review); 122.739 before the steering chain keepers (D-56: two 1/8 in shock cords and their two screw eyes, +0.015 lb); 122.754 before the flag blocks' 1/4 in cradle was drawn (-0.015 lb); 122.649 before the 8 sign standoff discs (+0.105 lb: 0.025 lb of oak, 0.08 lb of epoxy at 0.01 lb a glue joint); 122.686 before D-93 (-0.037 lb: the lid 1/8 in shorter at its aft end -0.020, the rounded 5/8 in turn-buttons -0.006, the 1-1/4 in flag blocks -0.010); 122.606 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); D-88 final: +0.014 lb, the kingpin slot 3/4 in tall for the thin nylock (jam) nut keeps oak; 122.592 before that; 122.942 before the storage turn-buttons (D-89, round 3); assembly review round 2: +0.148 lb (the narrower kingpin nut slot keeps more oak, the brake down-ties and snap hooks, the lid-support block, less the lighter lid hinges); round 1: -0.011 lb (the bigger kingpin nut slot and the king-beam reliefs for the plate bolt heads); 122.805 before. D-85: +0.725 lb (the rear ribs, rings and ties, the box rib moved, no sign strips); 122.080 before. Older note: // D-84: +0.32 lb (the 1/8 in grab-board strip and the oak caps, one screw and washer fewer); was 121.617; merged with the final review of the build outputs (121.639 before: 13/32 knee holes, 7/8 narrow washers and the rib-knee shift)
-    const oak = totalMass(buildModel({ ...defaults, thinSheetMaterial: OAK }, { rider: 'none', cargo: false }));
-    expect(oak).toBeCloseTo(121.47, 1); // 121.40 before the sign standoff discs; 121.28 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 121.63 before the storage turn-buttons (D-89, round 3); 121.48 before the assembly review (D-88 to D-91)
+    expect(totalMass(buildModel(defaults, { rider: 'none', cargo: false }))).toBeCloseTo(121.705, 2); // (2026-10-24: D-96/97/98) 13 mm deck, 5 mm combi-core white oak sides as bought, the two-block transom backers (D-97, -1.3 lb) and the seat-back insert pads (D-98); 122.811 before D-97
+    // the D-80 design (6 mm Baltic birch, 12 mm deck: D80_SHEETS) and the materials beside it
+    const m = totalMass(buildModel(base80, { rider: 'none', cargo: false }));
+    expect(m).toBeCloseTo(121.430, 2); // (2026-10-24: D-96/97/98) the two-block transom backers (D-97, -1.30 lb) and the seat-back insert pads (D-98); 122.732 before; 122.754 before the 1/4 in handlebow pins and the deeper post relief groove (2026-10-24 review); 122.739 before the steering chain keepers (D-56: two 1/8 in shock cords and their two screw eyes, +0.015 lb); 122.754 before the flag blocks' 1/4 in cradle was drawn (-0.015 lb); 122.649 before the 8 sign standoff discs (+0.105 lb: 0.025 lb of oak, 0.08 lb of epoxy at 0.01 lb a glue joint); 122.686 before D-93 (-0.037 lb: the lid 1/8 in shorter at its aft end -0.020, the rounded 5/8 in turn-buttons -0.006, the 1-1/4 in flag blocks -0.010); 122.606 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); D-88 final: +0.014 lb, the kingpin slot 3/4 in tall for the thin nylock (jam) nut keeps oak; 122.592 before that; 122.942 before the storage turn-buttons (D-89, round 3); assembly review round 2: +0.148 lb (the narrower kingpin nut slot keeps more oak, the brake down-ties and snap hooks, the lid-support block, less the lighter lid hinges); round 1: -0.011 lb (the bigger kingpin nut slot and the king-beam reliefs for the plate bolt heads); 122.805 before. D-85: +0.725 lb (the rear ribs, rings and ties, the box rib moved, no sign strips); 122.080 before. Older note: // D-84: +0.32 lb (the 1/8 in grab-board strip and the oak caps, one screw and washer fewer); was 121.617; merged with the final review of the build outputs (121.639 before: 13/32 knee holes, 7/8 narrow washers and the rib-knee shift)
+    const oak = totalMass(buildModel({ ...base80, thinSheetMaterial: OAK }, { rider: 'none', cargo: false }));
+    expect(oak).toBeCloseTo(120.15, 1); // (2026-10-24: D-96/97/98) -1.3 lb (D-97); 121.47 before; 121.40 before the sign standoff discs; 121.28 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 121.63 before the storage turn-buttons (D-89, round 3); 121.48 before the assembly review (D-88 to D-91)
     expect(m - oak).toBeCloseTo(1.28, 1); // the 6 mm Baltic over the 1/4 in white oak ply (1.33 before the build audit)
-    const ok = totalMass(buildModel({ ...defaults, thinSheetMaterial: OKOUME }, { rider: 'none', cargo: false }));
-    expect(ok).toBeCloseTo(120.712, 2); // 120.719 before the chain keepers (D-56); 120.734 before the flag blocks' cradle; 120.629 before the sign standoff discs; 120.663 before D-93 (-0.034 lb); 120.513 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); D-88 final: +0.014 lb (the 3/4 in thin-nylock kingpin slot keeps oak); 120.499 before; 120.849 before the storage turn-buttons (D-89, round 3); 120.701 before the assembly review (D-88 to D-91); D-80: the 6 mm okoume (Extreme); 120.712 before the assembly review's king-beam slot and reliefs (-0.011)
-    const tubeOk = totalMass(buildModel({ ...defaults, ...PRE_D72 }, { rider: 'none', cargo: false }));
-    expect(tubeOk).toBeCloseTo(116.961, 2); // 116.968 before the chain keepers (D-56); 116.983 before the flag blocks' cradle; 116.874 before the sign standoff discs; 116.905 before D-93 (-0.031 lb); 116.618 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); D-88 final: +0.014 lb (the 3/4 in kingpin slot); 116.604 before; 116.954 before the storage turn-buttons (D-89, round 3); 116.802 before the assembly review (D-88 to D-91); assembly review round 1: -0.011 (king-beam slot and reliefs); D-85: +0.75 lb; // the D-71 tube and the 4 mm okoume (PRE_D72)
-    const rodOk4 = totalMass(buildModel({ ...defaults, ...PRE_D72, axleWallIn: 0 }, { rider: 'none', cargo: false }));
+    const ok = totalMass(buildModel({ ...base80, thinSheetMaterial: OKOUME }, { rider: 'none', cargo: false }));
+    expect(ok).toBeCloseTo(119.411, 2); // (2026-10-24: D-96/97/98) -1.30 lb (D-97); 120.712 before; 120.719 before the chain keepers (D-56); 120.734 before the flag blocks' cradle; 120.629 before the sign standoff discs; 120.663 before D-93 (-0.034 lb); 120.513 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); D-88 final: +0.014 lb (the 3/4 in thin-nylock kingpin slot keeps oak); 120.499 before; 120.849 before the storage turn-buttons (D-89, round 3); 120.701 before the assembly review (D-88 to D-91); D-80: the 6 mm okoume (Extreme); 120.712 before the assembly review's king-beam slot and reliefs (-0.011)
+    const tubeOk = totalMass(buildModel({ ...base80, ...PRE_D72 }, { rider: 'none', cargo: false }));
+    expect(tubeOk).toBeCloseTo(115.661, 2); // (2026-10-24: D-96/97/98) -1.30 lb (D-97); 116.961 before; 116.968 before the chain keepers (D-56); 116.983 before the flag blocks' cradle; 116.874 before the sign standoff discs; 116.905 before D-93 (-0.031 lb); 116.618 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); D-88 final: +0.014 lb (the 3/4 in kingpin slot); 116.604 before; 116.954 before the storage turn-buttons (D-89, round 3); 116.802 before the assembly review (D-88 to D-91); assembly review round 1: -0.011 (king-beam slot and reliefs); D-85: +0.75 lb; // the D-71 tube and the 4 mm okoume (PRE_D72)
+    const rodOk4 = totalMass(buildModel({ ...base80, ...PRE_D72, axleWallIn: 0 }, { rider: 'none', cargo: false }));
     expect(rodOk4 - tubeOk).toBeCloseTo(1.88, 1); // the rod over the tube
   });
   it('riders safe 50-250+ lb, green 50-240 lb (also 240 with the 6 mm okoume); cargo capacity 286 lb; nothing fails', () => {
     const sw = riderSweep(defaults);
     expect(sw.safe).toEqual({ loLb: 50, hiLb: 230, openLow: true, openHigh: false }); // D-84: the honest grab-board row
-    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 210, openLow: true, openHigh: false }); // D-83: 220 lb (230 with the 4 mm okoume) before the 2 in clamp plates added groove bearing area
+    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 210, openLow: true, openHigh: false }); // (2026-10-24: D-96/97/98) 210 lb on the sheets as bought (the grab board goes yellow at 220); D-83: 220 lb (230 with the 4 mm okoume) before the 2 in clamp plates added groove bearing area
     expect(riderSweep(withMat(OKOUME)).green).toMatchObject({ loLb: 50, hiLb: 210 });
     const cap = cargoCapacity(defaults);
-    expect(cap.capacityLb).toBe(276); // 277 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 276 before the storage turn-buttons (D-89: 0.35 lb lighter); D-78 removable knees (the default): the dry knee's brake-mount row limits it
-    expect(cap.comfortableLb).toBe(231); // D-85: 232 before (0.7 lb heavier sled)
+    expect(cap.capacityLb).toBe(275); // (2026-10-24: D-96/97/98) 275 (13 mm deck, 5 mm combi-core white oak sides as bought, the lighter two-block transom backers); 276 before; 277 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 276 before the storage turn-buttons (D-89: 0.35 lb lighter); D-78 removable knees (the default): the dry knee's brake-mount row limits it
+    expect(cap.comfortableLb).toBe(225); // (2026-10-24: D-96/97/98) the side-web row is already marginal (0.96) with an empty bed on the bought 5 mm combi-core white oak sides, so "comfortable" ignores it (a row marginal at the lightest load does not set it)
+    expect(cargoCapacity(base80).comfortableLb).toBe(233); // (2026-10-24: D-96/97/98) 233 with the lighter two-block transom backers (D-97); 231 before; the D-80 6 mm Baltic birch and 12 mm deck; D-85: 232 before (0.7 lb heavier sled)
     expect(cap.limiter!.id).toBe('brake-mount');
     const glued = cargoCapacity({ ...defaults, kneeMount: KNEE_MOUNT.fixed });
-    expect(glued.capacityLb).toBe(286); // 285 before the flag blocks' cradle (-0.015 lb); 286 before the sign standoff discs (+0.105 lb); 285 before D-93 (the sled 0.037 lb lighter); D-85: 285 (the 0.7 lb heavier sled); D-83: 254 before the 2 in clamp plates (the groove bearing limited it)
+    expect(glued.capacityLb).toBe(278); // (2026-10-24: D-96/97/98) 278 with the lighter two-block transom backers (D-97); 276 (the 13 mm deck as bought leaves 0.04 in less hanger above the rear beam seat); 286 before; 285 before the flag blocks' cradle (-0.015 lb); 286 before the sign standoff discs (+0.105 lb); 285 before D-93 (the sled 0.037 lb lighter); D-85: 285 (the 0.7 lb heavier sled); D-83: 254 before the 2 in clamp plates (the groove bearing limited it)
     expect(glued.limiter!.id).toBe('rear-beam-seat'); // was 'bearing-groove'
     const cs = runChecks(defaults, { includeTruck: false });
     expect(cs.filter((c) => c.status === 'fail')).toEqual([]);

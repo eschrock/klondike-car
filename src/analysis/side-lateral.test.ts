@@ -2,7 +2,7 @@
  * D-76: the side-lateral row (the study's beam-on-strips screening model, rebuilt) and the solver behind it, worked by hand where it can be.
  */
 import { describe, expect, it } from 'vitest';
-import { defaultParams, type Params } from '../params';
+import { THIN_SHEET, defaultParams, type Params } from '../params';
 import { buildModel } from '../model';
 import { makeContext } from './context';
 import { runChecks } from './index';
@@ -12,7 +12,8 @@ const ctxFor = (patch: Partial<Params> = {}) => {
   const p = { ...defaultParams(), ...patch } as Params;
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }), buildModel(p, { rider: 'none', cargo: false, seat: 'stowed' }));
 };
-const ctx = ctxFor();
+// 2026-10-24: the hand numbers below are for the D-80 design (follow the weather: the 6 mm Baltic birch web; the 12 mm deck); the bought sheets (the defaults) are pinned at the end
+const ctx = ctxFor({ thinSheetMaterial: THIN_SHEET.followWeather, deckPlyIn: 0.472 });
 
 describe('the model by hand', () => {
   const m = sideModel(ctx);
@@ -92,6 +93,15 @@ describe('the side-lateral row (D-76)', () => {
   it('without the bow post a rating pull at the bow is carried by the side alone (the study: the deck line goes to 1.35); the row reads the stations the D-rings are on', () => {
     const two = sideLateral(ctxFor({ lashPointsPerSide: 2 }));
     expect(two.rating.station).not.toBe(3);
+  });
+  it('at the defaults (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought) the row passes, but a 50 lbf push moves the gunwale 0.144 in: over the 1/8 in "feels solid" mark (reported, not judged)', () => {
+    const c0 = ctxFor();
+    const s0 = sideLateral(c0);
+    const r0 = runChecks(c0.p, { includeTruck: false }).find((c) => c.id === 'side-lateral')!;
+    expect(r0.status).toBe('pass');
+    expect(s0.push.wPinned).toBeCloseTo(0.144, 2);
+    expect(r0.how).toMatch(/"feels solid" mark is 0\.125" \(reported, not judged\): NOT met/);
+    expect(kneeScrewLoads(c0).bite).toBeCloseTo(2.5 - (0.5 + 0.512), 6); // the 13 mm deck
   });
   it('a weaker web across its grain (the 4 mm okoume) still passes: the ribs carry the load', () => {
     const ok = runChecks({ ...defaultParams(), thinSheetMaterial: 2 } as Params, { includeTruck: false }).find((c) => c.id === 'side-lateral')!;

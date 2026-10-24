@@ -476,8 +476,8 @@ function screwItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): Fastener
   const ins = new RegExp(String.raw`#(\d+)-(\d+)\s*[x×]\s*${LEN}`).exec(size);
   if (/insert/i.test(size) && ins) {
     const out: FastenerItem[] = [{ label: `${mat.insert} threaded insert #${ins[1]}-${ins[2]} x ${lenText(ins[3])}"`, qty: n }];
-    // The hinge leaves are screwed into these inserts (assembly step: "#10-32 x 3/8 screws to the inserts"): a machine screw one leaf thicker than the insert is long.
-    if (/hinge/i.test(`${j.to} ${part.id}`)) out.push({ label: `${mat.ss} flat-head machine screw #${ins[1]}-${ins[2]} x ${fracIn(Math.ceil((Number(eval16(ins[3])) + HINGE_LEAF_IN) * 8 - 1e-6) / 8)}"`, qty: n });
+    // The seat-back hinge leaves are screwed into these inserts: a machine screw as long as the insert plus one leaf, rounded DOWN to 1/8 in, so it cannot bottom (1/2 in for the 0.512 in insert, Eric 2026-10-24).
+    if (/hinge/i.test(`${j.to} ${part.id}`)) out.push({ label: `${mat.ss} flat-head machine screw #${ins[1]}-${ins[2]} x ${fracIn(Math.floor((Number(eval16(ins[3])) + HINGE_LEAF_IN) * 8 + 1e-6) / 8)}"`, qty: n });
     return out;
   }
   const metric = /\bM(\d)\b(?:\s*[x×]\s*(\d+))?/.exec(size);
@@ -780,11 +780,11 @@ export function bom(parts: Part[], p: Params, opts: BomOptions = {}): Bom {
       if (cache) return cache;
       if (opts.noCompare) return (cache = { computed: false, activeSpec: b.spec, standardUsd: b.spec === 'standard' ? b.totalUsd : NaN, extremeUsd: b.spec === 'extreme' ? b.totalUsd : NaN, deltaUsd: 0, deltaBySection: {}, deltaCoreUsd: 0, deltaTouchesUsd: 0, standardLb: NaN, extremeLb: NaN, deltaLb: 0, thinSheetStandard: '', thinSheetExtreme: '' });
       const otherP: Params = { ...p, weatherSpec: b.spec === 'standard' ? WEATHER_SPEC.extreme : WEATHER_SPEC.standard };
-      const sameSheet = thinSheet(otherP).key === thinSheet(p).key;
-      const otherParts = sameSheet ? parts : buildModel(otherP, EMPTY_VIEW);
+      // Always rebuild: the spec changes more than the thin sheet (316 hardware, epoxy, part masses), so the parts of one spec cannot stand in for the other's.
+      const otherParts = buildModel(otherP, EMPTY_VIEW);
       const o = bom(otherParts, otherP, { noCompare: true });
       const std = b.spec === 'standard' ? b : o, ext = b.spec === 'standard' ? o : b;
-      const mine = totalMass(parts), theirs = sameSheet ? mine : totalMass(otherParts);
+      const mine = totalMass(parts), theirs = totalMass(otherParts);
       const stdLb = b.spec === 'standard' ? mine : theirs, extLb = b.spec === 'standard' ? theirs : mine;
       const deltaBySection: Record<string, number> = {};
       for (const sec of ext.sections) deltaBySection[sec.id] = money(sec.subtotalUsd - (std.sections.find((q) => q.id === sec.id)?.subtotalUsd ?? 0));

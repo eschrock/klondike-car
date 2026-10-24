@@ -22,7 +22,7 @@ import { contactsAt, RAD } from './geometry';
 import { PRE_D71, PRE_D66, PRE_D72 } from '../test-fixtures';
 
 // D-66 changed the tracks, the load-height rule and the bow: this file's hand calculations are the D-58 design (PRE_D66); the D-66 numbers are in d66.test.ts
-const defaults = { ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66 } as Params; // D-72/D-73: the D-58 design had the tube and the 4 mm okoume (PRE_D72)
+const defaults = { ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66, deckPlyIn: 0.472 } as Params; // D-72/D-73: the D-58 design had the tube and the 4 mm okoume (PRE_D72); 2026-10-24: the hand calculations are for the 12 mm deck (the defaults are the 13 mm sheet as bought)
 const L = computeLayout(defaults);
 const cs = runChecks(defaults, { includeTruck: false });
 const byId = (c: AnalysisCheck[], id: string) => c.find((x) => x.id === id)!;

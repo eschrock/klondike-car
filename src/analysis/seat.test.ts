@@ -48,11 +48,11 @@ describe('seatChecks', () => {
     expect(k.T / k.Q).toBeLessThan(0.3); // a small share: the hinge screws in oak are not the weak link
     // Hand check at the defaults: w = 300/2/16 = 9.375 lbf/in per stile.
     expect(k.w).toBeCloseTo(9.375, 9);
-    // Hand check of the bare panel: the worst moment per station M (at the crest, w (H - A)^2 / 2), over the 16 in width: m = 2M/W, sigma = 6 m / t^2 with t = 0.472
+    // Hand check of the bare panel: the worst moment per station M (at the crest, w (H - A)^2 / 2), over the 16 in width: m = 2M/W, sigma = 6 m / t^2 with t = 0.512
     const Mcrest = (k.w * (k.sup.H - k.A) ** 2) / 2;
     expect(k.M).toBeGreaterThanOrEqual(Mcrest - 1e-6);
     expect(k.m).toBeCloseTo((2 * k.M) / k.sup.W, 9);
-    expect(k.sigmaPly).toBeCloseTo((6 * k.m) / (0.472 * 0.472), 6);
+    expect(k.sigmaPly).toBeCloseTo((6 * k.m) / (0.512 * 0.512), 6); // (2026-10-24: D-96/97/98) the 13 mm panel as bought (t = 0.472 before)
     expect(k.sigmaPly).toBeLessThan(2125);
   });
   it('a heavier torso share and a weak insert fail the row (the check has teeth)', () => {

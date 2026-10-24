@@ -16,6 +16,10 @@ import type { Part } from './types';
 const std = defaultParams();
 const ext: Params = { ...std, weatherSpec: WEATHER_SPEC.extreme };
 const SPECS: [string, Params][] = [['Standard', std], ['Extreme', ext]];
+/** D-80 is about the follow-the-weather thin sheet and the 12 mm deck; the defaults are now the 5 mm white oak plywood and the 13 mm deck as bought (2026-10-24), so the D-80 block sets them. */
+const fwStd: Params = { ...std, thinSheetMaterial: THIN_SHEET.followWeather, deckPlyIn: 0.472 };
+const fwExt: Params = { ...fwStd, weatherSpec: WEATHER_SPEC.extreme };
+const FW_SPECS: [string, Params][] = [['Standard', fwStd], ['Extreme', fwExt]];
 const MM = 25.4;
 const get = (parts: Part[], id: string) => parts.find((x) => x.id === id)!;
 /** A part's thickness in the direction of a Domino tenon: its stock thickness times its plies (a rail is two strips). */
@@ -23,9 +27,9 @@ const thick = (x: Part): number => (x.stock?.t ?? Infinity) * (x.plies ?? 1);
 
 describe('D-80: the thin sheet follows the weather (6 mm)', () => {
   it('follow-the-weather picks 6 mm Baltic birch (Standard) and 6 mm okoume (Extreme)', () => {
-    expect(thinSheetKey(std)).toBe(THIN_SHEET.balticBirch6mm);
-    expect(thinSheetKey(ext)).toBe(THIN_SHEET.okoumeMarine);
-    const a = thinSheet(std), b = thinSheet(ext);
+    expect(thinSheetKey(fwStd)).toBe(THIN_SHEET.balticBirch6mm);
+    expect(thinSheetKey(fwExt)).toBe(THIN_SHEET.okoumeMarine);
+    const a = thinSheet(fwStd), b = thinSheet(fwExt);
     expect(a).toMatchObject({ name: '6 mm Baltic birch', nominal: '1/4 in (6 mm)', priceKey: 'baltic-6mm', sheetWidthIn: 48, sheetLengthIn: 96 });
     expect(a.thicknessIn).toBeCloseTo(0.236, 9);
     expect(a.moePerpPsi).toBe(486000);
@@ -40,15 +44,16 @@ describe('D-80: the thin sheet follows the weather (6 mm)', () => {
     expect(PARAM_DEFS.balticSixThickIn.status).toBe('verify');
   });
   it('the sandwich bands are 0.195 in and the defaults validate clean in both specs', () => {
-    for (const [name, p] of SPECS) {
+    for (const [name, p] of FW_SPECS) {
       expect(validateParams(p).filter((i) => i.severity !== 'info'), name).toEqual([]);
       const web = get(buildModel(p), 'side-L-web');
       expect(web.material, name).toMatch(/Baltic birch|okoume/);
     }
+    for (const [name, p] of SPECS) expect(validateParams(p).filter((i) => i.severity !== 'info'), `default ${name}`).toEqual([]); // the 5 mm white oak plywood and 13 mm deck as bought (2026-10-24)
     expect((0.625 - 0.236) / 2).toBeCloseTo(0.1945, 4);
   });
   it('side-web and side-lateral pass in both specs (4 mm okoume failed the web at 2.0)', () => {
-    for (const [name, p] of SPECS) {
+    for (const [name, p] of FW_SPECS) {
       const cs = runChecks(p, { includeTruck: false });
       for (const id of ['side-web', 'side-lateral']) {
         const c = cs.find((q) => q.id === id)!;
@@ -201,10 +206,11 @@ describe('D-83: lid support, seat pads, D-rings, clamp plates, lights', () => {
     expect(get(buildModel(std), 'handle-socket-L').notes).toMatch(/not sealant/);
     expect(get(buildModel(ext), 'handle-socket-L').notes).toMatch(/epoxy or polysulfide sealant/);
   });
-  it('the empty sled stays near 122 lb (Standard) and 120 lb (Extreme)', () => {
-    expect(totalMass(buildModel(std))).toBeGreaterThan(120);
-    expect(totalMass(buildModel(std))).toBeLessThan(123);
-    expect(totalMass(buildModel(ext))).toBeGreaterThan(118);
-    expect(totalMass(buildModel(ext))).toBeLessThan(121.5);
+  it('the empty sled stays near 123 lb in both specs (both use the 5 mm white oak plywood)', () => {
+    // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought; about 122.8 lb Standard and 123.1 lb Extreme. It was 122 / 120 lb on the 6 mm Baltic birch / okoume.)
+    expect(totalMass(buildModel(std))).toBeGreaterThan(121.5);
+    expect(totalMass(buildModel(std))).toBeLessThan(123.5);
+    expect(totalMass(buildModel(ext))).toBeGreaterThan(122);
+    expect(totalMass(buildModel(ext))).toBeLessThan(124);
   });
 });

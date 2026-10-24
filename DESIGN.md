@@ -46,7 +46,7 @@ A **Klondike Derby sled on wheels** for Boy Scout Troop 455: a solid, wide, reus
 | Wheels | 10" pneumatic, 4 of them, wheelbase 44", both tracks 30" |
 | Deck height | 8" |
 | Side height | 4" at the bow rising in a concave sweep to 14" at the rear |
-| Empty mass (Standard spec) | **122.7 lb** (113.6 lb in Transport mode with the removable knees off, 56.8 lb per person for the two-person lift; 116.8 lb and 58.4 lb with knees that stay on) |
+| Empty mass (Standard spec) | **121.7 lb** (about 112.6 lb in Transport mode with the removable knees off, 56.3 lb per person for the two-person lift; 115.8 lb and 57.9 lb with knees that stay on) |
 
 ### Construction
 - **Body.** The two sides are sandwiches: a thin plywood web with oak bands glued on both faces at the top (gunwale) and bottom (chine). No grooves. The bow bulkhead is a shaped oak board that is the foot brace and a hand-hold. A 12 mm okoume deck rides on oak rails and 8-1/2" joists. The rear transom is 1/2" oak. Four oak **ribs** per side stand on the inside face of the web (rear, box, mid and bow-post stations). Their heads carry the eight D-ring tie-downs (zinc-plated steel Standard, 316 stainless Extreme), through-bolted on two bolts each (D-83), and they stiffen the sides sideways (D-76).
@@ -72,10 +72,10 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | Glue | Titebond III where a glue-up is wood-to-wood throughout; epoxy where any joint in it needs epoxy (D-92) | epoxy everywhere |
 | Dominos | beech (shop stock) | beech, epoxied in |
 | Finish | exterior spar urethane; epoxy only where needed | marine varnish over epoxy, gallon epoxy kit |
-| Thin sheet (follows the spec, D-80) | 6 mm Baltic birch | 6 mm okoume |
+| Thin sheet (as bought, D-96) | 5 mm white oak plywood | 5 mm white oak plywood |
 | Drains | drilled holes | stainless nipples |
 | Empty mass | 122.7 lb | 121.0 lb |
-| BOM total (no shipping or tax) | **$1,511** | **$2,401** |
+| BOM total (no shipping or tax) | **$1,579** | **$2,348** |
 
 ### Brake knees (`kneeMount`, D-78)
 Default **Removable knees (bolts, ratchet)** (a checkbox in the viewer toolbar beside Transport mode, and the Brake knees dropdown in Advanced): the knee is fitted dry and held by four 3/8" bolts. The option **Knees stay on (bolted, glued)** keeps the same four bolts, washers, nylock nuts and backer, and epoxies the knee to the rail and chine band:
@@ -97,14 +97,14 @@ Default **Removable knees (bolts, ratchet)** (a checkbox in the viewer toolbar b
 The analysis is the same in both settings except `brake-mount` (and `brake-abuse`, which reuses it): the glued knee never counted glue or friction, but its uniform dowel bearing treated knee, rail and backer as one unit. For a dry knee the row adds the NDS single-shear yield-mode check of the worst bolt between the 1-3/4" leg and the 1-3/8" of rail and backer left by the plate recess, across the grain: Z' about 296 lbf (mode II, with C_M 0.70 wet, C_D 1.6 for the stomp as an impact, C_g 0.85) against a worst bolt of about 256 lbf, **0.87**, which governs the row and passes. Because that pass leans on C_D 1.6, a second detail holds the knee to a sustained hold at C_D 1.0: **0.69**. The NDS spacing and edge minimums are not met, so the yield-mode value is an estimate (tear-out and splitting are checked separately). Why not pins or clamped inserts: [docs/studies/removable-knee.md](docs/studies/removable-knee.md).
 
 ### Thin sheet (`thinSheetMaterial`)
-The thin sheet is the side webs, storage box and lid, and sign blanks. The 12 mm deck and seat back are always okoume. The default **follows the weather spec**.
+The thin sheet is the side webs, storage box and lid, and sign blanks. The deck and seat back are okoume. The defaults are **the sheets Eric bought** (D-96): a 13 mm okoume deck and 5 mm white oak plywood, at the thick end of their caliper readings so no dado binds.
 
-| Option | Used by default in | Thickness | Notes |
+| Option | Used by default | Thickness | Notes |
 |---|---|---|---|
-| 6 mm (1/4") Baltic birch | Standard | 0.236" (verify: count 5 plies, measure the sheet) | side-web check 0.33; Peach State $49 |
-| 6 mm okoume BS 1088 | Extreme | 0.236" | side-web check 0.44; Aircraft Spruce $158.65 |
-| 1/4" white oak plywood | none | 0.21" | side-web check 0.61 |
-| 3 mm (1/8") Baltic birch | none | 0.118" | side-web check **4.8 (fails)** |
+| 5 mm white oak plywood, combi core (as bought) | yes | 0.197" (calipers 4.95 to 5.00 mm) | side-web check **0.96 (marginal)** at an estimated strength: thin oak faces over MDF-like crossbands |
+| 6 mm (1/4") Baltic birch | no | 0.236" | side-web check 0.33; Peach State $49 |
+| 6 mm okoume BS 1088 | no | 0.236" | side-web check 0.44; Aircraft Spruce $158.65 |
+| 3 mm (1/8") Baltic birch | no | 0.118" | side-web check **4.8 (fails)** |
 
 Sheets are always full 4' × 8' (D-68). Solid parts up to 1-3/4" thick come from one 8/4 board (D-95). Thicker parts are face-laminated: the axle beams, brake knees and chocks are 3 × 3/4" layers from 4/4, milled to 2-1/8" (D-70, D-74).
 
@@ -117,9 +117,9 @@ Sheets are always full 4' × 8' (D-68). Solid parts up to 1-3/4" thick come from
 ## 5. Key numbers (Standard spec, default parameters)
 
 - **Mass** 122.7 lb empty: white oak 57.4 lb, plywood 27.3 lb, wheels 12 lb, axles 5 lb, hardware, fasteners and everything else about 21 lb.
-- **Checks.** 54 engineering rows, **none fail**. One is marginal: turning radius (0.97 of its limit). The tightest passes: seat stowage 0.95, park-hold 0.88, storage packing 0.87, kingpin 0.86.
+- **Checks.** 54 rows, **none fail**. Two are marginal: turning radius (0.97 of its limit) and the side web (0.96, the 5 mm combi-core white oak at an estimated strength, D-96; the ribs give the panel support the strip check does not count). The tightest passes: seat stowage 0.94, storage packing 0.89, park-hold 0.88, brake-mount 0.87, grab board 0.86.
 - **Rider range.** Safe (nothing fails) **50 to 230 lb**; green (nothing marginal) **50 to 210 lb** (the grab-board row sets both ends, D-84; the brake-mount row also sets 210 with removable knees). The 150 lb rider is a plain pass; the 200 lb goal rider is green.
-- **Cargo.** The 200 lb payload passes. Capacity is **276 lb** (the dry removable knee's brake-mount row; 286 lb with glued knees, where the rear beam under the seat sets it); comfortable (still green) to **231 lb** (the rear beam under the seat).
+- **Cargo.** The 200 lb payload passes. Capacity is **275 lb** (the dry removable knee's brake-mount row; 278 lb with glued knees, where the rear beam under the seat sets it); comfortable (still green) to **225 lb** (the side web is marginal from an empty bed and is left out of that measure, D-96).
 - **Resting load.** A 250 lb adult sitting or standing on one foot anywhere on the deck passes (capacity 348 lb).
 - **Stability.** Straight tip 45° against a 35° limit; full-lock tip the same; slides before it tips (0.78 of limit).
 - **Sides.** A 50 lbf push moves a gunwale about 0.12" (under the 1/8" "feels solid" mark; reported, not judged).
@@ -152,7 +152,7 @@ src/ui/                  panels: params, analysis, sim, Simple view, Build mode
 
 Everything is a pure function of the parameters.
 
-**Build order (D-94).** Nothing is cut to its final size before what it fits against exists. Milling, edge-glued panels and laminations come first and stay oversize. The 12 mm deck and seat back are cut next: the deck is the reference, and the frame is dry-fitted and set to it (deck edge 1/2" in from each rail's outer face). The side webs are cut at the side forms, after a 1/8" hardboard test web has proved the forms and the deck's edge has been measured (59-1/2"). Once the hull is glued, the transom and bow bulkhead are cut, after laser-cut 1/4" plywood end templates (dados and mortises cut through) have been pushed onto it; both ends are dry-fitted together before any epoxy. The brake flaps are cut after their template is tried on the knee and tire at the wheel dry fit, the signs and grab boards after the ribs (and the reach check), and the storage walls and lid to the box ribs and box as built. The dry fit is two steps (the frame dropped into the sides, then the rails trimmed, mortised and piloted), and the last holes from below are their own step after the wheel dry fit. Every step that cuts a part opens with a "Before you cut" check: what to measure, from which edge, the design number, the tolerance, and what to do if it is off. The glue card is one box before the steps; each glue step points to it.
+**Build order (D-94).** Nothing is cut to its final size before what it fits against exists. Milling, edge-glued panels and laminations come first and stay oversize. The 13 mm deck and seat back are cut next: the deck is the reference, and the frame is dry-fitted and set to it (deck edge 1/2" in from each rail's outer face). The side webs are cut at the side forms, after a 1/8" hardboard test web has proved the forms and the deck's edge has been measured (59-1/2"). Once the hull is glued, the transom and bow bulkhead are cut, after laser-cut 1/4" plywood end templates (dados and mortises cut through) have been pushed onto it; both ends are dry-fitted together before any epoxy. The brake flaps are cut after their template is tried on the knee and tire at the wheel dry fit, the signs and grab boards after the ribs (and the reach check), and the storage walls and lid to the box ribs and box as built. The dry fit is two steps (the frame dropped into the sides, then the rails trimmed, mortised and piloted), and the last holes from below are their own step after the wheel dry fit. Every step that cuts a part opens with a "Before you cut" check: what to measure, from which edge, the design number, the tolerance, and what to do if it is off. The glue card is one box before the steps; each glue step points to it.
 
 | Section | What it gives you |
 |---|---|
