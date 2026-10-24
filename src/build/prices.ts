@@ -435,12 +435,9 @@ export const NOTE_PRICE: Record<string, Price> = {
  */
 export const GLASS_TAPE: Price = foundCP(0.7, 'yd', 'U.S. Composites', 'https://uscomposites.com/prices.html', '8.7 oz glass cloth tape, 2" wide, sold by the yard ($0.70; 20 ft is $4.67). The West 729-10 (9 oz, 10 ft roll) is $14.88');
 
-const FINISH = 'Paint store / marine supplier';
-const OAK_TREE = 'Oak Tree Supply';
 export const FINISH_PRICE: Record<string, Price> = {
-  stain: est(18, 'qt', FINISH, 'wipe-on oak stain (or leave natural)'),
-  conditioner: est(16, 'qt', FINISH, 'pre-stain conditioner or gel stain for the okoume, which blotches (DESIGN.md finishing)'),
-  gelStain: est(20, 'qt', FINISH, 'gel stain for the okoume'),
+  // D-99: one 2 oz bottle of the concentrate, mixed with water; not looked up (Eric's figure, about $20 at Rockler or Woodcraft).
+  dye: est(20, 'bottle', 'Rockler / Woodcraft', 'TransTint liquid dye concentrate, Golden Brown, 2 oz bottle (Homestead Finishing), about $20'),
   varnish: found(53.99, 'qt', 'TotalBoat', 'https://www.totalboat.com/products/lust-marine-spar-varnish', 'TotalBoat Lust Rapid Recoat marine spar varnish, quart (heavily fortified with UV stabilizers)'),
   // D-83: the lid legend is filled with a black oil-based paint marker, not a half pint of enamel.
   enamel: foundCP(4.9, 'ea', 'Walmart (Sharpie)', 'https://www.walmart.com/ip/seort/5468037669', 'Sharpie oil-based paint marker, fine point, black (Rust-Oleum gloss black half pint is $9.99), for the lid legend grooves', true),
@@ -451,7 +448,6 @@ export const FINISH_PRICE: Record<string, Price> = {
 };
 /**
  * Researched container prices (the real products), keyed like `FINISH_PRICE`; a container without one is priced as the base per-quart price times `FINISH_CONTAINER_FACTOR`.
- * Conditioner: no pint of the water-based product exists, so the pint line buys the quart.
  */
 export const FINISH_CONTAINER_PRICE: Record<string, Partial<Record<'pt' | 'qt' | 'gal', Price>>> = {
   enamel: { pt: FINISH_PRICE.enamel },
@@ -461,12 +457,6 @@ export const FINISH_CONTAINER_PRICE: Record<string, Partial<Record<'pt' | 'qt' |
       [foundPack(2, 95.99, 'qt', 'TotalBoat', 'https://www.totalboat.com/products/lust-marine-spar-varnish', 'the 2-quart kit is $95.99, cheaper than two quarts ($107.98)', false, '2-quart kit')]),
     gal: found(139.99, 'gal', 'TotalBoat', 'https://www.totalboat.com/products/lust-marine-spar-varnish', 'TotalBoat Lust Rapid Recoat marine spar varnish, gallon (360-400 ft2 at 3 mil wet); four quarts would be $216'),
   },
-  stain: { pt: found(19.6, 'pt', OAK_TREE, 'https://www.oaktreesupply.com/products/gf-water-based-dye', 'General Finishes water-based dye, pint (Woodcraft 20.99, item 148600; dark colors up to 29.95)', true) },
-  conditioner: {
-    pt: found(16.77, 'pt', 'Walmart / Ace / Alper\'s', 'https://www.walmart.com/ip/Minwax-Pre-Stain-Wood-Conditioner-Clear-1-Pint/17300083', 'Minwax water-based pre-stain wood conditioner: NO pint of the water-based product was found, so the pint line buys the QUART at $16.77 (Walmart sale; $21.99 at Ace or Alper\'s)', true),
-    qt: found(16.77, 'qt', 'Walmart / Ace / Alper\'s', 'https://www.walmart.com/ip/Minwax-Pre-Stain-Wood-Conditioner-Clear-1-Pint/17300083', 'Minwax water-based pre-stain wood conditioner, quart (Walmart sale; $21.99 at Ace or Alper\'s)', true),
-  },
-  gelStain: { pt: found(28, 'pt', OAK_TREE, 'https://www.oaktreesupply.com/collections/general-finishes/type_oil-based-stains', 'General Finishes oil-based gel stain, pint ("from 28" up to 37.95 by color; Woodcraft half pint 20.99)', true) },
 };
 
 /** Price of a container relative to a quart, for the finishing schedule's buy list: a pint costs about 0.6 of a quart, a gallon about 3.2 quarts. */

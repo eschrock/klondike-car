@@ -39,7 +39,7 @@ import { TONGUE_SHOULDER_FILLET_IN, tongueSeatHalfWidth } from '../model/pivot';
 import { boxTieGeometry, kneeScrews, lashBoltLength, sideRibStations, KNEE_SCREW_SEAT_IN, LASH_BOLT_DIA_IN, LASH_HOLE_DX_IN, LASH_BOLTS, LASH_WASHER } from '../model/side-ribs';
 import { localBounds, transformPoint, worldAABB } from '../model/bounds';
 import { BOARD_THICKNESSES, capStripSource, cutList, discStrip, isCapStrip, edgeJointUp, LAMINATION_SEAM_OFFSET_IN, resawUsableIn, ribFillers, ribFillerSource, type CutList, type GlueUp, type ResawPool } from './cutlist';
-import { EPOXY_SYSTEM, epoxyTimeFactor, finishingSchedule, glueJointEstimates } from './finishing';
+import { EPOXY_SYSTEM, epoxyTimeFactor, finishingSchedule, glueJointEstimates, isDyed } from './finishing';
 import { flatPattern } from './flat';
 import { analyzeShaperPart, type ShaperFeature } from './shaper-svg';
 import { formDrawings, RIB_STOCK_IN, type FormDrawing } from './forms';
@@ -430,6 +430,15 @@ function stepNo(c: Pick<StepCtx, 'parts' | 'p'>, id: string): number | string {
   return finishingSchedule(c.parts, c.p).steps.find((q) => q.id === id)?.n ?? '?';
 }
 
+/**
+ * D-99: the "dye first" line of a step that seals or coats a show face early: dye `what` (Golden Brown, as the finishing schedule's dye step says) before the epoxy, and keep the dye off the glue faces.
+ * Empty when the show faces are not dyed.
+ */
+function dyeFirst(c: Pick<StepCtx, 'parts' | 'p'>, what: string, glueFaces = 'the glue faces', when?: string): string {
+  if (!isDyed(c.p)) return '';
+  return `${when ? `${when}, dye ${what}` : `Dye ${what} first`} (Golden Brown, finishing step F${stepNo(c, 'stain')}); keep it off ${glueFaces}.`;
+}
+
 /** Total of one joint type touching the step's parts, with the mating part listed on one side only counted once. */
 function count(c: StepCtx, type: Joint['type']): number {
   return [...jointTally(c.parts, new Set(c.mine.map((x) => x.id)), type, () => '').values()].reduce((s, n) => s + n, 0);
@@ -474,7 +483,7 @@ export function glueCard(p: Params): Instr {
       ? [I('Titebond III:', [
         'Thin coat on both faces; open time about 10 min, so have the clamps set out.',
         'Clamp 30-60 min; full strength in 24 h.',
-        'Wipe squeeze-out at once with a damp rag: dried glue seals the wood and shows as a pale patch under the clear finish.',
+        isDyed(p) ? 'Wipe squeeze-out at once with a damp rag: dried glue blocks the dye and shows as a pale patch.' : 'Wipe squeeze-out at once with a damp rag: dried glue seals the wood and shows as a pale patch under the clear finish.',
         'Do not glue below 47 °F.',
       ])]
       : []),
@@ -485,6 +494,7 @@ export function glueCard(p: Params): Instr {
       `The resin is thin and runs out of a joint, so thicken it with ${E.thickener} (wear a dust mask; stir it in a little at a time): to the thickness of ketchup for gluing, and of peanut butter for fillets, bedding and gap-filling.`,
       `Where a fillet, plug bed or gap-fill shows and should match the oak, stir in ${E.colorMatch} (from your own sanding) in place of some of the silica.`,
       'For laminating, roll it on both faces and add only a spoonful of silica a cup, so the joint is not starved.',
+      ...(isDyed(p) ? ['Wipe squeeze-out off every show face before it kicks: cured epoxy blocks the dye (the show faces are dyed just before their first coat). Dye never goes on a glue face: it weakens the bond.'] : []),
     ]),
     I('Cold shop:', [
       `At 60 °F epoxy pot life is ${r(...c.potMin)} min and the clamp time ${r(...c.clampHours)} h.`,
@@ -1360,20 +1370,20 @@ const TEMPLATES_1: Template[] = [
               '(Extreme weather, stored outside: epoxy for every glue joint and a marine topcoat.)',
             ])
             : I('Weather spec: Extreme (stored outside or near salt): epoxy for every glue joint and marine varnish.'),
-          I('Run the finishing offcut tests first (finishing schedule, step F1).', [std ? 'They show how the clear urethane looks on each wood; no show face is coated until a panel passes.' : 'They decide how the okoume takes stain under epoxy; no show face is sealed until a panel passes.']),
+          I('Run the finishing offcut tests first (finishing schedule, step F1).', [isDyed(c.p) ? 'They set the two dye mixes (the okoume takes a diluted one) by the color under the epoxy; no show face is dyed or coated until a panel passes.' : std ? 'They show how the clear urethane looks on each wood; no show face is coated until a panel passes.' : 'They show how each wood looks under the epoxy; no show face is sealed until a panel passes.']),
           std
             ? I('Epoxy ONE coat, unthickened (mix as on the glue card), on:', [
               'the deck underside and deck edges (water pools there);',
               `any ${thinSheet(c.p).name} edge not captured in a dado or banded with oak.`,
-              'Leave the other plywood faces bare: they take the clear urethane at the finish (no stain).',
+              isDyed(c.p) ? 'No dye here: the deck underside is hidden and plywood edges take no dye. Leave the other plywood faces bare: the show faces are dyed, then coated, at the finish.' : 'Leave the other plywood faces bare: they take the clear urethane at the finish (no stain).',
               'The oak end grain is coated later: the transom and bulkhead edges at [[step:ends]], the rest in the finish.',
             ])
             : I('Epoxy-seal (one coat, unthickened, mixed as on the glue card) ONLY the deck underside and edges, every ply edge, and faces nobody will see.', [
               'The show faces stay bare: both web faces, the deck top, the box, the lid, the seat back.',
-              `They are stained, THEN sealed, after assembly (Finishing, steps ${stepNo(c, 'stain')}-${stepNo(c, 'epoxy')}). Water-based dye under epoxy is the safe route.`,
+              isDyed(c.p) ? `They are dyed, THEN sealed, after assembly (Finishing, steps ${stepNo(c, 'stain')}-${stepNo(c, 'epoxy')}). Water-based dye under epoxy is the safe route.` : `They are sealed after assembly (Finishing, step ${stepNo(c, 'epoxy')}).`,
             ]),
           I('Wash the amine blush off any sealed face that will be glued again.', ['Warm water and Scotch-Brite, dry, then 120 grit.', 'Glue faces stay bare or scuffed; keep the oak bands and rails bare.']),
-          I(std ? 'In every later glue-up, wipe squeeze-out off the bare show faces before it kicks: dried epoxy shows as a glossy patch under the clear finish.' : 'In every later glue-up, wipe squeeze-out off the bare show faces before it kicks: dried epoxy blocks the stain.'),
+          I(isDyed(c.p) ? 'In every later glue-up, wipe squeeze-out off the bare show faces before it kicks: cured epoxy blocks the dye and leaves a pale patch.' : 'In every later glue-up, wipe squeeze-out off the bare show faces before it kicks: dried epoxy shows as a glossy patch under the clear finish.'),
         ],
         checks: ['No bare ply edge left on any sheet part', 'Offcut panel approved before any show face is coated'],
       };
@@ -1819,6 +1829,7 @@ const TEMPLATES_2: Template[] = [
             `The outer chine band is ${bandSize('side-L-chine')} and the outer gunwale band ${bandSize('side-L-gunwale')}.`,
             'Push the outer chine band against the edge stops, so it runs flush with the web\'s bottom edge: it is the face that sits on the rail.',
             `The gunwale band bends on edge to the sheer and across its thickness to the S, both at once; leave it ${fin(c.p.gunwaleEndLongIn)} past each web end and set the end stops against it.`,
+            isDyed(c.p) ? 'These are the faces everyone sees: wipe the squeeze-out off the web and the bands before it kicks, or the dye will not take there.' : false,
           ], ['side-L-chine', 'side-L-gunwale', 'side-R-chine', 'side-R-gunwale']),
           I('Weight the bands with the same bags as cure 1, along the bands only: the web keeps its S now.'),
           ...(capCut && capL ? [I(`Once this cure is hard, fit a cap strip in the slot along the top: the web stops ${fin(computeLayout(c.p).webCap)} under the top of the gunwale bands, leaving a slot as wide as the web.`, [
@@ -2048,6 +2059,11 @@ const TEMPLATES_2: Template[] = [
             dj ? `Then the two ${dominoKey(dj)} Domino mortises in its rear face (the dado face): lay the bulkhead template on it, its slots over the dados, and mark the two Domino slots through it. Cut them at the marks on the Domino's middle width setting (a little play up and down, so the bulkhead can settle onto its dados); the rail-end mortises stay on the tight setting.` : false,
           ])] : []),
           I('Seal the two ends before any glue-up: one coat of unthickened epoxy on the transom\'s and the bulkhead\'s edges (their side edges are end grain) and in their hand holes.', [
+            ...(isDyed(c.p) ? [
+              dyeFirst(c, 'the edges that show', 'the dados, the mortises and the faces that glue to the hull'),
+              'Those are the top edges and the hand holes, and the end-grain side edges with the diluted mix.',
+              'Tape the faces along each edge so no epoxy runs onto them: a cured drip blocks the face\'s dye later.',
+            ] : []),
             'Keep it out of the dados, the mortises and the faces that glue to the hull.',
             'Let it cure, then wash the blush off and scuff it (as in [[step:seal]]) before [[step:transom]].',
             `Then check the sealed deck enters its dados: each dado is the deck's thickness plus about ${fin(c.p.deckSlopIn)} (a feeler gauge, or a deck offcut pushed in).`,
@@ -2149,6 +2165,7 @@ const TEMPLATES_2: Template[] = [
             `Epoxy (glue card), mixed in SMALL batches in a wide shallow container: the pot life is ${EPOXY_SYSTEM.potMin[0]}-${EPOXY_SYSTEM.potMin[1]} min, so do the fillets and the dado fills in the sequence you rehearsed, one batch at a time. You can do it alone.`,
             ...(vents.places.length ? ['Glue shows at the vent holes when the dados are full: fill them flush with thickened epoxy after the cure.'] : []),
             'Once the transom is home, fillet the inside corners with thickened epoxy. The fillet stops at the backer blocks, and stays out of the bottom 1" of each corner: the side drain hole is there.',
+            ...(isDyed(c.p) ? ['Keep the fillets neat and wipe every smear and run of squeeze-out off the faces before it kicks: the dye will not take over cured epoxy.'] : []),
             'After the cure, run a 3/8" bit through each side drain from outside to clear any epoxy.',
           ]),
         ],
@@ -2572,7 +2589,12 @@ const TEMPLATES_2: Template[] = [
             ...((g) => (g ? [((b) => `Except where the grab-board strips and caps go on (each side, ${near16(b.min[0] - computeLayout(c.p).xRear)} to ${near16(b.max[0] - computeLayout(c.p).xRear)} from the transom's outer face, the full height of the outer gunwale band): mask it. They are epoxied there at [[step:side-holes]], and epoxy does not hold on varnish; that patch is finished with the rest at [[step:finish]].`)(worldAABB(g))] : []))(c.by('seat-grip-L')),
             ...((pl, st) => (pl && st ? [`And mask each handle-socket footprint on the transom's outer face, ${fin(st.w)} × ${fin(st.l)}, centered ${fin(pl.off)} either side of the centerline, its bottom ${fin(pl.up)} up from the bottom edge: the sockets are bedded there in epoxy at [[step:hang]].`] : []))(socketOnTransom(c.parts), c.by('handle-socket-L')?.stock),
           ]),
-          I(std ? 'Offcut test first, then sand 120 / 150 and raise the grain once. No stain.' : 'Offcut test first, then sand 120 / 150 and stain the show faces.'),
+          isDyed(c.p)
+            ? I(`Offcut test first, then sand 120 / 150 and dye the show faces (finishing step F${stepNo(c, 'stain')}): the outside of the sides, the transom and the bulkhead.`, [
+              'No dye on the deck underside, the frame, the backers or the masked patches: they are hidden or glue faces.',
+              `Let the dye dry before any epoxy or ${std ? 'urethane' : 'varnish'} goes on.`,
+            ])
+            : I(std ? 'Offcut test first, then sand 120 / 150 and raise the grain once. No stain.' : 'Offcut test first, then sand 120 / 150 and raise the grain once.'),
           std
             ? I('Touch up the epoxy on the deck underside (coated in [[step:seal]]) and the transom and bulkhead edges (coated in [[step:ends]]), give the rest of the oak end grain its one coat, then urethane.', ['3 coats on the show faces, 2 on the hidden ones, 320 between coats.'])
             : I('Touch up the epoxy seal on the deck underside (done in [[step:seal]]) and the transom and bulkhead edges (done in [[step:ends]]), and seal the rest of the underside (one saturation coat), then varnish.', ['3 coats on the show faces, 2 on the hidden ones, 320 between coats.']),
@@ -2581,7 +2603,7 @@ const TEMPLATES_2: Template[] = [
           I('Flip only when the last coat is dry enough to handle (3 days).', ['Padded horses; carry the hull by the rails and the bulkhead, never by the sides.']),
           I('The inside, the topside and everything built after the flip are finished later, in the Finish step.'),
         ],
-        checks: [std ? 'Offcut test approved before any urethane goes on the sled' : 'Offcut test approved before any stain goes on the sled', 'No bare wood or bare ply edge on the underside', ...(isStandard(c.p) && drainHoles(c.parts, c.p)?.box?.host === 'deck' ? ['The box drain holes are open and their bores sealed'] : []), 'Varnish dry to handle before the flip'],
+        checks: [isDyed(c.p) ? 'Offcut test approved before any dye or finish goes on the sled' : 'Offcut test approved before any finish goes on the sled', ...(isDyed(c.p) ? ['Outside of the hull dyed before its first coat'] : []), 'No bare wood or bare ply edge on the underside', ...(isStandard(c.p) && drainHoles(c.parts, c.p)?.box?.host === 'deck' ? ['The box drain holes are open and their bores sealed'] : []), 'Varnish dry to handle before the flip'],
       };
     },
   },
@@ -3051,6 +3073,7 @@ const TEMPLATES_2: Template[] = [
             stripEnd ? `Groove its underside end to end on the table saw (several passes): ${fin(stripEnd.max[2] - stripEnd.min[2])} deep, from ${fin(stripEnd.min[0] - stripB.min[0])} to ${fin(stripEnd.max[0] - stripB.min[0])} from its aft edge. That leaves a ${fin(stripEnd.min[0] - stripB.min[0])} hinge leg at the aft edge and a ${fin(stripB.max[0] - stripEnd.max[0])} leg at the front.` : false,
             stripEnd ? `Cut the two end blocks (${tl(c.mine.filter((x) => /^storage-strip-end-/.test(x.id)).map((x) => x.id))}), ${fin(stripEnd.max[0] - stripEnd.min[0])} × ${fin(stripEnd.max[1] - stripEnd.min[1])} × ${fin(stripEnd.max[2] - stripEnd.min[2])}, and glue one into each end of the groove: there the strip sits on the side coamings, and the box stays closed at its sides.` : false,
             'Ease the top aft edge 1/16" (the hinge knuckles bed down on it), seal it all round with epoxy, and let it cure.',
+            dyeFirst(c, 'its top and front face', 'the underside, the groove and the end blocks (glue faces)'),
           ], c.mine.filter((x) => /^storage-strip/.test(x.id)).map((x) => x.id))] : []),
           ...(strip && stripB ? [I('Glue the strip across the front of the box top with thickened epoxy, on the coaming.', [
             `Its front face flush with the box's front end, its ends flush with the box sides; its aft face ${boxSide ? fin(stripB.min[0] - boxSide.min[0]) : SEE} from the box's aft end outside.`,
@@ -3070,13 +3093,16 @@ const TEMPLATES_2: Template[] = [
           I('Saw the {{storage-lid}} on the table saw to its cut-list size (the size includes the 1/4" tongue that sits in the rabbet all round).', ['First lay the four frame pieces round it dry, at their joints: the panel drops into the rabbets with about 1/32" all round. If the frame came out to the box a little off its drawing, saw the panel to the frame.']),
           ...((lg) => (lg ? [I(`Letter the panel's top face ${lg.text}, all before it is sealed.`, [
             `Test first: mask an offcut of the same sheet with the same tape and score the lettering file through it. Raise the power or add passes until the letters come out dark, just through the face veneer into the first glue line (about ${fractionText(lg.depthIn, 64)}" deep); the face veneer is thinner than that, so it is the glue line that reads.`,
-            'Mask the lettering area with low-tack masking tape first, smoothed down hard: the laser scores through the tape, and the tape keeps the fill off the bare birch (thin epoxy wicks into its grain and leaves a grey halo).',
+            'Mask the lettering area with low-tack masking tape first, smoothed down hard: the laser scores through the tape, and the tape keeps the fill off the bare face veneer (thin epoxy wicks into its grain and leaves a grey halo).',
             'Laser: lay the panel on the bed, line it up on the black outline with the framing preview, and run the lettering file (the letters only; each stroke is several passes side by side, so the line reads from a standing position).',
             'Fill: work black epoxy (pigment in a little mixed epoxy, thickened a little so it does not run) or an oil-based black paint marker into the letters, over the tape.',
             'Peel the tape while the fill is still soft; when it is hard (24 h), sand the face flush with a block at 220 grit, lightly: do not go through the face veneer.',
             I(`The finishing schedule only checks the lettering's fill (step ${stepNo(c, 'engrave')}), before the topcoat.`, ['It is a lid to sit a cushion on, not a step.']),
           ])] : []))(c.by('storage-lid')?.legend),
-          I('Seal the {{storage-lid}} with epoxy, both faces and every edge, and let it cure.', ['Then wash the blush off and scuff with 120 the tongue all round and the three batten lines: they are glued next.']),
+          I('Seal the {{storage-lid}} with epoxy, both faces and every edge, and let it cure.', [
+            dyeFirst(c, 'the top face', 'the tongue all round and the underside (glue faces)', c.by('storage-lid')?.legend ? 'Once the lettering is sanded flush' : undefined),
+            'Then wash the blush off and scuff with 120 the tongue all round and the three batten lines: they are glued next.',
+          ]),
           I(`Glue the frame square around the panel, all in thickened epoxy: on the corner tenons and bedding the panel edge in its rabbet.`, ['Clamp it square while the corners set.']),
           I(`Glue the ${plural(battens.length, 'batten')} under the panel with thickened epoxy, the lid face down on a flat bench and weighted for 24 h.`, [
             battenAt.length ? I(`Centers ${list(battenAt)} from the rear end of the frame, square across; each cut to fit between the frame sides as glued and butted to them in the epoxy.`, [], battens) : false,
@@ -3190,7 +3216,7 @@ const TEMPLATES_2: Template[] = [
         goal: 'Make the seat back and fit its hinges, pins and the two foam pads (the hardware goes on for good after the finish).',
         glue: { epoxy: true, titebond: false },
         items: [
-          I('Band the edge of the {{seat-back-panel}} (made with the deck at [[step:cut-deck]], its 2-1/2" radius top corners and all).', ['1/16" oak veneer banding round the edge, flush-trimmed and epoxy-sealed: no ply edge shows.']),
+          I('Band the edge of the {{seat-back-panel}} (made with the deck at [[step:cut-deck]], its 2-1/2" radius top corners and all).', ['1/16" oak veneer banding round the edge, flush-trimmed and epoxy-sealed: no ply edge shows.', dyeFirst(c, 'the banding', 'the back face where the oak pads glue')]),
           ...(insPad && insSize ? [I(`Cut the two oak insert pads, ${tl(['seat-back-panel-pad-L', 'seat-back-panel-pad-R'])}, and glue one to the BACK face behind each hinge, before the insert holes are drilled.`, [
             `Each pad is ${fin(insSize[2])} × ${fin(insSize[1])} × ${fin(insSize[0])} oak, its grain along the ${fin(insSize[0])} length.`,
             `Lay it on the back face with its length across the panel: its bottom edge ${fin(padMid - insSize[1] / 2)} up from the panel's bottom edge, its outer end ${fin(padOuter)} in from the side edge.`,
@@ -3305,6 +3331,7 @@ const TEMPLATES_2: Template[] = [
             `It sits on the flap's underside, centered ${fin(shoeFromFoot)} from the flap's foot end, over the top of the tire.`,
             `Leave the bottom a little long (it is fitted to the tire at the hang step), then glue it on with thickened epoxy and 2 × ${screwOf(c, 'brake-shoe-L', /brake-flap/)} screws up into the flap.`,
             'Once the blocks and shoes have cured: epoxy-seal each flap all over, its block and shoe with it, and the pin hole.',
+            dyeFirst(c, 'each flap and shoe', 'the tread\'s patch on the flap and the pad\'s seat on the shoe (glue faces)'),
           ]),
           I('Dry-fit the pads and treads: they go on for good at the hang step.', [
             `Pad: 3" × 3" rubber, contact cement and 2 × ${screwOf(c, 'brake-pad-L', /brake-shoe/)} flat-heads buried 1/8", 1/2" off the shoe screws.`,
@@ -3425,7 +3452,7 @@ const TEMPLATES_2: Template[] = [
   {
     id: 'finish',
     title: 'Finish: epoxy, lettering check, topcoat',
-    retitle: (p) => (isStandard(p) ? undefined : 'Finish: stain, epoxy, lettering check, topcoat'),
+    retitle: (p) => (isDyed(p) ? 'Finish: dye, epoxy, lettering check, topcoat' : undefined),
     kind: 'process',
     steps: [STEP.finish],
     view: 'iso',
@@ -3438,22 +3465,30 @@ const TEMPLATES_2: Template[] = [
         items: [
           I('Follow the finishing schedule, steps F1 to F' + s.steps.length + '.', s.steps.map((x) => `F${x.n}: ${x.title}`)),
           I('The underside is already done (the Finish the underside step): this is everything else.'),
-          std
-            ? I('Show faces: no stain. Raise the grain once, then the clear urethane, once the offcut panel passed.', ['The deck underside and the open ply edges were epoxied at [[step:seal]], the transom and bulkhead edges at [[step:ends]]; the rest of the end grain gets its coat in the schedule.'])
-            : I('Show faces: stained first, then epoxy-sealed, once the offcut panel passed.', ['The deck underside and the ply edges were sealed at [[step:seal]], the transom and bulkhead edges at [[step:ends]]. Water-based dye under the epoxy is the safe route.']),
+          isDyed(c.p)
+            ? I(`Show faces: dye first (finishing step F${stepNo(c, 'stain')}), then ${std ? 'the epoxy and the urethane' : 'the epoxy seal and the varnish'}, once the offcut panel passed.`, [
+              'Already dyed and sealed: the outside of the hull, the transom and bulkhead edges, the lid panel and its strip, the seat-back banding and the brake flaps. Everything else is dyed now, the bench kits too, and what shows of the masked grab-board patch.',
+              'Keep the dye off glue faces: the footprints of the handle sockets and the cradles that take the flag tube stay masked.',
+              std ? 'The deck underside and the open ply edges were epoxied at [[step:seal]], the transom and bulkhead edges at [[step:ends]]; the rest of the end grain gets its coat in the schedule.' : 'The deck underside and the ply edges were sealed at [[step:seal]], the transom and bulkhead edges at [[step:ends]]. Water-based dye under the epoxy is the safe route.',
+            ])
+            : std
+              ? I('Show faces: no stain. Raise the grain once, then the clear urethane, once the offcut panel passed.', ['The deck underside and the open ply edges were epoxied at [[step:seal]], the transom and bulkhead edges at [[step:ends]]; the rest of the end grain gets its coat in the schedule.'])
+              : I('Show faces: no stain. Raise the grain once, then the epoxy seal, once the offcut panel passed.', ['The deck underside and the ply edges were sealed at [[step:seal]], the transom and bulkhead edges at [[step:ends]].']),
           I(isRemovable(c.p) ? 'Finish the removable kits on the bench: the brake knees with their flaps and chocks, the handle U and the signs.' : 'Finish the removable kits on the bench: the brake flaps and chocks, the handle U and the signs.', [
             'The tongue and the grab boards (with their caps) are NOT removable: they stay on and are finished in place, with the screw nuts and washers masked.',
             'Plug or mask the pivot bores, bolt seats and sockets.',
             ...(isRemovable(c.p) ? [
-              'Take the strap off each knee (its 4 screws) and finish the knee all over: every face, the inboard face against the rail too, with epoxy and the topcoats, and the strap\'s seat. Keep the four bolt holes open, and keep finish out of the pin hole and the strap pilots.',
+              `Take the strap off each knee (its 4 screws) and finish the knee all over: every face, the inboard face against the rail too, with ${isDyed(c.p) ? 'the dye on its outer faces, then ' : ''}epoxy and the topcoats, and the strap\'s seat. Keep the four bolt holes open, and keep finish out of the pin hole and the strap pilots.`,
               'No finish may run onto the rail: the knee is bolted on dry at the hang step.',
             ] : []),
           ], ['brake-flap-L', 'brake-flap-R', 'handle-bar', 'sign-L', 'sign-R', 'bridle-tongue', ...(isRemovable(c.p) ? ['brake-knee-L', 'brake-knee-R'] : [])]),
           I('No hardware on the sled: axles, wheels, plates, eye bolts, hinges, handle sockets and brake pins go on after the varnish cures (next step).'),
         ],
         checks: [
-          std ? 'Offcut test panel approved before any urethane goes on the sled' : 'Offcut test panel approved before anything on the sled is stained',
-          std ? 'Show faces urethaned, no stain; the deck underside, every uncaptured ply edge and all oak end grain epoxied' : 'Show faces stained, then epoxy-sealed; every plywood edge and all oak end grain sealed',
+          isDyed(c.p) ? 'Offcut test panel approved before any dye or finish goes on the sled' : 'Offcut test panel approved before any finish goes on the sled',
+          std
+            ? (isDyed(c.p) ? 'Show faces dyed, then urethaned; the deck underside, every uncaptured ply edge and all oak end grain epoxied' : 'Show faces urethaned, no stain; the deck underside, every uncaptured ply edge and all oak end grain epoxied')
+            : (isDyed(c.p) ? 'Show faces dyed, then epoxy-sealed; every plywood edge and all oak end grain sealed' : 'Show faces epoxy-sealed, no stain; every plywood edge and all oak end grain sealed'),
           std ? 'Urethane fully hard before hardware goes on' : 'Varnish fully hard before hardware goes on',
         ],
       };

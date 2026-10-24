@@ -276,7 +276,7 @@ describe('build review round 1: finish after hardware (MUST-1)', () => {
 });
 
 describe('build review round 1: stain vs seal (MUST-2)', () => {
-  it('seals only the deck underside, the ply edges and hidden faces at assembly; the show faces are stained, then sealed', () => {
+  it('seals only the deck underside, the ply edges and hidden faces at assembly; the show faces are dyed, then sealed (D-99)', () => {
     const seal = steps.find((s) => s.id === 'seal')!.instructions.join(' ');
     expect(seal).toMatch(/ONLY the deck underside and edges, every ply edge/); // D-94: no dados exist yet at the seal step
     expect(seal).toMatch(/show faces stay bare/);
@@ -284,8 +284,9 @@ describe('build review round 1: stain vs seal (MUST-2)', () => {
     expect(seal).toMatch(/Water-based dye under epoxy is the safe route/);
     expect(seal).toMatch(/offcut tests/);
     expect(seal).not.toMatch(/all ply faces/i);
+    expect(seal).toMatch(/They are dyed, THEN sealed/);
     const fin = steps.find((s) => s.id === 'finish')!.instructions.join(' ');
-    expect(fin).toMatch(/stained first, then epoxy-sealed/);
+    expect(fin).toMatch(/Show faces: dye first \(finishing step F3\), then the epoxy seal and the varnish/);
   });
 });
 
@@ -1132,20 +1133,65 @@ describe('D-79..D-83: the cost-pass build text', () => {
     expect(stepText(ext, 'storage-box')).not.toMatch(/box drain holes through/);
   });
 
-  it('Standard: no stain and no stain step; clear spar urethane only, and the finish steps cite the finishing schedule\'s own numbers', () => {
-    const t = everything(std);
-    // every line that mentions a stain says there is none
-    const mentions = [...t.matchAll(/[^\n]*\bstain(?:ed|ing)?\b[^\n]*/gi)].map((m) => m[0]);
-    for (const line of mentions) expect(line, line).toMatch(/no stain|No stain|stain-free/i);
-    expect(std.find((s) => s.id === 'finish')!.title).toBe('Finish: epoxy, lettering check, topcoat');
-    expect(std.find((s) => s.id === 'finish')!.instructions.join('\n')).toMatch(/F3: Raise the grain \(no stain\)/);
-    expect(stepText(std, 'finish-under')).toMatch(/raise the grain once\. No stain/);
+  it('D-99: the show faces are dyed by default under both specs; with no stain, Standard is clear spar urethane and every stain line says there is none', () => {
+    for (const list of [std, ext]) {
+      expect(list.find((s) => s.id === 'finish')!.title).toBe('Finish: dye, epoxy, lettering check, topcoat');
+      expect(list.find((s) => s.id === 'finish')!.instructions.join('\n')).toMatch(/F3: Dye the show faces \(Golden Brown\)/);
+      expect(stepText(list, 'finish-under')).toMatch(/dye the show faces \(finishing step F3\): the outside of the sides, the transom and the bulkhead/);
+    }
     expect(stepText(std, 'seal')).not.toMatch(/Finishing, steps 3-4/);
-    expect(stepText(std, 'seal')).toMatch(/clear urethane/);
-    // Extreme keeps the stain, and cites steps 3 and 4 of its own schedule
-    expect(ext.find((s) => s.id === 'finish')!.title).toBe('Finish: stain, epoxy, lettering check, topcoat');
+    expect(stepText(std, 'seal')).toMatch(/No dye here: the deck underside is hidden and plywood edges take no dye/);
     expect(stepText(ext, 'seal')).toMatch(/Finishing, steps 3-4/);
-    expect(stepText(ext, 'finish-under')).toMatch(/stain the show faces/);
+    // the clear option: no dye anywhere, and every line that mentions a stain says there is none
+    for (const spec of [0, 1]) {
+      const pc = { ...defaultParams(), weatherSpec: spec, stainShowFaces: 0 };
+      const clear = assemblySteps(buildModel(pc), pc);
+      const t = everything(clear);
+      expect(t).not.toMatch(/\bdye(?:d|ing)?\b(?! under epoxy)/i);
+      for (const line of [...t.matchAll(/[^\n]*\bstain(?:ed|ing)?\b[^\n]*/gi)].map((m) => m[0])) expect(line, line).toMatch(/no stain|No stain|stain-free/i);
+      expect(clear.find((s) => s.id === 'finish')!.title).toBe('Finish: epoxy, lettering check, topcoat');
+      expect(clear.find((s) => s.id === 'finish')!.instructions.join('\n')).toMatch(/F3: Raise the grain \(no stain\)/);
+      expect(stepText(clear, 'finish-under')).toMatch(/raise the grain once/);
+    }
+  });
+
+  it('D-99: every step that first seals or coats a show face says to dye it first, and no step dyes a glue face', () => {
+    const fin = finishingSchedule(partsStd, pStd);
+    const F = fin.steps.find((s) => s.id === 'stain')!.n;
+    expect(fin.steps.find((s) => s.id === 'stain')!.title).toBe('Dye the show faces (Golden Brown)');
+    for (const list of [std, ext]) {
+      const tx = (id: string): string => stepText(list, id);
+      // the early seals and coats of show faces, each with its dye-first line
+      expect(tx('ends'), 'ends').toMatch(new RegExp(`Dye the edges that show first \\(Golden Brown, finishing step F${F}\\); keep it off the dados, the mortises and the faces that glue to the hull`));
+      expect(tx('finish-under'), 'finish-under').toMatch(/dye the show faces \(finishing step F3\)/);
+      expect(tx('storage-lid'), 'storage strip').toMatch(/Dye its top and front face first \(Golden Brown, finishing step F3\); keep it off the underside, the groove and the end blocks \(glue faces\)/);
+      expect(tx('storage-lid'), 'lid panel').toMatch(/Once the lettering is sanded flush, dye the top face \(Golden Brown, finishing step F3\); keep it off the tongue all round and the underside \(glue faces\)/);
+      expect(tx('seat-back'), 'seat-back banding').toMatch(/Dye the banding first \(Golden Brown, finishing step F3\); keep it off the back face where the oak pads glue/);
+      expect(tx('brake-flaps'), 'flaps').toMatch(/Dye each flap and shoe first \(Golden Brown, finishing step F3\); keep it off the tread's patch on the flap and the pad's seat on the shoe \(glue faces\)/);
+      expect(tx('finish'), 'finish').toMatch(/Show faces: dye first \(finishing step F3\)/);
+      // the dye line comes before the seal or coat it protects, in the same item
+      for (const id of ['storage-lid', 'seat-back', 'brake-flaps', 'ends']) {
+        const st = list.find((s) => s.id === id)!;
+        const item = st.items.find((x) => (x.sub ?? []).some((q) => /^(Dye|Once the lettering is sanded flush, dye) /.test(q.text)));
+        expect(item, id).toBeDefined();
+        expect(item!.text + (item!.sub ?? []).map((q) => q.text).join(' '), id).toMatch(/seal/i);
+      }
+      // the steps that seal only hidden faces, bores or edges say nothing about dyeing them
+      for (const id of ['seal']) expect(tx(id), id).not.toMatch(/^(?:– )*Dye /m);
+      // no step dyes a glue face: every "dye ..." instruction names the glue faces it stays off, and none tells you to dye a dado, mortise, tenon or glue face
+      for (const s of list) {
+        for (const line of s.instructions) {
+          if (!/\bdye (?:the|its|each)\b/i.test(line) || /\bdye the show faces\b/i.test(line) || /^(?:– )*Show faces: dye first/.test(line)) continue;
+          expect(line, `${s.id}: ${line}`).toMatch(/keep it off/);
+          expect(line.split('keep it off')[0], `${s.id}: ${line}`).not.toMatch(/dado|mortise|tenon|glue face|underside/i);
+        }
+      }
+      // squeeze-out: cured epoxy blocks the dye (the glue card and the seal step, and the big glue-ups)
+      expect(tx('seal')).toMatch(/cured epoxy blocks the dye/);
+      expect(tx('sides-outer')).toMatch(/wipe the squeeze-out off the web and the bands before it kicks, or the dye will not take there/);
+      expect(tx('transom')).toMatch(/the dye will not take over cured epoxy/);
+    }
+    expect(flattenInstr([glueCard(pStd)], partsStd).join(' ')).toMatch(/cured epoxy blocks the dye.*Dye never goes on a glue face/);
   });
 
   it('the Finishing step numbers cited by the seal and finish steps are the finishing schedule\'s own', () => {

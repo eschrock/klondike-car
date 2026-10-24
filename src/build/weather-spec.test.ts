@@ -40,7 +40,7 @@ describe('the two specs', () => {
     expect(bExt.spec).toBe('extreme');
   });
 
-  it('Standard has no 316 line; neither spec has a Sipo line (D-79: beech Dominos from the shop, epoxied in under Extreme); Standard has no stain, conditioner, scupper or box-drain line (D-83)', () => {
+  it('Standard has no 316 line; neither spec has a Sipo line (D-79: beech Dominos from the shop, epoxied in under Extreme); Standard has no scupper or box-drain line (D-83); neither has a conditioner or gel stain, and both buy the one dye bottle (D-99)', () => {
     for (const l of lines(bStd)) {
       expect(allText(l), l.key).not.toMatch(/316/);
       expect(allText(l), l.key).not.toMatch(/sipo/i);
@@ -48,15 +48,25 @@ describe('the two specs', () => {
       expect(l.key, l.key).not.toMatch(/^(stain|conditioner|gel-stain)|^(scupper|storage-drain)/);
       expect(allText(l), l.key).not.toMatch(/stain or dye|pre-stain conditioner|gel stain|nipple|scupper/i);
     }
+    for (const b of [bStd, bExt]) {
+      const dye = lines(b).filter((l) => /^dye-/.test(l.key));
+      expect(dye.map((l) => [l.key, l.qty, l.extUsd, l.basis])).toEqual([['dye-bottle', 1, 20, 'estimate']]);
+      expect(dye[0].description).toMatch(/^TransTint liquid dye, Golden Brown, 2 oz bottle/);
+      expect(lines(b).some((l) => /^(conditioner|gel-stain|stain)-/.test(l.key))).toBe(false);
+    }
+    // no stain: no dye line, and the Standard BOM is $20 less
+    const clear: Params = { ...std, stainShowFaces: 0 };
+    const bClear = bom(stdParts, clear);
+    expect(lines(bClear).some((l) => /^dye-/.test(l.key))).toBe(false);
+    expect(bStd.totalUsd - bClear.totalUsd).toBeCloseTo(20, 2);
     for (const l of lines(bExt)) expect(allText(l), l.key).not.toMatch(/sipo/i);
     // and the other way round: the specs do differ
     expect(lines(bExt).some((l) => /316/.test(l.key))).toBe(true);
     expect(lines(bExt).some((l) => /^Domino/.test(l.key) && /beech.*epoxied in/.test(l.description))).toBe(true);
     expect(lines(bStd).some((l) => /^Domino/.test(l.key) && /beech/.test(l.description))).toBe(true);
     expect(lines(bStd).some((l) => /^18-8 /.test(l.key))).toBe(true);
-    // Extreme keeps the nipples (316, real price) and the stain products; Standard's clear urethane is the whole finish
+    // Extreme keeps the nipples (316, real price)
     expect(lines(bExt).some((l) => l.key === 'scupper')).toBe(true);
-    expect(lines(bExt).some((l) => /^stain-/.test(l.key))).toBe(true);
   });
 
   it('Standard uses Titebond III (shop stock, $0, kept on the list) and less epoxy than Extreme; Extreme uses epoxy everywhere', () => {
@@ -366,29 +376,30 @@ describe('finishing schedule by spec', () => {
     expect(urethaneContainers(4.2).map((c) => `${c.qty} ${c.unit}`)).toEqual(['1 gal', '1 qt']);
   });
 
-  it('Standard takes no stain and no conditioner (D-83): step 3 is the grain-raising pass and the buy list has none; Extreme keeps the stain, the conditioner and the gel stain', () => {
-    expect(sS.steps.map((x) => x.id)).toEqual(['offcut-tests', 'sand', 'grain', 'epoxy', 'engrave', 'varnish']);
-    const grain = sS.steps.find((x) => x.id === 'grain')!;
-    expect(grain.n).toBe(3);
-    expect(grain.products).toEqual([]);
-    expect(grain.instructions.join(' ')).toMatch(/Skip the stain and the conditioner/);
-    expect(sS.buy.some((b) => /stain|conditioner/i.test(b.item))).toBe(false);
+  it('D-99: both specs dye the show faces with the one TransTint dye (step 3); with no stain, step 3 is the grain-raising pass and the buy list has no dye', () => {
+    for (const sc of [sS, sE]) {
+      expect(sc.steps.map((x) => x.id)).toEqual(['offcut-tests', 'sand', 'stain', 'epoxy', 'engrave', 'varnish']);
+      const dye = sc.steps.find((x) => x.id === 'stain')!;
+      expect(dye.n).toBe(3);
+      expect(dye.products).toHaveLength(1);
+      expect(dye.products[0].areaFt2).toBeCloseTo(sc.areas.show.totalFt2, 0);
+      expect(dye.instructions.join(' ')).toMatch(/the diluted mix on the okoume \(the deck top, the seat back\)/);
+      expect(sc.buy.filter((b) => /^TransTint/.test(b.item)).map((b) => `${b.qty} ${b.unit}`)).toEqual(['1 bottle']);
+      expect(sc.buy.some((b) => /conditioner|gel stain/i.test(b.item))).toBe(false);
+    }
     // the lid legend is filled with a paint marker, not enamel
     expect(sS.buy.some((b) => /paint marker/.test(b.item))).toBe(true);
     expect(sS.buy.some((b) => /enamel/i.test(b.item))).toBe(false);
-    // Extreme: the oak takes the stain, okoume a conditioner and a gel stain
-    const stain = sE.steps.find((x) => x.id === 'stain')!;
-    expect(stain.products[0].areaFt2).toBeCloseTo(sE.areas.show.oakFt2 + sE.areas.show.oakPlyFt2, 0);
-    expect(stain.products[1].areaFt2).toBeCloseTo(sE.areas.show.okoumeFt2 + sE.areas.show.birchFt2, 0);
-    expect(sE.buy.some((b) => /Gel stain/.test(b.item))).toBe(true);
-    expect(sE.buy.some((b) => /conditioner/i.test(b.item))).toBe(true);
-    // a Baltic birch thin sheet under the Extreme spec blotches: it takes the conditioner too
-    const baltic: Params = { ...defaultParams(), weatherSpec: WEATHER_SPEC.extreme, thinSheetMaterial: THIN_SHEET.balticBirch6mm };
-    const sB = finishingSchedule(buildModel(baltic), baltic);
-    const stainB = sB.steps.find((x) => x.id === 'stain')!;
-    expect(sB.areas.birchFt2).toBeGreaterThan(5);
-    expect(stainB.products[1].areaFt2).toBeCloseTo(sB.areas.show.okoumeFt2 + sB.areas.show.birchFt2, 0);
-    expect(stainB.products[1].name).toMatch(/Baltic birch/);
+    for (const spec of [WEATHER_SPEC.standard, WEATHER_SPEC.extreme]) {
+      const pc: Params = { ...defaultParams(), weatherSpec: spec, stainShowFaces: 0 };
+      const sc = finishingSchedule(buildModel(pc), pc);
+      expect(sc.steps.map((x) => x.id)).toEqual(['offcut-tests', 'sand', 'grain', 'epoxy', 'engrave', 'varnish']);
+      const grain = sc.steps.find((x) => x.id === 'grain')!;
+      expect(grain.products).toEqual([]);
+      expect(grain.instructions.join(' ')).toMatch(/Skip the stain/);
+      expect(sc.buy.some((b) => /stain|conditioner|dye|TransTint/i.test(b.item))).toBe(false);
+      expect(sc.steps.map((x) => x.instructions.join(' ')).join(' ')).not.toMatch(/\bdyed?\b(?!, oil and wax)/);
+    }
   });
 
   it('names the thin sheet, not "4 mm okoume", in the offcut, sanding and engraving text', () => {

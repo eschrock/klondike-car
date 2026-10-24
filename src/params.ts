@@ -79,6 +79,8 @@ export const TIRE_TYPE = { pneumatic: 0, flatFree: 1 } as const;
 export const PLY_SPECIES = { okoumeMarine: 0, balticBirchExterior: 1 } as const;
 /** D-73: the weather the sled is built for. Standard = garage-kept, a few uses a year; Extreme = stored outside or near salt. */
 export const WEATHER_SPEC = { standard: 0, extreme: 1 } as const;
+/** D-99: the stain on the show faces, under both weather specs. `waterDye` = TransTint water-based dye, Golden Brown, under the epoxy and the topcoat; `none` = a clear finish. */
+export const STAIN = { none: 0, waterDye: 1 } as const;
 /** D-73, D-80: the thin-sheet material (the side webs, the storage box and lid, the signs). `followWeather` picks 6 mm Baltic birch for Standard and 6 mm okoume for Extreme. */
 export const THIN_SHEET = { followWeather: 0, whiteOakPly: 1, okoumeMarine: 2, balticBirch3mm: 3, balticBirch6mm: 4 } as const;
 /** D-78: how the step-brake knees are mounted. `fixed` = bolted and glued on for good (the default); `removable` = the same four bolts, fitted dry, taken off with a ratchet and wrench. */
@@ -2029,7 +2031,7 @@ const defs = {
       { value: PLY_SPECIES.okoumeMarine, label: 'Okoume marine (BS 1088)' },
       { value: PLY_SPECIES.balticBirchExterior, label: 'Baltic birch, exterior glue' },
     ],
-    note: 'D-73: this species covers the 12 mm deck and seat-back sheet only; the thin sheet (webs, box, lid, signs) is chosen by thinSheetMaterial. MATERIALS AND SOURCES (Eric, 2026-10-12): the deck and seat back are 12 mm (1/2 in) okoume marine plywood (BS 1088), one FULL 4 x 8 ft sheet from a local supplier (D-68); the thin sheet is 6 mm (D-80). Each side web is one piece. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine). Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK: Standard is clear (no stain, no conditioner: exterior spar urethane over the bare wood, with an epoxy coat on the edges, end grain and deck underside only); Extreme keeps its stain or gel stain, the epoxy saturation coat and marine spar varnish (D-83).',
+    note: 'D-73: this species covers the 12 mm deck and seat-back sheet only; the thin sheet (webs, box, lid, signs) is chosen by thinSheetMaterial. MATERIALS AND SOURCES (Eric, 2026-10-12): the deck and seat back are 12 mm (1/2 in) okoume marine plywood (BS 1088), one FULL 4 x 8 ft sheet from a local supplier (D-68); the thin sheet is 6 mm (D-80). Each side web is one piece. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine). Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK: Standard is exterior spar urethane over the show faces, with an epoxy coat on the edges, end grain and deck underside only; Extreme is the epoxy saturation coat and marine spar varnish (D-83). The stain under either is stainShowFaces (D-99: a water-based dye by default).',
   },
   weatherSpec: {
     label: 'Weather spec', group: 'materials', unit: '',
@@ -2038,7 +2040,16 @@ const defs = {
       { value: WEATHER_SPEC.standard, label: 'Standard (garage-kept)' },
       { value: WEATHER_SPEC.extreme, label: 'Extreme weather' },
     ],
-    note: 'D-73. Standard: garage-kept, used a few times a year, gets wet at most at a rainy derby (Eric, 2026-10-12). Extreme weather: stored outside or near salt. The model reads this for the thin-sheet material ("follow the weather setting": Standard is 6 mm Baltic birch, Extreme is 6 mm okoume marine, D-80), for the drains (Standard: drilled 3/8 in holes with an epoxy-lined bore; Extreme: stainless nipples, D-83). The fasteners, glue and finish that follow the weather spec are chosen in the BOM and finishing schedule: Standard is clear (no stain, urethane); Extreme keeps its stain, epoxy saturation coat and marine varnish (D-83).',
+    note: 'D-73. Standard: garage-kept, used a few times a year, gets wet at most at a rainy derby (Eric, 2026-10-12). Extreme weather: stored outside or near salt. The model reads this for the thin-sheet material ("follow the weather setting": Standard is 6 mm Baltic birch, Extreme is 6 mm okoume marine, D-80), for the drains (Standard: drilled 3/8 in holes with an epoxy-lined bore; Extreme: stainless nipples, D-83). The fasteners, glue and finish that follow the weather spec are chosen in the BOM and finishing schedule: Standard is urethane; Extreme is the epoxy saturation coat and marine varnish (D-83). The stain is its own setting (stainShowFaces, D-99).',
+  },
+  stainShowFaces: {
+    label: 'Stain on the show faces', group: 'materials', unit: '',
+    default: STAIN.waterDye, min: 0, max: 1, step: 1, status: 'locked', ref: 'D-99',
+    options: [
+      { value: STAIN.none, label: 'None (clear finish)' },
+      { value: STAIN.waterDye, label: 'TransTint water-based dye, Golden Brown' },
+    ],
+    note: 'D-99 (Eric, 2026-10-24): the show faces are dyed so the 13 mm okoume deck, the 5 mm white oak plywood sides and the solid oak look alike: TransTint liquid dye, Golden Brown (Homestead Finishing, one 2 oz bottle), mixed with water, wiped on before the first coat of epoxy or urethane, diluted for the okoume to match the oak under the epoxy (offcut test). It applies under both weather specs. The Ready Seal Eric has is an oil stain-and-sealer: epoxy and urethane do not bond over it, so it is not used. None leaves the wood clear.',
   },
   thinSheetMaterial: {
     label: 'Thin-sheet material (webs, box, lid, signs)', group: 'materials', unit: '',

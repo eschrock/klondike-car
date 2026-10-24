@@ -32,7 +32,7 @@ import type { Joint, Part } from '../model/types';
 import { WEATHER_SPEC, thinSheet, type Params } from '../params';
 import { cutList, fracIn, groupedName, isBuilt, partKey, toCsv, type CsvCell } from './cutlist';
 import { ceilTo, fractionText, fractionizeInches, inchMarks } from './units';
-import { EPOXY_BUY_RE, finishingSchedule, glueEpoxyFlOz } from './finishing';
+import { DYE_BUY_RE, EPOXY_BUY_RE, finishingSchedule, glueEpoxyFlOz } from './finishing';
 import { nestPlywood, oakBoardFeet, widthListText, type OakPlan } from './nesting';
 import {
   EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, FILLERS, FINISH_CONTAINER_FACTOR, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, RESEARCH_DATE,
@@ -1103,9 +1103,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   // The finish products, container by container, exactly as the schedule's buy list names them.
   const finishKey = (item: string): { key: string; table: string; price: Price } | null => {
     if (/West System/.test(item) || EPOXY_BUY_RE.test(item)) return null; // the epoxy is priced as a kit above
-    if (/conditioner/i.test(item)) return { key: 'conditioner', table: 'conditioner', price: FINISH_PRICE.conditioner };
-    if (/gel stain/i.test(item)) return { key: 'gel-stain', table: 'gelStain', price: FINISH_PRICE.gelStain };
-    if (/stain or dye/i.test(item)) return { key: 'stain', table: 'stain', price: FINISH_PRICE.stain };
+    if (DYE_BUY_RE.test(item)) return { key: 'dye', table: 'dye', price: FINISH_PRICE.dye };
     if (/thinner/i.test(item)) return { key: 'thinner', table: 'thinner', price: FINISH_PRICE.thinner };
     if (/urethane/i.test(item)) return { key: 'urethane', table: 'urethane', price: URETHANE_CONTAINER_PRICE.qt! };
     if (/varnish/i.test(item)) return { key: 'varnish', table: 'varnish', price: FINISH_PRICE.varnish };
@@ -1116,7 +1114,8 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     const k = finishKey(bl.item);
     if (!k) { if (!/West System/.test(bl.item) && !EPOXY_BUY_RE.test(bl.item)) unpriced.push(bl.item); continue; }
     // The real container price where the research found one, else the base per-quart price scaled by the container size.
-    const price: Price = (k.table === 'urethane' ? URETHANE_CONTAINER_PRICE[bl.unit] : FINISH_CONTAINER_PRICE[k.table]?.[bl.unit]) ?? { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
+    // The dye is bought by the bottle (D-99): its price is per bottle.
+    const price: Price = bl.unit === 'bottle' ? k.price : (k.table === 'urethane' ? URETHANE_CONTAINER_PRICE[bl.unit] : FINISH_CONTAINER_PRICE[k.table]?.[bl.unit]) ?? { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
     // The paint marker is bought as a marker, not by the pint (the schedule counts it as a half pint of fill).
     const desc = k.key === 'paint-marker' ? bl.item : `${bl.item}, ${bl.unit}`;
     consumables.push(line('Consumables', k.key === 'paint-marker' ? 'paint-marker' : `${k.key}-${bl.unit}`, desc, bl.qty, price, { vendor: price.source, notes: joinNotes(price.url ? `Price: ${price.note}.` : undefined, bl.note) }));
