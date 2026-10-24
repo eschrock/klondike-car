@@ -88,7 +88,7 @@ export const LASER_CONVENTIONS: { color: string; name: string; meaning: string }
 /** Notes Eric needs next to the laser files (also in the README). */
 export const LASER_NOTES: string[] = [
   "Every file is full size and in real inches: its width and height are its true size, and the pieces are laid out along the conveyor (the long side is the X axis). Import it in XCS and check the size XCS shows against the file's size in the list before cutting.",
-  `Limits used to flag the cut list and to decide which files exist: pieces up to ${frac(LASER_MAX_WIDTH_IN)} wide and ${frac(LASER_MAX_LENGTH_IN)} long (the S1 conveyor's processing area; the basic 39 in rail set is too short for the 59-1/2 in web and rail patterns, so fit the extension rails) and ${frac(LASER_MAX_THICKNESS_IN)} thick (the machine holds material to 0.55 in, but 1/4 in is the cut-through figure used here). Both are constants in laser-svg.ts: VERIFY them on your machine, change them if they are wrong, and the flags and files follow.`,
+  `Limits used to flag the cut list and to decide which files exist: pieces up to ${frac(LASER_MAX_WIDTH_IN)} wide and ${frac(LASER_MAX_LENGTH_IN)} long (the S1 conveyor's processing area; the basic 39 in rail set is too short for the 59-1/2 in web and rail patterns, so fit the extension rails) and ${frac(LASER_MAX_THICKNESS_IN)} thick (the machine holds material to 0.55 in, but 1/4 in is the cut-through figure used here). Check both on your machine before the first cut; if yours differ, the design's laser limits need changing before you regenerate the files.`,
   'Give the red strokes your cut setting for the sheet (test it on a scrap of the same plywood first) and the blue strokes a light score setting. In XCS set the inner shapes to cut before the outline (the files list them first, but XCS orders its own paths), so a piece cannot shift as it drops free.',
   'The outlines are drawn exactly as the part is, with no kerf offset. A diode kerf is a fraction of a millimeter; the templates need about 1/32 in, so none is allowed for. Check the first template against the printed drawing.',
   'Templates are cut in 1/4 in Baltic birch plywood rather than hardboard. A piece wider than the bed would be cut in bands that butt on the bench.',
@@ -228,8 +228,9 @@ function readme(d: BuildData, others: string[]): string {
   lines.push('');
   lines.push('Build book');
   lines.push('----------');
-  lines.push('  build-book.html is the whole build on paper: the verify checklist, the cut list, the board shopping list, the plywood nesting drawings, the BOM, the assembly');
-  lines.push('  steps, the finishing schedule and the Shaper file index. Open it in a browser and print it (Letter, scale 100%) or save it as a PDF.');
+  lines.push('  build-book.html is the build on paper: a start-here page, the verify checklist, the cut list, the board shopping list, the plywood nesting drawings, the BOM, the assembly');
+  lines.push('  steps, the finishing schedule, the forms and templates (how to build each), every part drawing, and the Shaper and laser file indexes. Open it in a browser and print it');
+  lines.push('  (Letter, scale 100%) or save it as a PDF. Print the tiled forms (forms/tiled/) separately at 100%.');
   lines.push('');
   lines.push('Files');
   lines.push('-----');

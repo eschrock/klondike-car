@@ -31,6 +31,46 @@ export const SOCKET_SCREW_WASHER_IN = 0.5;
 export const SOCKET_ACCESS_HOLE_IN = ACCESS_HOLE_IN;
 export const POST_RELIEF = { widthIn: 0.5, depthIn: 0.1875 } as const;
 
+/** 1/4-20 socket screw: threads per inch, and the least engagement in the T-nut barrel (4 full threads, 0.2 in). */
+export const SOCKET_SCREW_TPI = 20;
+export const SOCKET_SCREW_MIN_THREADS = 4;
+/** Stocked lengths of 1/4-20 18-8 and 316 button-head cap screws above 1 in: 1/4 in steps (Bolt Depot #4414 is 1-1/4, #4415 is 1-1/2; no 1-3/8 is listed). */
+export const SOCKET_SCREW_STOCK_IN: readonly number[] = [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3];
+
+export interface SocketScrewFit {
+  /** Screw length under the head (in), as installed. */
+  lengthIn: number;
+  /** The stocked length it is cut from, or null when a stocked length fits as bought. */
+  cutFromIn: number | null;
+  /** Overlap of the screw with the T-nut's threaded barrel (in). */
+  engageIn: number;
+  /** How far the tip stops short of the T-nut flange, the backer's inside face (in); negative when it stands past. */
+  tipShortIn: number;
+  /** At least `SOCKET_SCREW_MIN_THREADS` engaged and the tip at or short of the face. */
+  ok: boolean;
+}
+
+/**
+ * The push-handle socket screw length: `faceIn` is everything the screw crosses from under the head to the T-nut flange (socket wall + nylon washer + transom + backer), and the threaded barrel runs
+ * `barrelIn` back from the flange into the backer. The screw is the longest stocked length that ends at or short of the face with at least 4 threads in the barrel; if none does, the shortest stocked
+ * length above the face is cut to the longest 1/8 in step that does (D-77 allows a bandsaw cut); if that still misses, `ok` is false and the joint text says CHECK.
+ */
+export function socketScrewFit(faceIn: number, barrelIn: number, stock: readonly number[] = SOCKET_SCREW_STOCK_IN): SocketScrewFit {
+  const min = SOCKET_SCREW_MIN_THREADS / SOCKET_SCREW_TPI;
+  const engage = (len: number) => Math.max(0, Math.min(barrelIn, len - (faceIn - barrelIn)));
+  const result = (lengthIn: number, cutFromIn: number | null): SocketScrewFit => {
+    const tipShortIn = faceIn - lengthIn;
+    const engageIn = engage(lengthIn);
+    return { lengthIn, cutFromIn, engageIn, tipShortIn, ok: tipShortIn >= -1e-9 && engageIn >= min - 1e-9 };
+  };
+  const asBought = [...stock].filter((l) => l <= faceIn + 1e-9).sort((a, b) => b - a)[0];
+  if (asBought !== undefined && engage(asBought) >= min - 1e-9) return result(asBought, null);
+  const cut = Math.floor(faceIn * 8 + 1e-9) / 8;
+  const from = [...stock].filter((l) => l > cut + 1e-9).sort((a, b) => a - b)[0];
+  if (from !== undefined && engage(cut) >= min - 1e-9) return result(cut, from);
+  return result(asBought ?? cut, asBought !== undefined ? null : from ?? null);
+}
+
 // ── Rear push handle: steel-tube sockets on the transom, pinned oak uprights, crossbar (D-9, D-39) ──
 export interface HandleGeom {
   zTop: number;
@@ -142,16 +182,15 @@ export function buildHandle(ctx: Ctx): Part[] {
   // Hollow 6061 aluminum tube (plan item 5, −1.5 lb vs steel): wall area × length × density.
   const tubeLb = ((h.socketX * h.socketY - (h.socketX - 2 * w) * (h.socketY - 2 * w)) * p.handleSocketDepthIn / IN3_PER_FT3) * p.aluminumDensityPcf;
   const sockGrip = w + L.transom + p.blockingThickIn;
-  // The nut end is a 1/4-20 316 T-nut set in the backer (assembly step: the transom step), flange flush with the backer's inside face, so no wrench reaches behind the storage box. The bolt goes through the
-  // socket wall (nylon washer under the head), the transom and the whole backer, and its tip shows 0.1 in past the T-nut flange: grip + washer + 0.1, rounded up to a stocked 1/4 in.
-  // Round 3 (build critic S3): rounding UP left the 1-3/4 in screw's tip 0.31 in past the backer face, where the storage box's aft wall sits (Layout.rearLane). So the screw is the longest stocked 1/4 in step that
-  // ends AT OR SHORT OF the flange (no thread shows), as long as the T-nut is still engaged at least 1.5 diameters (the usual full-strength rule); a deeper stack than this would round up instead.
-  const sockStack = sockGrip + washerThick(0.25); // everything the screw crosses before the T-nut barrel, plus the backer
-  const minEngage = 1.5 * 0.25;
-  let sockLen = Math.floor(sockStack * 4 + 1e-9) / 4;
-  while (sockLen - (sockStack - p.blockingThickIn) < minEngage - 1e-9) sockLen += 0.25;
-  const sockTipPast = sockLen - sockStack; // negative: the tip stops short of the flange (the backer's inside face)
-  const sockEngage = sockLen - (sockStack - p.blockingThickIn);
+  // The nut end is a 1/4-20 T-nut set in the backer (assembly step: the transom step), flange flush with the backer's inside face, so no wrench reaches behind the storage box. Only the T-nut's
+  // barrel is threaded, so the screw engages where it overlaps the barrel; its tip must stop at or short of the backer face, where the storage box aft wall sits (Layout.rearLane). socketScrewFit picks the length.
+  const fit = socketScrewFit(sockGrip + washerThick(0.25), p.handleTNutBarrelIn);
+  const sockLen = fit.lengthIn;
+  const sockTipPast = -fit.tipShortIn; // negative: the tip stops short of the flange (the backer's inside face)
+  const sockEngage = fit.engageIn;
+  const threads = (v: number) => Math.floor(v * SOCKET_SCREW_TPI + 1e-6);
+  const lenText = fit.cutFromIn ? `${inchesText(fit.cutFromIn)} (cut to ${inchesText(sockLen)}")` : inchesText(sockLen);
+  const cutText = fit.cutFromIn ? `no stocked length fits (1/4" steps), so buy ${inchesText(fit.cutFromIn)}" and cut each to ${inchesText(sockLen)}" on the metal bandsaw (run a nut on first and back it off to clean the thread), ` : '';
   for (const { s, tag } of SIDES) {
     const y = s * h.yPost;
     parts.push(box(ctx, {
@@ -160,8 +199,8 @@ export function buildHandle(ctx: Ctx): Part[] {
       ...span([L.xRear - h.socketX, L.xRear], [y - h.socketY / 2, y + h.socketY / 2], [h.zBot, h.zTop]),
       material: '6061-T6 aluminum rectangular tube, anodized',
       joints: [
-        { type: 'bolt', to: 'transom-rear', count: 2, diaIn: 0.25, size: `1/4-20 × ${inchesText(sockLen)} ${stainless(p)} button-head cap screws (round holes: a carriage-bolt square neck will not seat in a 1/8" aluminum wall), nylon washer under the head, threaded into a 1/4-20 ${stainless(p)} T-NUT set in the backer (barrel in the backer, flange flush with its inside face; NO nylock nut, NO wrench behind the box); the heads sit INSIDE the bore on the wall against the transom, so push them in through a ${ACCESS_HOLE_IN}" (5/8 in) ACCESS HOLE in the opposite (rear) wall, directly opposite each screw (the ${SOCKET_SCREW_HEAD_IN}" button head and its ${SOCKET_SCREW_WASHER_IN}" nylon washer pass it with ${f2((ACCESS_HOLE_IN - SOCKET_SCREW_WASHER_IN) / 2)}" a side; the head seats on the inside of the near wall and the hex key goes through the same hole); plug the holes with 5/8 in button plugs after assembly (D-63)`,
-          at: [h.zBot + 1.2, h.zTop - 1.2].map((z): Vec3 => [h.socketX / 2 - w / 2, 0, z - (h.zBot + h.zTop) / 2]), note: `grip = socket wall ${f2(w)}" + transom ${f2(L.transom)}" + backer ${f2(p.blockingThickIn)}" = ${f2(sockGrip)}" (+ the nylon washer ${f2(washerThick(0.25))}"); ${f2(sockLen)}" screw: the longest stocked 1/4" step that stays inside the backer, ${f2(sockEngage)}" engaged in the T-nut, tip ${sockTipPast <= 0 ? `${f2(-sockTipPast)}" SHORT of the flange` : `${f2(sockTipPast)}" PAST the flange (clearance needed in the box aft wall)`}${sockTipPast <= 0 ? ', so nothing stands past the backer face where the storage box aft wall sits' : ''} (no nut; the T-nut is epoxied in the backer at the transom step)` },
+        { type: 'bolt', to: 'transom-rear', count: 2, diaIn: 0.25, size: `1/4-20 × ${lenText} ${stainless(p)} button-head cap screws (round holes: a carriage-bolt square neck will not seat in a 1/8" aluminum wall), nylon washer under the head, threaded into a 1/4-20 ${stainless(p)} T-NUT set in the backer (barrel in the backer, flange flush with its inside face; NO nylock nut, NO wrench behind the box); the heads sit INSIDE the bore on the wall against the transom, so push them in through a ${ACCESS_HOLE_IN}" (5/8 in) ACCESS HOLE in the opposite (rear) wall, directly opposite each screw (the ${SOCKET_SCREW_HEAD_IN}" button head and its ${SOCKET_SCREW_WASHER_IN}" nylon washer pass it with ${f2((ACCESS_HOLE_IN - SOCKET_SCREW_WASHER_IN) / 2)}" a side; the head seats on the inside of the near wall and the hex key goes through the same hole); plug the holes with 5/8 in button plugs after assembly (D-63)`,
+          at: [h.zBot + 1.2, h.zTop - 1.2].map((z): Vec3 => [h.socketX / 2 - w / 2, 0, z - (h.zBot + h.zTop) / 2]), note: `grip = socket wall ${f2(w)}" + transom ${f2(L.transom)}" + backer ${f2(p.blockingThickIn)}" = ${f2(sockGrip)}" (+ the nylon washer ${f2(washerThick(0.25))}"); ${cutText}${f2(sockLen)}" screw: only the T-nut's ${f2(p.handleTNutBarrelIn)}" barrel is threaded, so ${f2(sockEngage)}" (${threads(sockEngage)} threads) engages it, tip ${sockTipPast <= 1e-9 ? `${f2(-sockTipPast)}" SHORT of the flange, so nothing stands past the backer face where the storage box aft wall sits` : `${f2(sockTipPast)}" PAST the flange (clearance needed in the box aft wall)`}${fit.ok ? '' : `; CHECK: under ${SOCKET_SCREW_MIN_THREADS} threads engaged or the tip past the face (measure the T-nut barrel; a longer-barrel T-nut fixes it)`} (no nut; the T-nut is epoxied in the backer at the transom step)` },
         { type: 'pin', to: `handle-post-${tag}`, count: 1, diaIn: p.handlePinDiameterIn, size: `${p.handlePinDiameterIn}" clevis pin through both walls and the post`, at: [[0, 0, h.zPin - (h.zBot + h.zTop) / 2]] },
       ],
       notes: `Aluminum 6061-T6 rectangular tube ${f2(h.socketX)} × ${f2(h.socketY)} × ${f2(p.handleSocketDepthIn)} (wall ${f2(w)}), cut on the bandsaw and drilled on the drill press; the ${f2(p.handlePostThickIn)}" × ${f2(p.handlePostWidthIn)}" post is a slip fit (${f2(p.handleSocketSlipIn)}" a side) in the ${f2(h.socketX - 2 * w)}" × ${f2(h.socketY - 2 * w)}" inside. The two screw heads are inside the bore (${f2(0.14 + 0.06)}" proud of the wall with the nylon washer), so drill a ${ACCESS_HOLE_IN}" (5/8 in) ACCESS HOLE in the rear wall opposite each screw (build 3c M5, enlarged from 3/8 in at D-63: the head is ${SOCKET_SCREW_HEAD_IN}" and the washer ${SOCKET_SCREW_WASHER_IN}", neither passes a 3/8 in hole) and give the post the relief groove on its transom face. Leaves ${f2((h.socketY - ACCESS_HOLE_IN) / 2)}" of wall each side of the hole on the ${f2(h.socketY)}" face; seal the bare aluminum edge of each hole with epoxy or anodize touch-up, and press a 5/8 in black button plug in each after assembly (water, grit). Lighter than steel (about 0.4 lb vs 1.2 lb each, plan item 5). Anodized or epoxy-coated, and bedded against the transom ${p.weatherSpec === WEATHER_SPEC.extreme ? 'in epoxy or polysulfide sealant' : 'in thickened epoxy (D-83: not sealant; the socket is glued on for good, it never comes off)'}: bare aluminum corrodes against wet tannin oak. Stays on the sled when the handle is removed (D-9).`,

@@ -165,10 +165,14 @@ describe('Bolt Depot by the piece', () => {
   it('prices the Standard fasteners below the Extreme ones', () => {
     const sub = (b: typeof bStd) => b.sections.find((s) => s.id === 'fasteners')!.subtotalUsd;
     expect(sub(bStd)).toBeLessThan(sub(bExt));
-    // the #10-32 screw-in insert for hardwood was not found in the research (twice): an estimate that says so
-    const ins = lines(bStd).find((l) => /threaded insert/.test(l.key))!;
-    expect(ins.basis).toBe('estimate');
-    expect(ins.notes).toMatch(/NO 18-8 or zinc #10-32 screw-in insert/);
+    // the seat-back insert (5/16 in): no #10-32 wood insert that short is sold, so a placeholder estimate and a decision; the sign insert in the ribs is Bolt Depot's 0.512 in flush insert, quoted
+    const ins = lines(bStd).find((l) => l.key === 'zinc threaded insert #10-32 x 5/16"')!;
+    expect([ins.basis, ins.qty]).toEqual(['estimate', 6]);
+    expect(ins.notes).toMatch(/NO #10-32 insert for wood 11\/32" long or shorter/);
+    expect(ins.decision).toBeTruthy();
+    const signIns = lines(bStd).find((l) => l.key === 'zinc threaded insert #10-32 x 33/64"')!;
+    expect([signIns.basis, signIns.qty, signIns.unitUsd]).toEqual(['quoted', 8, 0.2]);
+    expect(signIns.url).toMatch(/product=23869$/);
     // the #8 x 2-1/2 that replaced the #6 is a real quoted screw (D-82)
     const eight = lines(bStd).find((l) => l.key === '18-8 wood screw #8 x 2-1/2"')!;
     expect([eight.basis, eight.unitUsd, eight.qty]).toEqual(['quoted', 0.6, 8]); // D-91: the 16 rail-to-chine screws are trim-head now, a line of their own; the rib knees keep 8

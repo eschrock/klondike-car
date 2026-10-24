@@ -462,7 +462,7 @@ export function jointItems(part: Part, j: Joint, byId: PartMap = new Map(), spec
     case 'bolt': return boltItems(part, j, byId, mat);
     case 'pin': {
       // A stainless rod epoxied into two parts (the handlebow pins) is stock to cut; clevis and hitch pins are purchased parts.
-      const r = new RegExp(String.raw`(\d\/\d+)"\s*[×x]\s*${LEN}"?\s*(?:316 )?stainless rod`, 'i').exec(size);
+      const r = new RegExp(String.raw`(\d\/\d+)"\s*[×x]\s*${LEN}"?\s*(?:316 |18-8 \(304\) |304 )?stainless rod`, 'i').exec(size);
       return r ? [{ label: `${mat.ss} stainless rod ${r[1]}" x ${lenText(r[2])}"`, qty: n }] : [];
     }
     default: return [];

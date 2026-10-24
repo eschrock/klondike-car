@@ -99,11 +99,12 @@ describe('D-72: three wood-screw sizes, every screw inside its stack with its bi
     expect(cs.find((c) => c.id === 'brake-pivot')!.status).toBe('pass');
     expect(cs.find((c) => c.id === 'brake-flap')!.status).toBe('pass');
   });
-  it('one #10-32 insert: 5/16 in for the seat back and the sign backers; the sign knob screw is the 1 in thumb-knob (a stocked length) with the white oak web', () => {
+  it('the sign insert is the bought 0.512 in flush insert (signInsertLenIn; the seat back keeps its 5/16 in); the sign knob screw is the 1 in thumb-knob (a stocked length) with the white oak web', () => {
     const j = buildModel(defaults).find((x) => x.id === 'sign-L')!.joints!.find((q) => q.type === 'knob')!;
     expect(j.size).toMatch(/#10-32 × 1 in thumb-knob/);
     const kn = signKnobPlan(makeCtx(defaults));
-    expect(kn.insertLenIn).toBeCloseTo(5 / 16, 9);
+    expect(kn.insertLenIn).toBeCloseTo(defaults.signInsertLenIn, 9);
+    expect(defaults.signInsertLenIn).toBeCloseTo(0.512, 9);
     expect(kn.lenIn).toBe(1);
     expect(kn.engagedIn).toBeLessThanOrEqual(kn.insertLenIn + 1e-9);
     expect(kn.tipShortIn).toBeGreaterThanOrEqual(0.125);
@@ -115,13 +116,13 @@ describe('D-72: three wood-screw sizes, every screw inside its stack with its bi
 describe('D-72: bolts and eye bolts at stock lengths', () => {
   const parts = buildModel(defaults);
   const boltSizes = (re: RegExp): Set<string> => new Set(parts.flatMap((x) => (x.joints ?? []).filter((j) => j.type === 'bolt' && re.test(j.size ?? '')).map((j) => /(?:0\.\d+"|\d\/\d+-\d+) [×x] ([\d-/]+)/.exec(j.size!)?.[1] ?? '?')));
-  it('1/4-20: the hanger and the hold-down upright bolts are the same 2-1/4 (leg + hanger + rail); the others are the T-nut 1-1/4, the grips 2, the beam 3', () => {
+  it('1/4-20: the hanger and the hold-down upright bolts are the same 2-1/4 (leg + hanger + rail); the others are the T-nut 1-1/2 (cut to 1-3/8), the grips 2, the beam 3', () => {
     const hd = parts.find((x) => x.id === 'beam-hold-down-L')!;
     expect(hd.joints!.find((j) => /axle-hanger/.test(j.to))!.size).toMatch(/^0\.25" × 2-1\/4 .*through the upright leg, the hanger and the rail/);
     expect(hd.joints!.find((j) => j.to === 'beam-R')!.size).toMatch(/^0\.25" × 2-3\/4 /); // D-74: 2-3/4 through the 2-1/8 in beam (3 through the 2-1/4 in beam before)
     // one bolt per position, recorded once (on the angle): the hanger carries no bolt joint of its own, so the BOM does not count the pair twice
     expect(parts.find((x) => x.id === 'axle-hanger-L')!.joints!.some((j) => j.type === 'bolt')).toBe(false);
-    expect([...boltSizes(/^0\.25"|1\/4-20/)].sort()).toEqual(['1-1/4', '2', '2-1/4', '2-3/4']); // 5 lengths before (1-1/4, 1-1/2, 2, 2-1/4, 3): four is what the stacks allow
+    expect([...boltSizes(/^0\.25"|1\/4-20/)].sort()).toEqual(['1-1/2', '2', '2-1/4', '2-3/4']); // 5 lengths before (1-1/4, 1-1/2, 2, 2-1/4, 3): four is what the stacks allow
   });
   it('3/8-16 hex bolts: two lengths (the clamp plates 3-1/4, the brake knees 4); the carriage bolt is the stock 6-1/2 (6 stops 1/16 in short of the top of the nylock nut)', () => {
     expect([...boltSizes(/0\.38" [×x] [\d-/]+ (?:316|18-8 \(304\) stainless) hex bolts|0\.38" x [\d-/]+" (?:316|18-8 \(304\) stainless) hex bolts/)].filter((s) => s !== '?').sort()).toEqual(['3-1/4', '4']);

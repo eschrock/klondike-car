@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultParams, validateParams, type Params } from '../params';
 import { buildModel } from './index';
 import { computeLayout } from './layout';
-import { handleGeometry } from './handle';
+import { SOCKET_SCREW_MIN_THREADS, SOCKET_SCREW_TPI, handleGeometry, socketScrewFit } from './handle';
 import { brakeGeometry } from './brake';
 import { worldAABB } from './bounds';
 import { beamSeat, boltLength, inchesText, nutHeight, railSection, washerThick } from './rear-mount';
@@ -189,20 +189,31 @@ describe('fastener stacks (S2) and the push-handle fit (S7)', () => {
     expect(inchesText(3)).toBe('3');
     expect(inchesText(1.75)).toBe('1-3/4');
   });
-  it('the socket screws are 1-1/4 in (round 3): the longest 1/4 in step that ends short of the T-nut flange with 1.5 diameters engaged, so no tip stands into the box aft wall (1-3/4 stood 0.31 in past it)', () => {
+  it('the socket screws are 1-1/2 in stock cut to 1-3/8: only the T-nut barrel is threaded, so the tip ends 1/16 in short of the backer face with 5 threads engaged (1-1/4 engaged 2-1/2 threads)', () => {
     const sock = byId('handle-socket-L').joints!.find((j) => j.to === 'transom-rear')!;
-    const stack = defaults.handleSocketWallIn + L.transom + defaults.blockingThickIn + washerThick(0.25); // 1.4375 to the flange
-    const len = 1.25;
-    expect(sock.size).toMatch(/1\/4-20 × 1-1\/4 (?:316|18-8 \(304\) stainless)/);
-    expect(len).toBeLessThanOrEqual(stack + 1e-9); // ends flush or short of the backer face
-    expect(1.25 - (stack - defaults.blockingThickIn)).toBeGreaterThanOrEqual(1.5 * 0.25); // T-nut engagement
+    const face = defaults.handleSocketWallIn + L.transom + defaults.blockingThickIn + washerThick(0.25); // 1.4375 to the flange
+    const fit = socketScrewFit(face, defaults.handleTNutBarrelIn);
+    expect(fit).toMatchObject({ lengthIn: 1.375, cutFromIn: 1.5, ok: true });
+    expect(fit.tipShortIn).toBeCloseTo(0.0625, 6); // ends short of the backer face, where the box aft wall sits
+    expect(fit.engageIn).toBeCloseTo(0.25, 6); // 5 threads of the 5/16 in barrel
+    expect(sock.size).toMatch(/^1\/4-20 × 1-1\/2 \(cut to 1-3\/8"\) (?:316|18-8 \(304\) stainless)/);
     expect(sock.note).toMatch(/SHORT of the flange/);
+    expect(sock.note).toMatch(/5 threads/);
+    expect(sock.note).not.toMatch(/CHECK/);
+    // the old 1-1/4 as bought stops 0.19 in short of the flange, in only 0.125 in (2-1/2 threads) of the barrel
+    expect(1.25 - (face - defaults.handleTNutBarrelIn)).toBeLessThan(SOCKET_SCREW_MIN_THREADS / SOCKET_SCREW_TPI);
+  });
+  it('socketScrewFit: a stocked length as bought when one fits, else a cut one, else flagged', () => {
+    expect(socketScrewFit(1.4375, 0.4375)).toMatchObject({ lengthIn: 1.25, cutFromIn: null, ok: true }); // a 7/16 in barrel: the 1-1/4 engages 5 threads
+    expect(socketScrewFit(1.5, 0.3125)).toMatchObject({ lengthIn: 1.5, cutFromIn: null, ok: true }); // flush with the face, the whole barrel engaged
+    expect(socketScrewFit(1.4375, 0.125).ok).toBe(false); // a barrel shorter than 4 threads can never pass
+    expect(socketScrewFit(1.4375, 0.125).engageIn).toBeLessThan(0.2);
   });
   it('the socket bolts on a nylock nut were 2 in, with a T-nut the stack is computed from the grip', () => {
     const sock = byId('handle-socket-L').joints!.find((j) => j.to === 'transom-rear')!;
     const stack = defaults.handleSocketWallIn + L.transom + defaults.blockingThickIn; // 1.375
     expect(boltLength(stack, 0.25, 2)).toBe(2); // the nylock-nut length, kept to show the T-nut saves a size
-    expect(sock.size).toMatch(/1\/4-20 × 1-1\/4 (?:316|18-8 \(304\) stainless)/);
+    expect(sock.size).toMatch(/1\/4-20 × 1-1\/2 \(cut to 1-3\/8"\) (?:316|18-8 \(304\) stainless)/);
     expect(sock.size).toMatch(/T-NUT/);
     expect(sock.size).toMatch(/button-head/);
     expect(sock.at).toHaveLength(2);

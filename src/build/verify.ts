@@ -315,7 +315,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       title: 'Seat back: detent pin, inserts, pin head vs cushion',
       how: [
         it('Spring-detent pin: with the real pin, measure the tip-to-ball distance and the head height.', ['The upright groove is 23/32" from the hole mouth, the flat groove 1/4" below the deck.', 'Cut both with a hook tool, 1/16" wide, 1/32" deep.']),
-        it(`Inserts: epoxy a #10-32 × 5/16 insert in a scrap of the ${f(p.seatBackPlyIn * 25.4, 0)} mm okoume.`, ['11/32" blind hole with a drill stop; let it cure.', 'Screw in a bolt and hang a bucket from it.']),
+        it(`Inserts: first choose the hinge insert (no #10-32 wood insert of 11/32" or less is sold; the BOM line lists the options), then epoxy one in a scrap of the ${f(p.seatBackPlyIn * 25.4, 0)} mm okoume.`, ['11/32" blind hole with a drill stop (the insert at least 1/32" shorter); let it cure.', 'Screw in a bolt and hang a bucket from it.']),
         it('Hinge: confirm the 2" stainless butt hinge\'s screw-in-oak rating.'),
         it('Fit the pin in the panel and check the head clears the cushion (the cushion is set back 3/8").'),
       ],
@@ -336,7 +336,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       title: `Sign: ${fr(knob.lenIn)}" #10-32 thumb-knob screws`,
       how: [
         it(`Get one sample of the stainless #10-32 × ${fr(knob.lenIn)}" thumb-knob screw.`, [`A ${fr(knob.lenIn)}" length is not stocked by every vendor; 1" and 3/4" are common.`]),
-        it('Stack the real layers and run the screw home.', [`A ${thin.nominal} scrap, the ${fr(knob.standoffIn, 32)}" standoff disc, a ${thin.nominal} web scrap and the oak backing strip with its epoxied #10-32 × 5/16 insert.`]),
+        it('Stack the real layers and run the screw home.', [`A ${thin.nominal} scrap, the ${fr(knob.standoffIn, 32)}" standoff disc, a ${thin.nominal} web scrap and an oak rib offcut with its epoxied #10-32 × ${fr(knob.insertLenIn, 64)}" flush insert (Bolt Depot #23869, 13 mm long, no flange): measure the insert's length and drill size first.`]),
       ],
       passList: [
         `The screw reaches the insert with ${fr(knob.engagedIn, 32)}" of thread engaged.`,

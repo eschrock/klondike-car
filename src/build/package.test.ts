@@ -134,7 +134,7 @@ describe('build book', () => {
     expect(html).toContain('<style>');
     expect(html).toContain('@media print');
     expect(html).toContain('@page');
-    expect(html).not.toMatch(/<script|<link|<img|<iframe|@import|url\(/i);
+    expect(html).not.toMatch(/<script|<link|<img|<iframe|@import|url\((?!#)/i); // url(#id) is an in-page clip path (part drawings), not a fetch
     expect(html).not.toMatch(/\ssrc="/i);
     // the only URLs are the SVG namespace, the design link quoted in the header and the vendor links Eric gave (BOM lines with a `url`)
     // (a line's alternatives are named in its notes with their links, so those links are allowed too)
@@ -142,31 +142,30 @@ describe('build book', () => {
     expect(vendor.size).toBeGreaterThan(0);
     const urls = [...html.matchAll(/https?:\/\/[^\s"'<)]+/g)].map((m) => m[0]);
     // (a link with a ")" in it, such as a Bolt Depot page, is cut there by the pattern: a prefix of a vendor link is fine)
-    expect(urls.filter((u) => u !== 'http://www.w3.org/2000/svg' && u !== 'https://example.test/#x' && ![...vendor].some((v) => v.startsWith(u)))).toEqual([]);
+    expect(urls.filter((u) => u !== 'http://www.w3.org/2000/svg' && u !== 'http://www.shapertools.com/namespaces/shaper' && u !== 'https://example.test/#x' && ![...vendor].some((v) => v.startsWith(u)))).toEqual([]);
     // every external link opens in a new tab without an opener
     const anchors = [...html.matchAll(/<a href="(https?:[^"]+)"([^>]*)>/g)];
     expect(anchors.length).toBeGreaterThan(0);
     for (const a of anchors) { expect(vendor.has(a[1]), a[1]).toBe(true); expect(a[2]).toContain('target="_blank"'); expect(a[2]).toContain('rel="noopener"'); }
-    // the SVGs are the nesting sheets and the assembly step figures
-    expect((html.match(/<svg\b/g) ?? []).length).toBe(pkg.data.nest.sheets.length + pkg.data.steps.reduce((n, s) => n + s.figures.length, 0));
+    // the SVGs are the nesting sheets, the assembly step figures, the forms (shrunk) and the part drawings
+    expect((html.match(/<svg\b/g) ?? []).length).toBe(pkg.data.nest.sheets.length + pkg.data.steps.reduce((n, s) => n + s.figures.length, 0) + pkg.data.forms.length + pkg.data.partDrawings.length);
     expect(new TextEncoder().encode(html).length).toBeLessThan(4_000_000);
   });
 
   it('contains every assembly step title, with its clamp and cure text and its checks', () => {
     expect(pkg.data.steps.length).toBeGreaterThan(20);
     for (const s of pkg.data.steps) {
-      expect(html, `step ${s.n}`).toContain(`${s.n}. ${esc(s.title)}`);
+      expect(html, `step ${s.n}`).toContain(`Step ${s.n}.</span> ${esc(s.title)}`);
       if (s.clampCure) expect(html, `step ${s.n} clampCure`).toContain(esc(s.clampCure));
       for (const c of s.checks) expect(html, `step ${s.n} check`).toContain(esc(c.replace(/:\s*passed$/i, ''))); // a check is a to-do (an empty box), never "passed"
       expect(html, `step ${s.n} goal`).toContain(esc(s.goal));
       // Each item and sub-item, with its part tokens as links to the cut list: the text between the tokens is in the book as written.
       const walk = (items: typeof s.items): string[] => items.flatMap((q) => [q.text, ...walk(q.sub ?? [])]);
       for (const t of walk(s.items)) for (const piece of t.split(/\{\{[^{}]+\}\}/).map((x) => x.trim()).filter((x) => x.length > 3)) expect(html, `step ${s.n} item`).toContain(esc(piece));
-      for (const id of walk(s.items).flatMap((t) => [...t.matchAll(/\{\{([^{}]+)\}\}/g)].map((m) => m[1]))) {
-        if (html.includes(`id="part-${id}"`)) expect(html, `step ${s.n} link ${id}`).toContain(`href="#part-${id}"`);
-      }
     }
-    expect(html).toMatch(/<a class="part" href="#part-rail-L">/);
+    // A part with a drawing links to it (with its "[Dn]" number for paper); every in-page link has its target.
+    expect(html).toMatch(/<a class="part" href="#drawing-\d+">rail L<\/a> <span class="dref">\[D\d+\]<\/span>/);
+    for (const m of html.matchAll(/href="#([^"]+)"/g)) expect(html, m[1]).toContain(`id="${m[1]}"`);
   });
 
   it('contains every Shaper file name', () => {

@@ -474,3 +474,59 @@ describe('forms read plainly (readability round 2)', () => {
     expect(text).toContain(`inner chine band (${frac(st('side-L-chine-in').t)} × ${frac(st('side-L-chine-in').w)})`);
   });
 });
+
+describe('materials: the shopping list for each jig', () => {
+  const allBuild = (id: string): string => byId(id).build.flatMap((st) => [st.step, ...(st.sub ?? [])]).join(' ');
+
+  it('gives every form a non-empty list in shop fractions (no decimals, no part names or decision numbers)', () => {
+    const keys = [...new Set(parts.flatMap((x) => [x.id, x.partNo ?? x.id]))].filter((k) => /-/.test(k));
+    for (const d of drawings) {
+      expect(d.materials.length, d.id).toBeGreaterThan(0);
+      for (const m of d.materials) {
+        expect(m, `${d.id}: ${m}`).not.toMatch(/\d\.\d/);
+        expect(m, `${d.id}: ${m}`).not.toMatch(/\bD-\d+/);
+        for (const k of keys) expect(new RegExp(`(^|[^A-Za-z0-9])${k}([^A-Za-z0-9-]|$)`).test(m), `${d.id}: ${k} in ${m}`).toBe(false);
+      }
+    }
+  });
+
+  it('rail form: the MDF layers, the base and the patterns match the build steps', () => {
+    const build = allBuild('rail-form'), list = byId('rail-form').materials.join('\n');
+    const layers = Number(/stack of (\d+) layers/.exec(build)![1]);
+    expect(list).toContain(`3/4" MDF: ${2 * layers} layers: ${layers} for the form`);
+    expect(list).toContain(`and ${layers} for the counter-form`);
+    expect(list).toContain('2 laser patterns');
+    const base = /BASE: 3\/4" plywood ([\d/ -]+)" × ([\d/ -]+)"/.exec(build)!;
+    expect(list).toMatch(/3\/4" plywood: 1 base, [\d/-]+" × [\d/-]+"/);
+    expect(base).toBeTruthy();
+    expect(list).toContain(`2 spare rail strips`);
+    expect(build).toContain('Glue 2 spare rail strips');
+  });
+
+  it('side form: the cleats, stops, ribs, bench tops and sand match the build steps', () => {
+    const d = byId('side-form'), build = allBuild('side-form'), list = d.materials.join('\n');
+    const cleats = Number(/CLEATS on the sheer line: (\d+) blocks/.exec(build)![1]);
+    expect(cleats).toBe(2 * dim('side-form', 'cleat-count'));
+    expect(list).toContain(`${cleats} cleats`);
+    expect(list).toContain('4 end stops');
+    const edge = Number(/EDGE STOPS, (\d+) more blocks a bench/.exec(build)![1]);
+    expect(list).toContain(`${2 * edge} edge stops`);
+    expect(list).toContain(`${cleats + 4 + 2 * edge} blocks`);
+    expect(list).toContain(`3/4" MDF: ${dim('side-form', 'ramp-ribs') + dim('side-form', 'mirror-ribs')} ribs: ${dim('side-form', 'ramp-ribs')} for the S-ramp`);
+    expect(list).toContain(`${dim('side-form', 'mirror-ribs')} for the mirror ramp`);
+    expect(build).toContain(`cut ${dim('side-form', 'ramp-ribs')} ribs`);
+    expect(list).toMatch(/3\/4" plywood or MDF: 2 bench tops, each [\d/-]+" × [\d/-]+"/);
+    expect(list).toContain('2 ramp caps');
+    const bags = Number(/\((\d+) bags\)/.exec(build)![1]) + Number(/Lay (\d+) bags/.exec(build)![1]);
+    const sand = Number(/about (\d+) lb in all/.exec(build)![1]);
+    expect(list).toContain(`play sand, about ${sand} lb, in ${bags} bags`);
+    expect(list).toMatch(/packing tape/);
+  });
+
+  it('templates: each list names its plywood template pieces and the tape', () => {
+    expect(byId('crown-templates').materials.join(' ')).toMatch(/2 laser templates/);
+    expect(byId('brake-flap-template').materials.join(' ')).toMatch(/1 laser template/);
+    expect(byId('brake-knee-template').materials.join(' ')).toMatch(/1 laser template/);
+    expect(byId('end-templates').materials.join(' ')).toMatch(/2 laser templates, the rear transom template/);
+  });
+});

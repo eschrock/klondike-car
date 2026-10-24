@@ -13,7 +13,7 @@ import { innerHalfWidth, samples, sideSlopeAt, sideTopAt, type Layout } from './
 import { planWallGeometry } from './plan-wall';
 import { SIGN_X_MAX_IN, brakeGeometry } from './brake-layout';
 import { compose } from './mat4';
-import { STORAGE_LOCATION, thinSheet, WEATHER_SPEC } from '../params';
+import { STORAGE_LOCATION, thinSheet, WEATHER_SPEC, type Params } from '../params';
 import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
 /** Shop clearance: the rear transom backers stop this far in from the inner band's face, so a band end standing a hair proud does not hold the transom off (round 2 fix). */
@@ -545,8 +545,8 @@ export function signBackerPlan(ctx: Pick<Ctx, 'p' | 'L'>) {
 }
 /** The strip extends this far past each knob row. */
 const SIGN_BACKER_PAD_IN = 0.6;
-/** Threaded insert (#10-32 x 5/16, the same insert as the seat back's, D-72) in the backing strip; the knob screw should engage at least 6 threads (about 0.2 in) of it and leave 1/8 in of wood behind its tip. */
-export const SIGN_INSERT_LEN_IN = 0.3125;
+/** The sign's threaded insert (#10-32, `signInsertLenIn`: the bought flush insert, longer than the seat back's); the knob screw should engage at least 6 threads (about 0.2 in) of it and leave 1/8 in of wood behind its tip. */
+export const signInsertLenIn = (p: Pick<Params, 'signInsertLenIn'>): number => p.signInsertLenIn;
 const SIGN_SCREW_BEHIND_IN = 0.125;
 
 /**
@@ -554,7 +554,7 @@ const SIGN_SCREW_BEHIND_IN = 0.125;
  * (so it clears the strip wherever the seat puts the board); the bands stand about 0.21 to 0.25 in proud of the thin web, so the gap behind the sign (`standoffIn`, 0.297 in) is crossed by each screw before it
  * reaches the strip: sign + standoff + web. The standoff is filled by four oak discs (about 0.30 in thick, 1/2 in across) epoxied to the sign back around the screw holes, or 5/16 in nylon spacers,
  * so the sign cannot flex or be levered across an air gap. The screw is the longest 1/8 in length that leaves 1/8 in of wood behind its tip in the strip: 7/8 in at the defaults, 0.26 in engaged
- * in the 3/8 in insert (the old 1 in screw assumed no standoff and would come within 0.05 in of the back of the strip; 3/4 in engages only 0.14 in).
+ * in the insert (the old 1 in screw assumed no standoff and would come within 0.05 in of the back of the strip; 3/4 in engages only 0.14 in).
  */
 export function signKnobPlan(ctx: Pick<Ctx, 'p' | 'L'>) {
   const { p, L } = ctx;
@@ -564,7 +564,7 @@ export function signKnobPlan(ctx: Pick<Ctx, 'p' | 'L'>) {
   const stripT = p.signBackerThickIn;
   const lenIn = Math.max(0.5, Math.floor((stackIn + stripT - SIGN_SCREW_BEHIND_IN) * 8 + 1e-9) / 8);
   const engagedIn = lenIn - stackIn;
-  return { standoffIn, stackIn, lenIn, engagedIn, tipShortIn: stripT - engagedIn, stripT, insertLenIn: SIGN_INSERT_LEN_IN };
+  return { standoffIn, stackIn, lenIn, engagedIn, tipShortIn: stripT - engagedIn, stripT, insertLenIn: signInsertLenIn(p) };
 }
 
 /**

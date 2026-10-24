@@ -827,7 +827,7 @@ const finishedRail: FigFn = (c) => {
   return {
     id: 'rail-finished',
     title: 'The finished rail and its cuts',
-    caption: `Out of the clamps, each rail is planed flush on its edges and marked at its finished ends; it stays long at both ends until the dry fit trims it, so every position is measured from the finished rear end. The notch in the bottom edge takes the rear axle beam; the bow step makes the rail shallower where the front axle swings under it; the screw holes take the screws that tie the side down onto the rail; the Domino mortises take the crossmembers and the king beam. The end mortises are cut later, in [[step:dry-fit]].`,
+    caption: `Out of the clamps, each rail is planed flush on its edges and marked at its finished ends; it stays long at both ends until the dry fit trims it, so every position is measured from the finished rear end. The notch in the bottom edge takes the rear axle beam; the bow step makes the rail shallower where the front axle swings under it; the screw holes take the screws that tie the side down onto the rail; the Domino mortises take the crossmembers and the king beam. The end mortises are cut later, in [[step:rail-ends]].`,
     svg: F.svg('The finished rail from its top edge and its inboard face: the beam notch, the bow step, the screw holes and the Domino mortises'),
   };
 };

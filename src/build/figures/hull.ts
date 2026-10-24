@@ -664,7 +664,7 @@ const lowerJoint: FigFn = (c) => {
   return {
     id: 'lower-joint',
     title: 'The rail-to-side joint, in order',
-    caption: `A cut across the left rail and side at one screw, upside down as it is glued. The frame and deck unit goes straight down between the cradle posts onto a bed of thickened epoxy on the edges of both sides, and the ${tie.perRail} screws a side pull each side onto its rail at the pilots drilled in [[step:dry-fit]]; the clamps and cauls between the screws keep the outer faces flush until the epoxy cures. The deck edges are buttered from the same batch, so the slot between each deck edge and its web (closed in by the rail) fills as the unit goes down; a second small batch tops it up from the open hull ends.`,
+    caption: `A cut across the left rail and side at one screw, upside down as it is glued. The frame and deck unit goes straight down between the cradle posts onto a bed of thickened epoxy on the edges of both sides, and the ${tie.perRail} screws a side pull each side onto its rail at the pilots drilled in [[step:rail-ends]]; the clamps and cauls between the screws keep the outer faces flush until the epoxy cures. The deck edges are buttered from the same batch, so the slot between each deck edge and its web (closed in by the rail) fills as the unit goes down; a second small batch tops it up from the open hull ends.`,
     svg: F.svg('The rail-to-side joint at one screw, with the order of the glue-up'),
   };
 };

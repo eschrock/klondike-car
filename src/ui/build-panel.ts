@@ -1007,7 +1007,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     const real = (v: string | undefined): string => (v && !/^[-–—\s]*$/.test(v) ? v : '');
     out.push(h('div', { class: 'bp-fin-steps' }, ...f.steps.map((s) =>
       h('article', { class: 'bp-card bp-finstep' },
-        h('h4', { class: 'bp-sub' }, `${s.n}. ${s.title}`, s.coats ? h('span', { class: 'muted' }, ` · ${s.coats} coat${s.coats === 1 ? '' : 's'}`) : ''),
+        h('h4', { class: 'bp-sub' }, `F${s.n}. ${s.title}`, s.coats ? h('span', { class: 'muted' }, ` · ${s.coats} coat${s.coats === 1 ? '' : 's'}`) : ''),
         s.items?.length ? ui.instrList(s.items) : h('ol', { class: 'bp-instr' }, ...(s.instructions ?? []).map((t) => h('li', {}, t))),
         s.products.length
           ? table('bp-fin', ['Product', 'Area', 'Coats', 'Qt'], s.products.map((p) => [p.name, `${p.areaFt2.toFixed(0)} ft²`, String(p.coats), p.qtNeeded.toFixed(2)]), `${s.title} products`, { num: [1, 2, 3] })

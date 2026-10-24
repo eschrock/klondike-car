@@ -314,6 +314,11 @@ const defs = {
     default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-62, build 3c M4',
     note: 'D-62: nothing is screwed into the 4 mm web (a tee-nut in 0.157 in ply has 0.1 in of bite, and a 1 in screw poked into the cabin). Each side sign hangs on two vertical oak backing strips glued on the INSIDE of the web between the chine and gunwale bands, each with two #10-32 threaded inserts (3/8 long) for the knobs. The strips stand this far inboard of the web (0.27 in proud of the inner band faces), at the sign knob stations behind the box. D-63: the knob screw length is derived from this thickness and the 0.234 in sign standoff (7/8 in at the default: sign + standoff disc + web = 0.55 in, 0.33 in into the insert, 1/8 in of wood left behind its tip).',
   },
+  signInsertLenIn: {
+    label: 'Sign threaded insert length (#10-32, in the rib)', group: 'body', unit: 'in',
+    default: 0.512, min: 0.25, max: 0.787, step: 0.001, status: 'verify', ref: 'D-85',
+    note: 'The bought insert the sign knobs screw into, set in the box rib and the rear rib: Bolt Depot #23869, a flush-mount (no flange) zinc softwood insert, #10-32, Allen drive, 0.512 in (13 mm) long, $0.20 each (read 2026-10-24 via search). No flange, because it is turned in through the bore in the web; no #10-32 wood insert of 5/16 in is sold. The rib behind the web has about 0.94 in of oak (band-strip filler plus the 3/4 in rib), so the bore (web + insert + 1/16 in) leaves about 0.3 in behind it. The under-seat backing strips (1/2 in) cannot take it. Measure the real insert and set this; confirm its drill size on the bag.',
+  },
   signStandoffDiscDiaIn: {
     label: 'Sign standoff disc diameter (oak)', group: 'body', unit: 'in',
     default: 0.75, min: 0.5, max: 1.25, step: 0.125, status: 'assumed', ref: 'D-63',
@@ -746,7 +751,7 @@ const defs = {
   seatInsertPulloutLbf: {
     label: 'Seat-back hinge insert pull-out allowable (each)', group: 'seat', unit: 'lbf',
     default: 150, min: 50, max: 400, step: 10, status: 'verify', ref: 'D-62',
-    note: 'D-62: a #10-32 x 3/8 stainless hex-drive threaded insert, epoxied into a blind hole in the 12 mm okoume seat-back panel. Published axial pull-out for a #10 insert in plywood is a few hundred pounds; 150 lbf is a cautious working value (confirm with a pull test on a scrap: hang a bucket from a screwed-in insert).',
+    note: 'D-62: a #10-32 x 5/16 hex-drive threaded insert (zinc under Standard, 316 under Extreme), epoxied into an 11/32 in blind hole in the 12 mm okoume seat-back panel. Published axial pull-out for a #10 insert in plywood is a few hundred pounds; 150 lbf is a cautious working value (confirm with a pull test on a scrap: hang a bucket from a screwed-in insert).',
   },
   seatPinPullLbf: {
     label: 'Seat-back latch pin pull (each pin)', group: 'seat', unit: 'lbf',
@@ -1329,6 +1334,11 @@ const defs = {
   handleSocketWallIn: {
     label: 'Push-handle socket wall thickness', group: 'brake', unit: 'in',
     default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-39',
+  },
+  handleTNutBarrelIn: {
+    label: 'Push-handle socket T-nut barrel length', group: 'brake', unit: 'in',
+    default: 0.3125, min: 0.1875, max: 0.5, step: 0.0625, status: 'verify', ref: 'D-39',
+    note: 'The threaded barrel of the 1/4-20 four-prong T-nut set in the rear-transom backer, flange flush with the backer\'s inside face; only the barrel is threaded, so the socket screw engages only where it overlaps it. 5/16" is typical for a 1/4-20 T-nut: measure the real one (flange face to barrel tip). The screw length is chosen from this so the tip stops at or short of the backer face (the storage box aft wall sits against it) with at least 4 threads engaged.',
   },
   handlePinDiameterIn: {
     label: 'Push-handle retaining pin diameter', group: 'brake', unit: 'in',

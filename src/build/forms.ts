@@ -19,7 +19,7 @@ import { transomTopOutline } from '../model/body';
 import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
 import { epoxyTimeFactor } from './finishing';
-import { fractionText } from './units';
+import { fractionText, roughFrac } from './units';
 import { brakeOf, cutListFor } from './part-drawings';
 import { analyzeShaperPart } from './shaper-svg';
 import { LASER_MAX_WIDTH_IN, clipShape, emptyShape, fitToBed, type LaserItem, type LaserShape } from './laser-svg';
@@ -43,6 +43,8 @@ const MIRROR_CAP_MARGIN_IN = 1.5;
 export const CLEAT_TALL_IN = 1.5;
 /** The ramp caps run this much past the web's bow end so the bow end stop stands on the cap. (How far the gunwale band stands past each web end is `gunwaleEndLongIn`, D-93.) */
 const CAP_PAST_BOW_IN = 2;
+/** Screws along the edges of the side-form template (in), shop practice: about one every 12 in. */
+const TEMPLATE_SCREW_SPACING_IN = 12;
 /** Edge stops along the web's straight bottom edge, a bench: about one every 12 in (shop practice). */
 const EDGE_STOP_SPACING_IN = 12;
 /**
@@ -92,6 +94,10 @@ const BASE_FRONT_IN = 6;
 const BASE_END_IN = 3;
 /** HOW TO BUILD IT panel: text size and line pitch (in). */
 const BUILD_TEXT_IN = 0.15, BUILD_LINE_IN = 0.21;
+/** A screw or stock count rounded up to the next 5, for a shopping list ("about 60"). */
+const up5 = (n: number): number => Math.ceil(n / 5 - 1e-9) * 5;
+/** The 1/4 in plywood template, as the shopping list names it. */
+const TEMPLATE_PLY = `${fractionText(TEMPLATE_STOCK_IN, 8)}" Baltic birch plywood`;
 
 // Sheet layout (in): margins around the content for dimension lines, and the title block below it.
 const MARGIN_IN = 1.3;
@@ -125,6 +131,8 @@ export interface FormDrawing {
   notes: string[];
   /** How to build the form or template, step by step. */
   build: FormBuildStep[];
+  /** The shop shopping list for building this jig: stock (with thickness, count and rough size) and the screws, tape, glue and sand the build steps use. */
+  materials: string[];
   /** What the XTool S1 laser cuts for this drawing (D-86), or absent when nothing here is laser work. */
   laser?: FormLaser[];
 }
@@ -156,6 +164,7 @@ interface Plan {
   notes: string[];
   subtitle: string[];
   build: FormBuildStep[];
+  materials: string[];
   sketch?: Sketch;
   laser?: FormLaser[];
 }
@@ -206,7 +215,7 @@ function finishDrawing(plan: Plan, p: Params, date?: string): FormDrawing {
   const body = plan.draw(place) + sketch + `<g id="titleblock" ${ANNOTATION_ATTRS}>${tb.join('')}</g>`;
   const desc = [plan.title, ...plan.subtitle, ...plan.notes, 'HOW TO BUILD IT:', ...plan.build.flatMap((st, i) => [`${i + 1}. ${st.step}`, ...(st.sub ?? []).map((x, k) => `   ${String.fromCharCode(97 + k)}) ${x}`)])].join('\n');
   const svg = svgDocument({ widthIn: W, heightIn: H, title: `${plan.title} (1:1)`, desc, body });
-  return { id: plan.id, title: plan.title, fileName: `${plan.id}.svg`, svg, widthIn: W, heightIn: H, dims: plan.dims, notes: plan.notes, build: plan.build, ...(plan.laser ? { laser: plan.laser } : {}) };
+  return { id: plan.id, title: plan.title, fileName: `${plan.id}.svg`, svg, widthIn: W, heightIn: H, dims: plan.dims, notes: plan.notes, build: plan.build, materials: plan.materials, ...(plan.laser ? { laser: plan.laser } : {}) };
 }
 
 /** A rectangle (sketch inches, lower-left x, y, width, height) as a guide path at `at`, scaled by `k`. */
@@ -429,6 +438,30 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       ],
     },
   ];
+  // ── Shopping list (the same numbers as the steps above) ──
+  const benches = hasRamp ? 2 : 1;
+  const edgeStops = benches * EDGE_STOPS;
+  const blocks = 2 * nCleat + 4 + edgeStops; // cleats, end stops and edge stops, all 3/4" × 1-1/2" × 3"
+  const nBags = 2 * bagsPerBand + (hasRamp ? S_BAGS : 0);
+  const ribTall = RIB_BASE_IN + rampH;
+  const capLen = rampLen + (f.widthIn - uOf(xRe)) + CAP_PAST_BOW_IN, mirrorCapLen = mirrorLen + (f.widthIn - uOf(xRe)) + CAP_PAST_BOW_IN;
+  const materials: string[] = [
+    `3/4" plywood or MDF: ${benches === 1 ? '1 bench top' : `${benches} bench tops`}, ${benches === 1 ? '' : 'each '}${roughFrac(f.widthIn + 2 * BASE_END_IN)} × ${roughFrac(f.heightIn + 2 * BASE_END_IN)}`,
+    `${TEMPLATE_PLY}: the web template, ${tplPieces} laser pieces: the web outline, ${roughFrac(f.widthIn)} × ${roughFrac(f.heightIn)}${hasRamp ? `, and a second layer under the rear piece, ${roughFrac(uS0)} × ${roughFrac(f.heightIn)}` : ''}`,
+    ...(hasRamp ? [
+      `3/4" MDF: ${ribs + mirrorRibs} ribs: ${ribs} for the S-ramp, each ${roughFrac(rampLen)} × ${roughFrac(ribTall)}, and ${mirrorRibs} for the mirror ramp, each ${roughFrac(mirrorLen)} × ${roughFrac(ribTall)}`,
+      `${frac(TEMPLATE_STOCK_IN)} hardboard: 2 ramp caps, ${roughFrac(capLen)} × ${roughFrac(capW)} for the S-ramp and ${roughFrac(mirrorCapLen)} × ${roughFrac(mCapW)} for the mirror ramp`,
+    ] : []),
+    '1/8" hardboard: one scrap, to gauge the cleats against the web\'s top edge',
+    `${blocks} blocks, 3/4" × ${frac(CLEAT_TALL_IN)} × 3", plywood or oak offcuts: ${2 * nCleat} cleats, 4 end stops and ${edgeStops} edge stops`,
+    ...(hasRamp ? [`${2 * (ribs + mirrorRibs)} glue blocks, 3/4" × 3/4" × 3", offcuts (two a rib), and a few more where a cleat has no rib under it`] : []),
+    `#8 × ${hasRamp ? '1"' : '3/4"'} flat-head screws for the template, about ${up5(Math.ceil(2 * (f.widthIn + f.heightIn) / TEMPLATE_SCREW_SPACING_IN))}`,
+    `#8 screws for the ${blocks} blocks, 2 each: ${2 * blocks} in all, 2" long (2-1/2" where a block stands on a ramp cap); more for the glue blocks`,
+    ...(hasRamp ? ['brads and wood glue, for the ramp caps'] : []),
+    'packing tape, a roll or two: over the template, the caps, and the cleat and stop faces',
+    'plastic sheeting (a cut-open trash bag), to cover the wet bands',
+    `play sand, about ${sandLb} lb, in ${nBags} bags (${2 * nBags} freezer bags, doubled)`,
+  ];
   const sketch: Sketch | undefined = hasRamp && ribs > 1 ? {
     w: (capW + 6) * 0.5, h: (RIB_BASE_IN + rampH + 2.2) * 0.5, title: 'S-ramp, section across it at the bow end (not to scale)',
     draw: (at, sheet) => {
@@ -445,7 +478,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     },
   } : undefined;
   return {
-    id: 'side-form', title: 'Sandwich side: cleat-line template and S-ramp', w, h, dims, notes, build, ...(sketch ? { sketch } : {}),
+    id: 'side-form', title: 'Sandwich side: cleat-line template and S-ramp', w, h, dims, notes, build, materials, ...(sketch ? { sketch } : {}),
     laser: [
       {
         id: 'side-template', title: 'Sandwich side: web template', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN, items: tplItems,
@@ -602,6 +635,20 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       sub: [`Roll epoxy on both mating faces of the ${plies} strips (${frac(strip)} × ${frac(stripW)}), butter one face with thickened epoxy, and stand them on edge on the base against the form face, the bow ends ${frac(RAIL_BOW_EXTRA_IN)} past the form's bow end, the counter-form outside.`, 'Bend the glued strips onto the form face with the counter-form set on and every clamp snug but loose.', `On the overhang, set a straight ${frac(FORM_LAYER_IN)} × ${frac(stripW)} caul on the outer strip and hold caul, strips and fence with ${Math.ceil(hang / OVERHANG_CLAMP_IN)} to ${Math.ceil(hang / OVERHANG_CLAMP_IN) + 2} large spring clamps over the top, about every ${frac(OVERHANG_CLAMP_IN)}.`, 'Then tighten the clamps together, the straight lead-in first and the bow end last. The counter-form only seats once the strips are fully bent.', `Leave it clamped for the full cure, ${RAIL_CLAMP_H_70F} h at 70 °F or ${h60} h at 60 °F, before unclamping: a bent strip springs back if it comes off early. Bend the second rail on the same form the same way: the two come off identical, and one becomes the left rail by turning it over.`],
     },
   ];
+  // ── Shopping list (the same numbers as the steps above) ──
+  const counterH = vTop - Math.min(...inner.map((q) => q[1]));
+  const mdfSheets = (nLayers * lengthIn * (deepest + counterH)) / (48 * 96);
+  const stackScrews = up5(Math.ceil((2 * (lengthIn + deepest)) / STACK_SCREW_IN));
+  const materials: string[] = [
+    `${TEMPLATE_PLY}: 2 laser patterns, the form pattern ${roughFrac(lengthIn)} × ${roughFrac(deepest)} and the counter-form pattern ${roughFrac(lengthIn)} × ${roughFrac(counterH)}`,
+    `3/4" MDF: ${2 * nLayers} layers: ${nLayers} for the form, each ${roughFrac(lengthIn)} × ${roughFrac(deepest)}, and ${nLayers} for the counter-form, each ${roughFrac(lengthIn)} × ${roughFrac(counterH)} (about ${fractionText(Math.ceil(mdfSheets * 4 - 1e-9) / 4, 4)} of a 4 × 8 sheet)`,
+    `3/4" plywood: 1 base, ${roughFrac(baseL)} × ${roughFrac(baseW)}, and 1 strip about ${roughFrac(Math.ceil(hang))} × ${roughFrac(baseW)} to carry the strips' overhang level with the base`,
+    `1 straight board, 3/4" × ${roughFrac(stackH)} × ${roughFrac(Math.ceil(hang) + BASE_END_IN)}, for the fence, and 1 straight caul, 3/4" × ${roughFrac(stripW)}, for the overhang`,
+    '2 stop blocks, offcuts, to keep the counter-form from creeping',
+    `2 spare rail strips, ${roughFrac(strip)} × ${roughFrac(stripW)} × ${roughFrac(stripL)}, for the test rail, and a little epoxy to glue them`,
+    `#8 × 1-5/8" screws to fix the form stack to the base, about ${stackScrews} (one every ${frac(STACK_SCREW_IN)}); more screws and wood glue to hold each stack together`,
+    'packing tape (the form face and the counter-form face), and double-sided tape (to stick the patterns on the layers)',
+  ];
   const sketch: Sketch = {
     w: (baseW + 4.5) * 0.5, h: (FORM_BASE_IN + stackH + 1.6) * 0.5, title: 'Section across the form at the bow end (not to scale)',
     draw: (at, sheet) => {
@@ -622,7 +669,7 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     },
   };
   return {
-    id: 'rail-form', title: 'Rail bending form (plan, left rail)', w, h, dims, notes, build, sketch,
+    id: 'rail-form', title: 'Rail bending form (plan, left rail)', w, h, dims, notes, build, materials, sketch,
     subtitle: [`Form ${inch(lengthIn)} long; face offset ${inch(turn)} at the bow; ${plies} strips of ${inch(strip)} per rail.`],
     laser: [{
       id: 'rail-form', title: 'Rail bending form: form pattern and counter-form pattern', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
@@ -710,8 +757,12 @@ function crownPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     { step: 'BULKHEAD: set the template on the oak blank, flush with the corner-height line, and trace. The Shaper cuts the bulkhead itself: use the template to check its crown, or as the pattern if cutting it by hand.' },
     { step: 'No base, braces, clamps or spring-back: these are tracing and routing templates, nothing is bent.' },
   ];
+  const materials: string[] = [
+    `${TEMPLATE_PLY}: 2 laser templates, the handlebow ${roughFrac(barW)} × ${roughFrac(barH)} and the bow bulkhead crown ${roughFrac(2 * b.halfW)} × ${roughFrac(bulkH)}`,
+    'double-sided tape, to stick a template on the board',
+  ];
   return {
-    id: 'crown-templates', title: 'Crown templates: handlebow and bow bulkhead', w, h, dims, notes, build,
+    id: 'crown-templates', title: 'Crown templates: handlebow and bow bulkhead', w, h, dims, notes, build, materials,
     laser: [{
       id: 'crown-templates', title: 'Crown templates: handlebow and bow bulkhead', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
       items: [
@@ -774,8 +825,12 @@ function flapPlan(parts: Part[], p: Params): Plan | null {
       sub: ['For the right flap flip the template over (mirror image): the screw eye goes inboard on both.', 'Round over all edges after trimming. No base, braces or clamps: this is a routing template.'],
     },
   ];
+  const materials: string[] = [
+    `${TEMPLATE_PLY}: 1 laser template, ${roughFrac(f.widthIn)} × ${roughFrac(f.heightIn)}, and a second layer the same size if you want a longer edge for the bearing`,
+    'double-sided tape, to stick the template on the oak blank',
+  ];
   return {
-    id: 'brake-flap-template', title: 'Brake flap router template (left flap)', w, h, dims, notes, build,
+    id: 'brake-flap-template', title: 'Brake flap router template (left flap)', w, h, dims, notes, build, materials,
     laser: [{
       id: 'brake-flap-template', title: 'Brake flap router template (left flap)', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
       items: [{
@@ -845,8 +900,12 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
       sub: ['If your bit cuts less than the block is thick, trim half the thickness, flip the block and the template over, and trim the other half from the other face.', 'For the right knee flip the template over (mirror image). No base, braces or clamps: this is a routing template.'],
     },
   ];
+  const materials: string[] = [
+    `${TEMPLATE_PLY}: 1 laser template, ${roughFrac(wIn)} × ${roughFrac(hIn)}, and a second layer the same size if you want a longer edge for the bearing`,
+    'double-sided tape, to stick the template on the block',
+  ];
   return {
-    id: 'brake-knee-template', title: 'Brake knee router template (left knee)', w: wIn, h: hIn + 0.6, dims, notes, build,
+    id: 'brake-knee-template', title: 'Brake knee router template (left knee)', w: wIn, h: hIn + 0.6, dims, notes, build, materials,
     laser: [{
       id: 'brake-knee-template', title: 'Brake knee router template (left knee)', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
       items: [{
@@ -947,9 +1006,12 @@ function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
     },
     { step: 'No base, braces, clamps or spring-back: these are fit-check templates.' },
   ];
+  const materials: string[] = [
+    `${TEMPLATE_PLY}: ${ts.length} laser template${ts.length === 1 ? '' : 's'}, ${ts.map((t) => `the ${t.label.toLowerCase()} ${roughFrac(t.w)} × ${roughFrac(t.h)}`).join(' and ')}`,
+  ];
   const yOf = (i: number): number => ts.slice(0, i).reduce((a, t) => a + t.h + GAP, 0);
   return {
-    id: 'end-templates', title: 'End templates: rear transom and bow bulkhead', w, h, dims, notes, build,
+    id: 'end-templates', title: 'End templates: rear transom and bow bulkhead', w, h, dims, notes, build, materials,
     laser: [{
       id: 'end-templates', title: 'End templates: rear transom and bow bulkhead', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
       items: ts.map((t) => ({ shape: { ...emptyShape(t.id, t.label, t.outer), holes: t.slots, score: t.score, marks: t.marks }, qty: 1 })),
