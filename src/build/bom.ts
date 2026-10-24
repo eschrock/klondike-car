@@ -33,7 +33,7 @@ import { WEATHER_SPEC, thinSheet, type Params } from '../params';
 import { cutList, fracIn, groupedName, isBuilt, partKey, toCsv, type CsvCell } from './cutlist';
 import { ceilTo, fractionText, fractionizeInches, inchMarks } from './units';
 import { EPOXY_BUY_RE, finishingSchedule, glueEpoxyFlOz } from './finishing';
-import { nestPlywood, oakBoardFeet, type OakPlan } from './nesting';
+import { nestPlywood, oakBoardFeet, widthListText, type OakPlan } from './nesting';
 import {
   EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, FILLERS, FINISH_CONTAINER_FACTOR, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, RESEARCH_DATE,
   OWNED_NOTE, PURCHASED_FALLBACK, TITEBOND_OWNED, URETHANE_CONTAINER_PRICE, fastenerPrice, metalPrice, modelCostNote, purchasedDescribe, purchasedEntry, specOf, std304, type Price, type PriceBasis, type SpecName,
@@ -843,9 +843,9 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     lumberAllowanceUsd += t.allowanceBf * price.usd;
     lumberAltUsd += r2(t.purchaseBf) * (alt ?? price).usd;
     return line('Lumber', t.board, `White oak ${t.board}, rough, whole boards`, r2(t.purchaseBf), price, {
-      notes: `Buy: ${t.summary.join('; ')}. ${r2(t.netBf)} bf net on nominal thickness (${r2(t.allowanceBf)} bf with the ${Math.round(oak.wasteAllowance * 100)}% waste allowance); the boards come to ${r2(t.plannedBf)} bf.` +
+      notes: `By width: ${widthListText(t).join('; ')} (widths rounded up to a whole inch; a wider board rips down). Priced as whole boards: ${t.summary.join('; ')}. ${r2(t.netBf)} bf net on nominal thickness (${r2(t.allowanceBf)} bf with the ${Math.round(oak.wasteAllowance * 100)}% waste allowance); the boards come to ${r2(t.plannedBf)} bf.` +
         (alt ? ` Alternative: ${alt.source} $${alt.usd.toFixed(2)}/bf = $${(r2(t.purchaseBf) * alt.usd).toFixed(2)} for these boards (${alt.url}).` : '') +
-        (t.layersIn ? ` The face-laminated parts (${laminatedText(oak.laminated, built)}) take their layers from the stocked 4/4 and 5/4 boards, so no thicker board is bought.` : ''),
+        (t.layersIn ? ` The face-laminated parts (${laminatedText(oak.laminated, built)}) take their layers from the stocked boards.` : ''),
     });
   });
 

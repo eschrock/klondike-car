@@ -238,7 +238,12 @@ export interface OakThickness {
   layersIn?: { pieces: number; partNos: string[] };
   /** Human-readable board list, e.g. '2 x 6" x 8 ft'. */
   summary: string[];
+  /** The shopping list by width: each piece's rough width rounded UP to a whole inch, its length (plus a kerf) summed per width and rounded up to 1/2 ft. A wider board rips down to any narrower width. Resaw boards count at their width. */
+  byWidth: WidthLine[];
 }
+
+/** Linear feet of lumber at one whole-inch width (see `OakThickness.byWidth`). */
+export interface WidthLine { widthIn: number; linearFt: number; pieces: number }
 
 export interface OakPlan {
   thicknesses: OakThickness[];
@@ -259,6 +264,9 @@ export interface OakPlan {
 
 /** A thickness whose SOLID pieces total less than this many board feet is not worth a whole board of its own when a thicker board's offcuts can hold them (bf). */
 export const SMALL_BUCKET_BF = 1;
+
+/** "3\" wide: 14 ft" per width, narrowest first (the shopping list; `OakThickness.byWidth`). */
+export const widthListText = (t: Pick<OakThickness, 'byWidth'>): string[] => t.byWidth.map((w) => `${w.widthIn}" wide: ${w.linearFt} ft`);
 
 const lenFt = (inches: number): string => `${inches / 12} ft`;
 /** A cut shares a lane with others only when the lane is at most this much wider than the cut (in); otherwise it opens a lane of its own on a board with width left. */
@@ -465,6 +473,14 @@ export function oakBoardFeet(parts: Part[], p: Params): OakPlan {
     for (const q of boards) tally.set(q.lengthIn, (tally.get(q.lengthIn) ?? 0) + 1);
     const summary = [...tally.entries()].sort((a, c) => a[0] - c[0]).map(([l, n]) => `${n} x ${b.nominal} x ${BOARD_WIDTH_IN}" x ${lenFt(l)}`);
     for (const r of rb) summary.push(`${r.count} x ${b.nominal} x ${r.widthIn}" wide x ${lenFt(r.lengthIn)} (resaw into laminate strips: ${r.strips} needed, ${r.yieldPerBoard} per board, ${r.spares} spare${r.spares === 1 ? '' : 's'})`);
+    const byW = new Map<number, { in: number; pieces: number }>();
+    const addW = (w: number, len: number, n: number): void => {
+      const k = Math.ceil(w - 1e-9), e = byW.get(k) ?? byW.set(k, { in: 0, pieces: 0 }).get(k)!;
+      e.in += len * n; e.pieces += n;
+    };
+    for (const c of boards.flatMap((q) => q.lanes.flatMap((l) => l.cuts))) addW(c.widthIn, c.lengthIn + kerf, 1);
+    for (const r of rb) addW(r.widthIn, r.lengthIn, r.count);
+    const byWidth: WidthLine[] = [...byW.entries()].sort((a, c) => a[0] - c[0]).map(([widthIn, e]) => ({ widthIn, linearFt: Math.ceil((e.in / 12) * 2 - 1e-9) / 2, pieces: e.pieces }));
     const layerCuts = boards.flatMap((q) => q.lanes.flatMap((l) => l.cuts)).filter((c) => c.layer !== undefined);
     const layersIn = layerCuts.length ? { pieces: layerCuts.length, partNos: [...new Set(layerCuts.map((c) => c.partNo))] } : undefined;
     if (layersIn) summary.push(`includes ${layersIn.pieces} layer pieces for the face-laminated parts (glue the layers face to face, then mill)`);
@@ -474,7 +490,7 @@ export function oakBoardFeet(parts: Part[], p: Params): OakPlan {
     for (const f of fi ?? []) summary.push(`also cut the ${f.from} parts (${f.netBf.toFixed(1)} bf) from the free lanes of these boards: it saves ${f.from} board length`);
     thicknesses.push({
       board: b.nominal, nominalIn: b.nominalIn, usableIn: b.usableIn, finishedIn: boardFinishedIn(b, p), pieces: (pieces.get(b.nominal) ?? 0) + (stripCount.get(b.nominal) ?? 0),
-      solidNetBf, stripNetBf, netBf, allowanceBf, plannedBf, purchaseBf: plannedBf, boards, resawBoards: rb, summary,
+      solidNetBf, stripNetBf, netBf, allowanceBf, plannedBf, purchaseBf: plannedBf, boards, resawBoards: rb, summary, byWidth,
       ...(layersIn ? { layersIn } : {}), ...(mi ? { movedIn: mi } : {}), ...(movedOutOf.has(b.nominal) ? { movedOut: movedOutOf.get(b.nominal) } : {}), ...(fi ? { foldedIn: fi } : {}),
     });
   }

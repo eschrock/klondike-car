@@ -75,7 +75,7 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | Thin sheet (follows the spec, D-80) | 6 mm Baltic birch | 6 mm okoume |
 | Drains | drilled holes | stainless nipples |
 | Empty mass | 122.7 lb | 121.0 lb |
-| BOM total (no shipping or tax) | **$1,415** | **$2,305** |
+| BOM total (no shipping or tax) | **$1,511** | **$2,401** |
 
 ### Brake knees (`kneeMount`, D-78)
 Default **Removable knees (bolts, ratchet)** (a checkbox in the viewer toolbar beside Transport mode, and the Brake knees dropdown in Advanced): the knee is fitted dry and held by four 3/8" bolts. The option **Knees stay on (bolted, glued)** keeps the same four bolts, washers, nylock nuts and backer, and epoxies the knee to the rail and chine band:
@@ -106,7 +106,7 @@ The thin sheet is the side webs, storage box and lid, and sign blanks. The 12 mm
 | 1/4" white oak plywood | none | 0.21" | side-web check 0.61 |
 | 3 mm (1/8") Baltic birch | none | 0.118" | side-web check **4.8 (fails)** |
 
-Sheets are always full 4' × 8' (D-68). Solid parts that need more thickness than a stocked board gives are face-laminated: the axle beams, brake knees and chocks are 3 × 3/4" layers from 4/4, milled to 2-1/8" (D-70, D-74).
+Sheets are always full 4' × 8' (D-68). Solid parts up to 1-3/4" thick come from one 8/4 board (D-95). Thicker parts are face-laminated: the axle beams, brake knees and chocks are 3 × 3/4" layers from 4/4, milled to 2-1/8" (D-70, D-74).
 
 ### Other materials
 - **White oak** (USDA Wood Handbook, 12% MC): design bending stress 6,460 psi after the wet-service factor and a safety factor of 2.
@@ -123,8 +123,8 @@ Sheets are always full 4' × 8' (D-68). Solid parts that need more thickness tha
 - **Resting load.** A 250 lb adult sitting or standing on one foot anywhere on the deck passes (capacity 348 lb).
 - **Stability.** Straight tip 45° against a 35° limit; full-lock tip the same; slides before it tips (0.78 of limit).
 - **Sides.** A 50 lbf push moves a gunwale about 0.12" (under the 1/8" "feels solid" mark; reported, not judged).
-- **Cost.** BOM **$1,415** Standard ($2,305 Extreme), excluding shipping and tax; about 6.8% of the Standard total is estimates (the $30 ratchet-and-wrench pouch for the removable knees is most of it), the rest quoted from listings ([docs/price-research/price-research-cost-pass-2026-10.md](docs/price-research/price-research-cost-pass-2026-10.md) and the earlier files). Owned shop stock (beech Dominos, sandpaper, supplies, Titebond III, mineral spirits, contact cement, paracord) is listed at $0 (D-79).
-- **Materials by section (Standard BOM).** Lumber $435 (Peach State 4/4 and 5/4 only), plywood $139, metal $107, purchased parts $287, fasteners $147, consumables $165, finishing touches $138. Parts sold in packs far larger than the sled needs are priced by the whole pack in their own section (there is no separate bulk section).
+- **Cost.** BOM **$1,511** Standard ($2,401 Extreme; 8/4 oak for the solid blocks is +$96 over laminating them, D-95), excluding shipping and tax; about 6.8% of the Standard total is estimates (the $30 ratchet-and-wrench pouch for the removable knees is most of it), the rest quoted from listings ([docs/price-research/price-research-cost-pass-2026-10.md](docs/price-research/price-research-cost-pass-2026-10.md) and the earlier files). Owned shop stock (beech Dominos, sandpaper, supplies, Titebond III, mineral spirits, contact cement, paracord) is listed at $0 (D-79).
+- **Materials by section (Standard BOM).** Lumber $544 (Peach State 4/4, 5/4 and 8/4), plywood $139, metal $107, purchased parts $287, fasteners $147, consumables $165, finishing touches $138. Parts sold in packs far larger than the sled needs are priced by the whole pack in their own section (there is no separate bulk section).
 
 ## 6. How the app is organized
 
@@ -158,7 +158,7 @@ Everything is a pure function of the parameters.
 |---|---|
 | Verify | the checks to make on real parts before ordering (wheel hub, sheet thickness, axle steel, and so on); with removable knees, a refit check (flat seat, a slip of paper at the joint, the backing plate in its recess, no washer pressed into the oak, bolts after the first outing, the chock cord eye, wobble) |
 | Cut list | the actual cuts (an edge-glued panel is its boards, then the glue-up), rough sizes rounded up to 1/8", laminate allowances, board yields, a bandsaw resaw check; each plywood row says whether the laser cuts it (plain rectangles are sawn) |
-| Nesting | plywood layouts on 4' × 8' sheets; oak board feet |
+| Nesting | plywood layouts on 4' × 8' sheets; the oak shopping list as linear feet by whole-inch width per thickness (any board at least that wide rips down), then the whole-board plan the BOM prices and the board feet |
 | BOM | priced lines with vendor links, quoted vs estimated, Standard vs Extreme; the price research is in docs/price-research/price-research-2026-10.md and docs/price-research/price-research-standard-2026-10.md |
 | Shaper | SVG files for every flat part (outside, inside, pocket, guide conventions) |
 | Laser | full-size SVGs for the XTool S1 (D-86): the shaped thin parts that fit the bed (the webs), the lid's lettering (engrave only) and every 1/4" template and pattern, with red cuts and blue scores (plain rectangles are sawn); the rail form's counter-form is here |

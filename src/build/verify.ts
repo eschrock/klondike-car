@@ -481,14 +481,14 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       title: 'Lumber: Peach State price sheet and kiln drying',
       how: [
         it('Call Peach State Lumber (Kennesaw) before the lumber list goes out.', [
-          `Ask whether the printed price sheet ("Hardwoods LEVEL 2") is the walk-in price: the design is priced on $${f(OAK_PRICE_PER_BF['4/4'].usd, 2)} a board foot for 4/4 FAS white oak and $${f(OAK_PRICE_PER_BF['5/4'].usd, 2)} for 5/4.`,
+          `Ask whether the printed price sheet ("Hardwoods LEVEL 2") is the walk-in price: the design is priced on $${f(OAK_PRICE_PER_BF['4/4'].usd, 2)} a board foot for 4/4 FAS white oak, $${f(OAK_PRICE_PER_BF['5/4'].usd, 2)} for 5/4 and $${f(OAK_PRICE_PER_BF['8/4'].usd, 2)} for 8/4.`,
           'Ask whether the white oak is kiln dried. The sheet does not say.',
-          'Ask whether they hold 4/4 and 5/4 white oak in boards wide and long enough for the cut list (the widest and longest board in the lumber list).',
+          'Ask whether they hold 4/4, 5/4 and 8/4 white oak in boards wide and long enough for the cut list (the widest and longest board in the lumber list).',
         ]),
         it('When the boards arrive, put a moisture meter on every one.', ['Reject a board over 9 %. Sticker the lot and let it settle in the shop before milling.']),
-        it('Only 4/4 and 5/4 are bought. Do not accept a substitute thickness without redoing the cut list: the thick parts are glued up from layers.'),
+        it('Only 4/4, 5/4 and 8/4 are bought. Do not accept a substitute thickness (6/4 for 8/4, say) without redoing the cut list: the thickest parts are glued up from layers of 4/4.'),
       ],
-      passList: ['The walk-in price is at or under the sheet price.', 'The oak is kiln dried: 6 to 9 % on the meter.', '4/4 and 5/4 FAS are in stock in the widths and lengths the cut list needs.'],
+      passList: ['The walk-in price is at or under the sheet price.', 'The oak is kiln dried: 6 to 9 % on the meter.', '4/4, 5/4 and 8/4 FAS are in stock in the widths and lengths the cut list needs.'],
       ifFails: 'If the price is higher, enter it in the price list and re-check the total. If the oak is green or air dried, sticker it for a few weeks first (bent strips cup and crack in wet boards) or use another yard: The Wood Yard has 4/4 at a higher price and no 5/4.',
       partIds: [],
       paramKeys: [],

@@ -12,6 +12,7 @@ import { BuildData, CSV_MIME, LASER_CONVENTIONS, LASER_NOTES, SHAPER_CONVENTIONS
 import { FROM_TEXT, fabText, stepsLabel } from '../build/cutlist';
 import { paramLabels } from '../build/verify';
 import { tilePlan } from '../build/forms';
+import { widthListText } from '../build/nesting';
 import { glueCard, partLabel, type BuildStep } from '../build/assembly';
 import { drawnParts, partDims, type PartDims, type PartDrawingSheet } from '../build/part-drawings';
 import { roughFrac } from '../build/units';
@@ -564,6 +565,9 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     const o = d.oak;
     const oakBuy = (): Node[] => {
       const out: Node[] = [];
+      out.push(h('h3', { class: 'bp-group' }, 'Oak to buy, by width'));
+      out.push(table('bp-width', ['Thickness', 'Width and linear feet'], o.thicknesses.map((t) => [h('strong', {}, t.board), h('div', { class: 'bp-buy' }, ...widthListText(t).map((x) => h('div', {}, x)))]), 'Oak linear feet by thickness and width'));
+      out.push(note('Each piece\'s width is rounded up to a whole inch, and the lengths include the saw kerf. At the yard take any board at least that wide: a wider board rips down to the narrower widths, so 6" boards can cover the 3" and 4" lines. Add a little for defects.', 'muted small bp-prose'));
       out.push(h('h3', { class: 'bp-group' }, 'Oak board feet'));
       out.push(table('bp-bf', ['Board', 'Pieces', 'Net bf', `+${Math.round(o.wasteAllowance * 100)}% waste`, 'Buy'], [
         ...o.thicknesses.map((t) => [

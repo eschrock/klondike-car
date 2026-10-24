@@ -115,14 +115,14 @@ const WOODYARD = 'The Wood Yard (local), current pricing list (Eric, 2026-10-12)
 const PEACH_STATE = 'Peach State Lumber, Kennesaw GA (about 25 mi NW of Atlanta), FAS white oak, rough, plus tax';
 const PEACH_STATE_CHECK = 'The sheet is headed "Hardwoods LEVEL 2" (printed 9/9/2026, "last updated 8/5"): ask whether that is the walk-in retail tier, and whether the boards are kiln dried (the sheet does not say). Call (770) 428-3622';
 /**
- * White oak, $/board foot on nominal thickness (D-79). 4/4, 5/4 and 8/4: Peach State Lumber's FAS list [F, 2026-10-14]. Only 4/4 and 5/4 are BOUGHT (`OAK_STOCKED`); the 6/4 and 8/4 prices
+ * White oak, $/board foot on nominal thickness (D-79). 4/4, 5/4 and 8/4: Peach State Lumber's FAS list [F, 2026-10-14]. 4/4, 5/4 and 8/4 are BOUGHT (`OAK_STOCKED`, D-95); the 6/4 and 12/4 prices
  * show what the face-laminated parts would cost if those boards were bought, and keep the lamination planner's cost comparison honest.
  */
 export const OAK_PRICE_PER_BF: Record<string, Price> = {
   '4/4': foundCP(8.25, 'bf', PEACH_STATE, PEACH_STATE_LUMBER_URL, `white oak 4/4 FAS. ${PEACH_STATE_CHECK}`),
   '5/4': foundCP(10, 'bf', PEACH_STATE, PEACH_STATE_LUMBER_URL, `white oak 5/4 FAS (Wood Vendors, 100+ bf, rough kiln dried, delivered extra, $10.20: ${WOOD_VENDORS_URL}). ${PEACH_STATE_CHECK}`),
   '6/4': foundCP(10.5, 'bf', 'Wood Vendors (online, ship-from not stated)', WOOD_VENDORS_URL, '6/4 white oak, 84-100% clear, rough kiln dried, random widths, 100 bf minimum, freight extra. NOT BOUGHT: there is no Atlanta source of 6/4 (Peach State has none), so the 6/4 parts are face-laminated from 4/4 and 5/4. Hickory & Oak (Michigan) lists 6/4 Select & Better at $8.50, freight unknown'),
-  '8/4': foundCP(12.5, 'bf', PEACH_STATE, PEACH_STATE_LUMBER_URL, `white oak 8/4 FAS. NOT BOUGHT (the 8/4 parts are face-laminated from 4/4 and 5/4, D-70): this price shows what the laminating saves against the $15.00 at The Wood Yard. ${PEACH_STATE_CHECK}`),
+  '8/4': foundCP(12.5, 'bf', PEACH_STATE, PEACH_STATE_LUMBER_URL, `white oak 8/4 FAS, bought for the solid blocks up to 1-3/4" (D-95; the $15.00 at The Wood Yard is the other Atlanta yard). ${PEACH_STATE_CHECK}`),
   '12/4': quoted(25, 'bf', WOODYARD, 'white oak 12/4: NOT BOUGHT. The four parts that needed it are face-laminated from 4/4; this price only shows what the laminating saves', WOODYARD_URL),
   '16/4': est(32, 'bf', HARDWOOD, 'special-order'),
 };
@@ -138,10 +138,10 @@ export const OAK_ALT_PRICE_PER_BF: Record<string, Price> = {
 
 /**
  * The oak thicknesses the board plan may buy (D-79). A thickness set false is skipped: its parts move up to the next stocked thickness (milled down) and the resaw strips are re-planned from what is stocked.
- * Only 4/4 and 5/4 are bought (Peach State Lumber, Kennesaw: no 6/4 on its list, and 8/4 is face-laminated from 4/4 and 5/4 for a lower price per board foot than any 6/4 or 8/4 board, D-70).
+ * 4/4, 5/4 and 8/4 are bought (Peach State Lumber, Kennesaw: no 6/4 on its list; 8/4 gives the solid blocks up to 1-3/4" with no glue line, D-95, and the thicker parts are laminated from 4/4, D-70).
  * 12/4 is OFF (D-70): at $25/bf it is the dearest board. 16/4 is off: nothing needs it.
  */
-export const OAK_STOCKED: Record<string, boolean> = { '4/4': true, '5/4': true, '6/4': false, '8/4': false, '12/4': false, '16/4': false };
+export const OAK_STOCKED: Record<string, boolean> = { '4/4': true, '5/4': true, '6/4': false, '8/4': true, '12/4': false, '16/4': false };
 export const isOakStocked = (nominal: string): boolean => OAK_STOCKED[nominal] !== false;
 
 /**

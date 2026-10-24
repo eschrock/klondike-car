@@ -548,7 +548,7 @@ describe('build review round 2: step 1 names the cut list boards, rip first (MUS
   it('reads every single-board bandsaw blank from the cut list board column, and does not repeat the lamination lines', () => {
     expect(blankOf(steps, 'brake-shoe-L')).toContain(board('brake-shoe-L'));
     const listed = blankItem(steps).sub!.flatMap((q) => q.parts ?? []);
-    for (const id of ['brake-knee-L', 'brake-chock-L', 'handle-bar', 'bridle-tongue']) expect(listed, id).not.toContain(id); // laminated blocks: their recipe is in the face-laminate block only
+    for (const id of ['brake-knee-L', 'brake-chock-L', 'beam-R']) expect(listed, id).not.toContain(id); // laminated blocks: their recipe is in the face-laminate block only
     expect(blankItem(steps).sub!.map((q) => q.text).join(' ')).not.toMatch(/glue up, then mill the block|laminated block/);
     // Nothing is bought in 16/4, whatever the model's raw rough says.
     expect(mill).not.toMatch(/16\/4/);
@@ -1210,22 +1210,22 @@ describe('D-79..D-83: the cost-pass build text', () => {
     }
   });
 
-  it('every part the cut list face-laminates is named in the glue-up item of the mill step (D-79: only 4/4 and 5/4 are bought)', () => {
+  it('every part the cut list face-laminates is named in the glue-up item of the mill step (D-95: 8/4 is bought, so only the 2-1/8" parts are laminated)', () => {
     for (const [pp, list] of [[pStd, std], [p, ext]] as const) {
       const cl = cutList(buildModel(pp), pp);
       const mill = stepText(list, 'mill');
       const lam = cl.glueUps.filter((g) => g.kind !== 'edge');
-      expect(lam.length).toBeGreaterThanOrEqual(9);
+      expect(lam.length).toBeGreaterThanOrEqual(3); // the axle beams (rear and front), the knee block and the chock block
       const m = buildModel(pp);
       for (const g of lam) for (const id of g.ids) {
         const name = m.find((x) => x.id === id)!.name;
         expect(mill.toLowerCase(), `${id} (${name})`).toContain(name.replace(/\s*\(.*\)\s*$/, '').toLowerCase().replace(/^./, (c) => c));
       }
-      // the parts that used 6/4 and 8/4 boards are among them, and the board-yield line only offers what is bought
-      for (const id of ['bridle-tongue', 'king-beam', 'joist-6', 'bow-bulkhead', 'seat-wedge-L', 'handle-bar']) expect(lam.some((g) => g.ids.includes(id)), id).toBe(true);
-      expect(mill).toMatch(/4\/4 planes to 3\/4", 5\/4 to 1"\./);
-      expect(mill).not.toMatch(/6\/4 to|8\/4 to/);
-      expect(mill).toMatch(/The lumber list has only 4\/4 and 5\/4 white oak/);
+      // the parts thicker than 8/4 finishes to are among them, and the board-yield line only offers what is bought
+      for (const id of ['beam-R', 'beam-F', 'brake-chock-L', 'brake-knee-L']) expect(lam.some((g) => g.ids.includes(id)), id).toBe(true);
+      expect(mill).toMatch(/4\/4 planes to 3\/4", 5\/4 to 1", 8\/4 to 1-3\/4"\./);
+      expect(mill).not.toMatch(/6\/4 to/);
+      expect(mill).toMatch(/The lumber list has 4\/4, 5\/4 and 8\/4 white oak/);
       expect(mill).toMatch(/Mill the cured block to its final size \(joint one face, plane to thickness\)/);
       expect(mill).toMatch(/plenty of clamps/);
     }
@@ -1281,7 +1281,11 @@ describe('D-79..D-83: the cost-pass build text', () => {
   });
 
   it('the layers of an edge-glued laminate are unequal and mirrored, so the seams of neighboring layers sit at least 1-1/2" apart (bridle tongue, bow bulkhead); the edge-glue block comes before the lamination', () => {
-    const cl = cutList(partsStd, pStd);
+    // D-95 makes these solid 8/4; an 8/4 that finishes to only 1" (a yard with thin stock) puts them back to layers
+    const pThin = { ...pStd, boardYield84In: 1 };
+    const partsThin = buildModel(pThin);
+    const std = assemblySteps(partsThin, pThin);
+    const cl = cutList(partsThin, pThin);
     for (const id of ['bridle-tongue', 'bow-bulkhead']) {
       const cuts = cl.cuts.filter((q) => q.piece === 'layer' && q.ids.includes(id));
       const seam = (layer: number): number => cuts.filter((q) => q.layer === layer).sort((a, b) => a.index - b.index)[0].rough.w; // the first board's width: where the seam sits from the board-1 edge

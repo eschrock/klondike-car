@@ -159,7 +159,8 @@ describe('oakBoardFeet', () => {
 
   it('leaves no nearly empty board: a last board with a single short lane is folded into the free lanes of thicker boards (build review: the third 4/4 board)', () => {
     const util = (b: { lengthIn: number; lanes: Array<{ widthIn: number; usedIn: number }> }): number => b.lanes.reduce((a, l) => a + l.widthIn * (l.usedIn - p.resawKerfIn), 0) / (BOARD_WIDTH_IN * b.lengthIn);
-    for (const t of oak.thicknesses) for (const b of t.boards) expect(util(b), `${t.board} ${b.lengthIn / 12} ft`).toBeGreaterThan(0.4);
+    // (8/4 is exempt: D-95 puts the two small blocks, the seat back stops and crossmember 6, on a short 6 ft board of their own)
+    for (const t of oak.thicknesses) if (t.board !== '8/4') for (const b of t.boards) expect(util(b), `${t.board} ${b.lengthIn / 12} ft`).toBeGreaterThan(0.4);
     const t44 = oak.thicknesses.find((t) => t.board === '4/4')!;
     expect(t44.boards.length).toBeLessThanOrEqual(5); // D-79: with only 4/4 and 5/4 bought, the layers of the face-laminated parts (D-70) take most of the 4/4 boards (5 of 10 ft at the defaults)
     // (at the defaults the +1 in / +2 in length allowances leave nothing to fold; the checks below run on whatever did fold)
@@ -205,9 +206,9 @@ describe('oakBoardFeet', () => {
 describe('oakBoardFeet: face-laminated parts (D-70)', () => {
   const oak = oakBoardFeet(parts, p);
 
-  it('buys no 6/4, 8/4 or 12/4 (D-79): the axle beams, brake knees and chocks take their layers from the 4/4 boards (D-74: 3 x 3/4), and the thick blocks from 4/4 and 5/4', () => {
-    expect(oak.thicknesses.map((t) => t.board)).toEqual(['4/4', '5/4']);
-    expect(oak.laminated.map((q) => q.id).sort()).toEqual(['beam-F', 'beam-R', 'bow-bulkhead', 'brake-chock-L', 'brake-chock-R', 'brake-knee-L', 'brake-knee-R', 'bridle-tongue', 'handle-bar', 'joist-6', 'king-beam', 'seat-wedge-L', 'seat-wedge-R']); // D-89: no lid hinge backers
+  it('buys no 6/4 or 12/4 (D-79, D-95): the axle beams, brake knees and chocks take their layers from the 4/4 boards (D-74: 3 x 3/4), and the solid blocks up to 1-3/4" come from 8/4', () => {
+    expect(oak.thicknesses.map((t) => t.board)).toEqual(['4/4', '5/4', '8/4']);
+    expect(oak.laminated.map((q) => q.id).sort()).toEqual(['beam-F', 'beam-R', 'brake-chock-L', 'brake-chock-R', 'brake-knee-L', 'brake-knee-R']);
     const layerCuts = oak.thicknesses.flatMap((t) => t.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts.map((c) => ({ c, board: t.board })))))
       .filter((q) => q.c.layer !== undefined);
     // every part 3 layers of 4/4 (D-74); knees 1 + 2 + 1 pieces (the upright layers are one piece each); chocks 3 layers x 1 piece (a 3.5" wide chock fits a board)
@@ -262,5 +263,34 @@ describe('oakBoardFeet: the board plan uses the actual cuts (Eric 2026-10-12)', 
   it('cuts every board and layer at a rough width and length rounded UP to 1/8', () => {
     expect(cuts.length).toBeGreaterThan(40);
     for (const c of cuts) { expect(eighth(c.widthIn), `${c.id} w ${c.widthIn}`).toBe(true); expect(eighth(c.lengthIn), `${c.id} l ${c.lengthIn}`).toBe(true); }
+  });
+});
+
+describe('oakBoardFeet: the shopping list by width (linear feet at a whole-inch width)', () => {
+  const o = oakBoardFeet(parts, p);
+  it('lists whole-inch widths, narrowest first, in half-foot lengths', () => {
+    for (const t of o.thicknesses) {
+      expect(t.byWidth.length, t.board).toBeGreaterThan(0);
+      const w = t.byWidth.map((q) => q.widthIn);
+      expect(w, t.board).toEqual([...w].sort((a, b) => a - b));
+      for (const q of t.byWidth) { expect(Number.isInteger(q.widthIn), `${t.board} ${q.widthIn}`).toBe(true); expect(q.linearFt * 2, `${t.board} ${q.widthIn}`).toBeCloseTo(Math.round(q.linearFt * 2), 9); }
+    }
+  });
+  it('rounds each piece up to the next whole inch and counts every cut and every resaw board once', () => {
+    for (const t of o.thicknesses) {
+      const cuts = t.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts));
+      for (const c of cuts) expect(t.byWidth.some((q) => q.widthIn === Math.ceil(c.widthIn - 1e-9)), `${t.board} ${c.partNo} ${c.widthIn}`).toBe(true);
+      expect(t.byWidth.reduce((a, q) => a + q.pieces, 0), t.board).toBe(cuts.length + t.resawBoards.reduce((a, r) => a + r.count, 0));
+      // never less than the cut lengths themselves
+      const need = cuts.reduce((a, c) => a + c.lengthIn, 0) / 12 + t.resawBoards.reduce((a, r) => a + (r.lengthIn * r.count) / 12, 0);
+      expect(t.byWidth.reduce((a, q) => a + q.linearFt, 0), t.board).toBeGreaterThanOrEqual(need - 1e-9);
+    }
+  });
+  it('rounds 2-1/2" and 2-3/4" pieces up to a 3" line', () => {
+    const t = o.thicknesses.find((q) => q.board === '4/4')!;
+    const ws = t.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts.map((c) => c.widthIn))).filter((w) => w > 2 && w <= 3);
+    expect(ws.length).toBeGreaterThan(0);
+    expect(t.byWidth.find((q) => q.widthIn === 3)).toBeDefined();
+    expect(t.byWidth.find((q) => q.widthIn === 2.5)).toBeUndefined();
   });
 });
