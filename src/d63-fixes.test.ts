@@ -73,8 +73,8 @@ describe('R2-M1: the seat-back latch pins', () => {
     // the pad ends AT a joist face (butted), and the old 3 in strip's 0.5 in overshoot onto the joist is gone
     const jx = L.joistX.find((x) => Math.abs(x - L.joistT / 2 - hb.x1) < 1e-6);
     expect(jx).toBeDefined();
-    expect(lg.flatHoleIn).toBeCloseTo(0.625, 9);
-    expect(lg.flatLeftIn).toBeCloseTo(0.375, 9);
+    expect(lg.flatHoleIn).toBeCloseTo(0.5625, 9); // 2026-10-24: 13 mm deck as bought (0.625 in under the 12 mm deck)
+    expect(lg.flatLeftIn).toBeCloseTo(0.4375, 9); // 2026-10-24: 13 mm deck as bought (0.375 in under the 12 mm deck)
     expect(lg.flatLeftIn).toBeGreaterThanOrEqual(LATCH_HOLE_WALL_MIN_IN);
     expect(get('seat-pin-L').material).toMatch(/spring-detent/);
   });
@@ -152,7 +152,7 @@ describe('R2-M3: the deck side clearance', () => {
     const tie = get('side-L-chine').joints!.find((j) => j.to === 'rail-L' && /bearing face/.test(j.size ?? ''))!;
     expect(tie.size).toMatch(/3\/8" bearing face/); // 0.391 in: the outer band + the web edge, as in 3c-7
     const rabbet = get('side-L-chine-in').joints!.find((j) => j.type === 'rabbet')!;
-    expect(rabbet.size).toMatch(/3\/16" × 0\.512" gap/); // the deck tucks 0.172 in (3/16 in nominal) under the band
+    expect(rabbet.size).toMatch(/3\/16" × 0\.552" gap/); // 2026-10-24: the 13 mm deck as bought + 3/64 in clearance (0.512 in with the 12 mm deck); the deck tucks 0.172 in (3/16 in nominal) under the band
     expect(rabbet.size).toMatch(/cut 1\/16" short of the web on each side/);
   });
 });
@@ -225,16 +225,16 @@ describe('S7: the crest strip spans the gap between the blocks', () => {
   });
 });
 
-describe('S8: the hinge insert holes leave the back veneer', () => {
-  it('the blind hole is the panel less 1/8 in rounded down to 1/32 in, with a 5/16 in insert, and the screws are 3/8 in', () => {
-    const t = defaults.seatBackThickIn;
-    const hole = Math.floor((t - INSERT_VENEER_MIN_IN) * 32) / 32;
-    expect(t - hole).toBeGreaterThanOrEqual(INSERT_VENEER_MIN_IN);
+describe('S8: the hinge insert holes leave wood behind them', () => {
+  it('Eric 2026-10-24: the 0.512 in insert in a hole of the insert plus 1/16 in (19/32 in) through the panel into the oak pad on its back face, 1/8 in or more of oak behind, and 1/2 in screws', () => {
+    const hole = Math.ceil((defaults.seatBackInsertLenIn + 1 / 16) * 32) / 32;
+    expect(hole).toBeCloseTo(19 / 32, 9);
+    expect(defaults.seatBackPlyIn + defaults.seatBackInsertPadThickIn - hole).toBeGreaterThanOrEqual(INSERT_VENEER_MIN_IN);
     const j = get('seat-back-panel').joints!.find((q) => q.to === 'seat-hinge-L')!;
-    expect(j.size).toMatch(/5\/16 (?:316 stainless|zinc-plated) threaded inserts/);
-    expect(j.size).toMatch(/0\.344" deep/);
-    expect(j.size).toMatch(/leaving 0\.128" of back veneer/);
-    expect(get('seat-hinge-L').joints!.find((q) => q.to === 'seat-back-panel')!.size).toMatch(/#10-32 × 3\/8 (?:316|18-8 \(304\) stainless) flat-head/);
+    expect(j.size).toMatch(/#10-32 × 33\/64 (?:316 stainless|zinc-plated) threaded inserts/);
+    expect(j.size).toMatch(/0\.594" deep from the front face/);
+    expect(j.size).toMatch(/into the oak insert pad glued on the back face, leaving 0\.\d+" of oak behind/);
+    expect(get('seat-hinge-L').joints!.find((q) => q.to === 'seat-back-panel')!.size).toMatch(/#10-32 × 1\/2 (?:316|18-8 \(304\) stainless) flat-head/);
   });
 });
 

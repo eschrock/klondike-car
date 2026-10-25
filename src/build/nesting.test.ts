@@ -17,18 +17,18 @@ const bbox = (pts: Array<[number, number]>) => ({
 describe('nestPlywood', () => {
   it('places every sheet part on one sheet per thickness', () => {
     expect(nest.unplaced).toEqual([]);
-    expect(nest.sheets.map((s) => s.label)).toEqual(['6 mm Baltic birch', '12 mm okoume']); // D-73, D-80: the thin sheet follows the weather spec (Standard: 6 mm Baltic birch; Extreme: '6 mm okoume')
+    expect(nest.sheets.map((s) => s.label)).toEqual(['5 mm white oak plywood', '13 mm okoume']); // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought.) D-73, D-80: on follow-the-weather the thin sheet is the 6 mm Baltic birch (Standard) or '6 mm okoume' (Extreme)
     const ply = parts.filter((x) => isBuilt(x) && x.kind === 'sheet').map((x) => x.id).sort();
     expect(nest.sheets.flatMap((s) => s.placements.map((q) => q.partId)).sort()).toEqual(ply);
     for (const s of nest.sheets) { expect(s.widthIn).toBe(SHEET_WIDTH_IN); expect(s.lengthIn).toBe(SHEET_LENGTH_IN); }
   });
 
-  it('puts the seat back on the 12 mm sheet beside the deck', () => {
-    const s12 = nest.sheets.find((s) => s.thicknessMm === 12)!;
-    const ids = s12.placements.map((q) => q.partId);
+  it('puts the seat back on the deck sheet beside the deck', () => {
+    const deckSheet = nest.sheets.find((s) => s.placements.some((q) => q.partId === 'deck'))!; // (2026-10-24: the 13 mm deck as bought; it was the 12 mm sheet)
+    const ids = deckSheet.placements.map((q) => q.partId);
     expect(ids).toContain('seat-back-panel');
     expect(ids).toContain('deck');
-    expect(nest.sheets.find((s) => s.thicknessMm === 6)!.placements.map((q) => q.partId)).not.toContain('seat-back-panel');
+    expect(nest.sheets.find((s) => s.thicknessMm === 5)!.placements.map((q) => q.partId)).not.toContain('seat-back-panel');
   });
 
   it('keeps every outline inside the sheet margin and every pair of parts a kerf apart', () => {
@@ -57,7 +57,7 @@ describe('nestPlywood', () => {
   });
 
   it('runs the long webs and the deck lengthwise and reports no turned grain at the defaults', () => {
-    const s4 = nest.sheets.find((s) => s.thicknessMm === 6)!; // the 6 mm Baltic birch sheet (6 mm class)
+    const s4 = nest.sheets.find((s) => s.thicknessMm === 5)!; // the 5 mm white oak plywood sheet (2026-10-24: as bought; the 6 mm class on follow-the-weather)
     for (const id of ['side-L-web', 'side-R-web']) {
       const q = s4.placements.find((x) => x.partId === id)!;
       expect(q.widthIn).toBeGreaterThan(q.heightIn * 3);

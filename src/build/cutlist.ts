@@ -180,6 +180,11 @@ export const partKey = (x: Part): string => x.partNo ?? x.id;
 const isOak = (x: Part): boolean => /oak/i.test(x.material) && (x.kind === 'lumber' || x.kind === 'bentlam');
 /** A laminate member: bought as strips (bent rails with `plies`, and the sandwich bands, kind bentlam). */
 const isStripPart = (x: Part): boolean => isOak(x) && (x.plies !== undefined || x.kind === 'bentlam');
+/**
+ * The gunwale cap strips (2026-10-24: the slot over the web, between the two gunwale bands): bent with the bands but ripped from a spare band strip once all the bands are on
+ * (`capStripSource`), so they are no strip of the resaw pool and buy no board. Their cut row is `capStripCuts`.
+ */
+export const isCapStrip = (x: Pick<Part, 'id' | 'partNo'>): boolean => (x.partNo ?? x.id) === 'side-gunwale-cap';
 
 const r3 = (v: number): number => Math.round(v * 1000) / 1000;
 const dimKey = (d: Dims): string => `${d.t.toFixed(2)}x${d.w.toFixed(2)}x${d.l.toFixed(2)}`;
@@ -643,6 +648,12 @@ export function planOakPart(x: Part, p: Params, warnings: string[] = []): OakPar
   const mk = (exact: Dims, cap: number | null, layerT = false): { rough: Dims; roughExact: Dims } => ({
     roughExact: exact, rough: { t: layerT ? exact.t : roughThickness(exact.t, cap), w: roughUp8(exact.w), l: roughUp8(exact.l) },
   });
+  if (isCapStrip(x)) {
+    // Ripped from a planed strip (`capStripCuts`): its height gets the planing allowance (it is planed flush with the band tops), its width is the strip planed to the slot.
+    const { rough, roughExact } = mk({ t: stock.t + p.millingAllowanceIn, w: stock.w + p.millingAllowanceIn, l: stock.l + p.laminateLengthAllowanceIn }, null);
+    const pieces: PlannedPiece[] = [{ piece: 'strip', index: 1, of: 1, board: 'resawn', rough, roughExact }];
+    return { part: x, partNo, stock, strip: true, board: 'resawn', edgeN: 1, pieces, block: rough, blockExact: roughExact, warnings: w };
+  }
   if (isStripPart(x)) {
     const plies = x.plies ?? 1;
     // The model may ask for a longer strip than the allowance gives (the gunwale band stands past the web ends for the form's end stops): `Part.rough` is then the longer length.
@@ -866,7 +877,7 @@ export function spareSlots(boardLanes: StripItem[][][], k: number, stripW: numbe
  * (then the fewest boards, the narrowest, the thinnest). The cut order is RIP FIRST (lanes across the width), then resaw each lane (see `makeLanes`).
  */
 export function planResaw(parts: Part[], p: Params, plans?: OakPartPlan[]): ResawPool[] {
-  const stripPlans = plans ? plans.filter((q) => q.strip) : parts.filter((q) => isBuilt(q) && isStripPart(q)).map((q) => planOakPart(q, p));
+  const stripPlans = (plans ? plans.filter((q) => q.strip) : parts.filter((q) => isBuilt(q) && isStripPart(q)).map((q) => planOakPart(q, p))).filter((q) => !isCapStrip(q.part));
   const byT = new Map<number, StripItem[]>();
   for (const pl of stripPlans) {
     const rough = pl.pieces[0].rough;
@@ -926,7 +937,7 @@ export function planResaw(parts: Part[], p: Params, plans?: OakPartPlan[]): Resa
 function stripRows(plans: OakPartPlan[], pools: ResawPool[]): StripRow[] {
   const map = new Map<string, StripRow>();
   const names = nameByIdentity(plans);
-  for (const pl of plans.filter((q) => q.strip)) {
+  for (const pl of plans.filter((q) => q.strip && !isCapStrip(q.part))) {
     const x = pl.part;
     const rough = pl.pieces[0].rough;
     const plies = pl.pieces.length;
@@ -1205,6 +1216,7 @@ function cutsOf(plans: OakPartPlan[], pools: ResawPool[], p: Params): Cut[] {
   const map = new Map<string, Cut>();
   const names = nameByIdentity(plans);
   for (const pl of plans) {
+    if (isCapStrip(pl.part)) continue; // its own row (capStripCuts)
     const name = names.get(identityOf(pl))!;
     const glued = pl.edgeN > 1 || !!pl.lamination;
     const glueLabel = glued ? glueUpName(name, !!pl.lamination) : undefined;
@@ -1231,7 +1243,7 @@ function cutsOf(plans: OakPartPlan[], pools: ResawPool[], p: Params): Cut[] {
       });
     }
   }
-  return sortCuts([...discStripCuts([...map.values()], plans, p), ...ribFillerCuts(plans, pools, p)]);
+  return sortCuts([...discStripCuts([...map.values()], plans, p), ...ribFillerCuts(plans, pools, p), ...capStripCuts(plans, pools)]);
 }
 
 /** An oak disc (a cylinder thinner than it is wide: the sign standoff discs, D-93): cut with a hole saw from one planed strip, never from blanks of its own. */
@@ -1332,6 +1344,32 @@ function ribFillerCuts(plans: OakPartPlan[], pools: ResawPool[], p: Params): Cut
       note: `from ${src.text}, grain up the web${plies > 1 ? `, ${plies} layers glued face to face` : ''}, planed to ${finalFrac(band.stock.t * plies)} thick like the bands; ${f.count} of them, one per side; cut each to fit its gap, about ${fractionText(roughUp8(f.lengthIn), 8)}" long`,
     };
   });
+}
+
+/**
+ * Where the gunwale cap strips come from: a spare band strip of the band pool (the spares are there for a failed bend, and the caps go in after every band is on), when the pool
+ * has one at least as long as a cap; otherwise an offcut of a 4/4 board, ripped and planed the same way.
+ */
+export function capStripSource(pools: readonly ResawPool[], capRoughIn: number): { fromSpare: boolean; board: string; source: string; text: string } {
+  const pool = pools.find((q) => q.laneStrips.flat().some((x) => /^side-(gunwale|chine)/.test(x.partNo)));
+  const fromSpare = !!pool && pool.spares >= 1 && pool.boardLengthIn >= capRoughIn - 1e-9;
+  const source = fromSpare ? 'a spare band strip' : 'a 4/4 offcut';
+  const text = fromSpare ? 'a spare band strip (it is not needed once all the bands are on)' : 'an offcut of a 4/4 board at least that long';
+  return { fromSpare, board: fromSpare ? pool!.board : '4/4', source, text };
+}
+
+function capStripCuts(plans: OakPartPlan[], pools: ResawPool[]): Cut[] {
+  const caps = plans.filter((q) => isCapStrip(q.part));
+  if (!caps.length) return [];
+  const pl = caps[0];
+  const pc = pl.pieces[0];
+  const src = capStripSource(pools, pc.rough.l);
+  const stick = pc.rough.t; // the height of each stick ripped from the planed strip
+  return [{
+    partId: pl.part.id, ids: caps.map((q) => q.part.id), qty: caps.length, partNo: pl.partNo, name: 'Gunwale cap strip', label: `Gunwale cap strip (${src.fromSpare ? 'spare band strip' : '4/4 offcut'})`,
+    piece: 'strip', index: 1, of: 1, board: src.board, rough: pc.rough, roughExact: pc.roughExact, roughText: roughDimsText(pc.rough),
+    note: `from ${src.text}: plane it to the slot width first, the web's measured thickness (about ${finalFrac(pl.stock.w)}, a dry slip fit between the two gunwale bands), then rip ${fractionText(stick, 8)}" sticks from it, grain along the length; ${caps.length} of them, one per side, the full length of the gunwale bands (${fractionText(roughUp8(pl.stock.l), 8)}" finished, cut to fit)`,
+  }];
 }
 
 /** Each layer of a laminated part as it lies in the block: the width across ITS grain (the boards edge-glued, added up) and its length along its grain. */

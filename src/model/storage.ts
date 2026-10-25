@@ -165,7 +165,7 @@ export function addStorageDrainHoles(ctx: Ctx, parts: Part[]): void {
     (host.joints ??= []).push({ // a hole in this part alone, so `to` is the part itself (no mating part)
       type: 'hole', to: host.id, count: 1, diaIn: p.storageDrainDiaIn, at: [localPoint(host.transform, [site.x, site.y, site.z])],
       size: `${frac(p.storageDrainDiaIn)}" drain hole through ${site.hostId === 'deck' ? 'the deck (the box floor)' : 'the box floor panel'} at the aft ${site.tag === 'L' ? 'left' : 'right'} corner of the box; the bore is sealed with epoxy`,
-      note: 'D-83: drilled up through the deck from below while the hull is inverted (before the box goes on); seal the bore with epoxy, and fair the floor to fall about 1/8" toward each drain with epoxy thickened with fumed silica or wood flour. The Extreme spec fits a stainless nipple here instead.',
+      note: 'D-83: on the deck it is cut with the deck (its Shaper file), never drilled again; a box floor panel is drilled. Seal the bore with epoxy from below while the hull is inverted (before the box goes on), and fair the floor to fall about 1/8" toward each drain with epoxy thickened with fumed silica or wood flour. The Extreme spec fits a stainless nipple here instead.',
     });
   }
 }
@@ -352,8 +352,8 @@ export function buildStorage(ctx: Ctx): Part[] {
   const common = { group: 'storage', step: STEP.seatStorage } as const;
   const parts: Part[] = [];
   const yIn = hw - pl;
-  // Tape-and-fold corners (build S4): 45° bevels on the wall panels, 2" glass tape across the outside of the open seam, fold, fillet inside.
-  const miter = (to: string): Joint => ({ type: 'glue', to, count: 1, size: '45° bevel, tape-and-fold', note: 'bevels cut on the table saw, outside seam taped, folded, then a 3/8" epoxy fillet and 2" glass tape inside the corner; no spline (4 mm ply is too thin for one)' });
+  // Butt corners (build book review 2026-10-24): the ends stand between the sides, as the walls are sized (a 45° tape-and-fold corner needs every wall at its outside length).
+  const miter = (to: string): Joint => ({ type: 'glue', to, count: 1, size: 'butt corner, the end between the sides: thickened epoxy, a 3/8" fillet and 2" glass tape inside', note: 'the side\'s end edge shows at the corner: seal it with epoxy (the coaming caps the wall tops); no spline (the ply is too thin)' });
   const fillet = (to: string): Joint => ({ type: 'glue', to, count: 1, size: '3/8" epoxy fillet', note: 'floor captured between the walls, which reach the deck' });
   // Lid frame corner: the end piece's END GRAIN meets the inner face of the side, flush with the side's end, so a Domino cannot sit there (a 4x20 is 0.67" long in a 0.75" piece and the
   // face is only 0.71" tall). A shop-made loose tenon in a mortise in BOTH pieces: a third of the frame thickness thick, as wide as leaves `endMin` of solid wood between the mortise and the

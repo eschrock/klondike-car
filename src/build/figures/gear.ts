@@ -247,7 +247,7 @@ const rearBeamWhere: FigFn = (c) => {
   return {
     id: 'rear-beam-where',
     title: 'Where the rear beam goes',
-    caption: `The hull is still upside down, so you are looking at its underside, with the rear transom at the bottom of the picture and the sled's left side on the right. The rear axle beam lies across both rails with its grooved face down, seated in the notches of the rails and of the axle hangers you glued on in [[step:hangers]]. The axle ${axleWord(c.p)} lies in that groove, held by a clamp plate at each end, and its ends stick out past the beam for the wheels; the hold-down angles under it pin the ${axleWord(c.p)} and hold the beam in. Only the bolt heads and nuts show on this side. The beam, its ${axleWord(c.p)} and plates and the angles stay on from now on.`,
+    caption: `The upside-down hull seen from underneath: the rear transom is at the bottom of the picture and the sled's left side is on the right. The beam lies grooved face down across both rails; the ${axleWord(c.p)} ends stick out for the wheels.`,
     svg: F.svg('Where the rear beam goes: across the rails of the upside-down hull'),
   };
 };
@@ -329,7 +329,7 @@ const rearBeamSection: FigFn = (c) => {
   return {
     id: 'rear-beam-section',
     title: 'The rear beam\'s end, cut open',
-    caption: `Drawn the way up you see it, with the hull upside down: the beam is on top and the deck below. The ${aw} and its plates go on at the bench first; then each angle is bolted to its hanger, flat leg pointing in, and the beam is turned over and lowered into the notches so the ${aw} lands on both flat legs. The ${aw} stands ${f32(proud)} proud of the beam face, so the flat legs and the clamp plates bear on it and pin it; a small relief in each hanger notch clears it. The flat-leg bolts go in from the beam's face that is up, nuts on the flat legs. All of it stays on for good.`,
+    caption: `Drawn the way up you see it, with the hull upside down: the beam is on top and the deck below. The ${aw} stands proud of the beam face, so the angles and clamp plates bear on it.`,
     svg: F.svg('The rear beam end in section: the beam in its notch, the axle in its groove, the hold-down angle and the clamp plate'),
   };
 };
@@ -405,7 +405,7 @@ const kingpinSection: FigFn = (c) => {
   return {
     id: 'front-kingpin',
     title: 'The kingpin stack',
-    caption: `Cut fore and aft through the kingpin bolt, the way up you see it with the hull upside down. The plastic thrust disc is screwed to the king beam (built with the frame) and stays there; the front axle beam lies on it and turns under it. The bolt goes through the beam, the disc and the king beam (down through them as the hull lies now), and its thin nylock (jam) nut sits in the slot cut into the king beam's front face, with no washer: the slot is only a little wider than the nut's flats, so it holds the nut while you turn the bolt from its head. Snug it, then back it off a quarter turn: the bolt only locates the beam, which swings on its shank through the full lock. The disc's three screws keep clear of the slot: one straight aft, two at 120° from it.`,
+    caption: `Cut fore and aft through the kingpin bolt, the way up you see it with the hull upside down. From the top: the beam, the thrust disc and the king beam, with the nut in the slot in the king beam's front face.`,
     svg: F.svg('The kingpin stack in section: beam, thrust disc, king beam, bolt and nut'),
   };
 };
@@ -507,7 +507,7 @@ const frontPlan: FigFn = (c) => {
   return {
     id: 'front-beam-plan',
     title: 'The front beam from above',
-    caption: `The bow end of the upside-down hull, looking at its underside, with the sled's left side on the right. The front axle beam hangs on the kingpin under the king beam. A stub axle lies in a groove at each end of its hidden face, held by two clamp plates, with a plastic roll pad across the groove between them, bearing on the stub, that slides under the rail. The eye bolts go fore and aft through the beam, eyes to the rear; the check chains run from them to the anchors on the chain crossmember, whose holes you drill now. The chains and anchors go on in [[step:hang]].`,
+    caption: `The bow end of the upside-down hull, seen from underneath, with the sled's left side on the right. The stub axles lie in grooves on the beam's hidden face; the eye bolts have their eyes to the rear.`,
     svg: F.svg('The front beam from above: stub axles, clamp plates, roll pads, eye bolts and check chains'),
   };
 };
@@ -578,7 +578,7 @@ const frontSection: FigFn = (c) => {
   return {
     id: 'front-beam-section',
     title: 'The front beam end, cut along the axle',
-    caption: `The left end of the front beam, cut along the axle line, the way up you see it (the kingpin end is in the figure before). Each stub axle lies in a groove in the beam's hidden face and stands ${f32(p.axleProudIn)} proud, so its two clamp plates bear on it, as at the rear. The plastic roll pad lies across the groove between the plates, bearing on the stub, just clear of the rail: it slides under the rail as the beam swings and catches the beam when one wheel rides up. ${hr ? 'The inner plate sits under the king beam, so the king beam\'s underside is relieved over its bolt heads. ' : ''}The stubs, plates and pads go on at the bench before the beam is hung, and come off after the wheel dry fit, for the finish.`,
+    caption: `The left end of the front beam, cut along the axle line, the way up you see it. The stub axle lies in a groove in the beam's hidden face, with the roll pad across it, just clear of the rail.`,
     svg: F.svg('The front beam cut along the axle: stub axle, clamp plates, roll pad, kingpin and king beam'),
   };
 };
@@ -669,7 +669,7 @@ const kneesWhere: FigFn = (c) => {
   return {
     id: 'brake-knees-where',
     title: 'Where the brake knees go',
-    caption: `Each brake knee is an oak bracket bolted to the outside of a rail just ahead of the rear wheel; the brake flap (made later) pivots in the pocket at its top and presses down on the tire. Fit the knees now, while the hull is upside down: the four bolts go through the knee, the rail and the oak backer inside the rail, and their nuts sit on the steel backing plate on that backer, under the deck, where you can reach them from above today.${removableKnees(p) ? ' The knees go on dry and come off again after the wheel dry fit.' : ''}`,
+    caption: `Each brake knee is bolted to the outside of a rail just ahead of the rear wheel, with its nuts inside the rail, under the deck.`,
     svg: F.svg('Where the brake knees go: beside the rear wheels, outside the rails'),
   };
 };
@@ -728,7 +728,7 @@ const kneeSection: FigFn = (c) => {
   return {
     id: 'brake-knee-section',
     title: `The knee bolted on${rm ? ', dry' : ''}`,
-    caption: `Drawn the way up you see it with the hull upside down, cut across the left rail through one column of knee bolts. Each bolt goes through the knee's leg, the rail and the oak backer, and its nylock nut tightens on the stainless backing plate let into the backer's inside face. That face is in the bay between two crossmembers, which is open and faces up while the hull is upside down, so the nuts are easy to hold with a wrench now.${rm ? ' No glue anywhere: the knee is held only by its four bolts, so it can come off again.' : ''}`,
+    caption: `Drawn the way up you see it with the hull upside down, cut across the left rail through one column of knee bolts. The nuts are on the backing plate in the open bay that faces up now.`,
     svg: F.svg('A brake knee bolted on: section through the knee, rail, backer and backing plate'),
   };
 };
@@ -827,7 +827,7 @@ const wheelOnAxle: FigFn = (c) => {
   return {
     id: 'gear-fit-wheel',
     title: 'A wheel on its axle end',
-    caption: `Each wheel slides onto its axle end, just clear of the beam end; then a washer and a collar go on against the hub, and a cotter pin through the cross hole ${f16(p.axleCrossHoleFromEndIn)} from the end keeps them there. This dry fit proves the track, the spin and the clearances while the hull is still upside down. Then the wheels and the front gear come off and are bagged by side, because the underside is finished next, in [[step:finish-under]]; the beams, the rear ${aw} and its plates, the hold-down angles, the kingpin${has(/^brake-backer/) ? ', the knee backers and their plates' : ''} stay on (mask the metal).`,
+    caption: `A wheel on its axle end, with the collar and cotter pin. The list shows what comes off after the dry fit and what stays on.`,
     svg: F.svg('A wheel on its axle end: washer, collar and cotter pin, and the list of what comes off after the dry fit'),
   };
 };
@@ -937,7 +937,7 @@ const kneeOffReach: FigFn = (c) => {
   return {
     id: 'brake-knee-off-reach',
     title: 'Where to reach to take a knee off',
-    caption: 'The nuts are out of sight: on the steel backing plate inside the rail, under the deck, in the bay between the two crossmembers just ahead of the rear wheel. Lie beside the sled, reach in under the rail and up behind it, and hold each nut with the wrench, its handle angled down and inboard. Turn the bolt from outside with the ratchet and socket on its head. The knee comes off with its flap as one piece; the backer and the plate stay on the sled.',
+    caption: `The nuts are out of sight, on the backing plate inside the rail, under the deck. Reach in under the rail to hold each nut; turn the bolt from outside.`,
     svg: F.svg('Taking a brake knee off: the reach under the rail and the two tools on one bolt'),
   };
 };

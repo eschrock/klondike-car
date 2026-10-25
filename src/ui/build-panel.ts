@@ -39,6 +39,8 @@ export interface BuildPanelOptions {
   onSection?(id: string): void;
   /** The shareable design link for the README. */
   getLink?(): string;
+  /** A picture of the sled for the build book's title page (a PNG data URL from the 3D view), made when the book or the zip is opened. */
+  getCover?(): string | undefined;
   /** Set one design parameter (the BOM's weather toggle sets `weatherSpec`). */
   setParam?(key: ParamKey, value: number): void;
   /** Save the briefing book for the troop committee as an HTML file (it needs the 3D viewer for its pictures, so the app makes it). */
@@ -358,8 +360,10 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   const withData = (fn: (d: BuildData) => void): void => {
     if (refreshData() && data) fn(data);
   };
-  const saveZip = (d: BuildData): void => download(zipName(d), 'application/zip', zipPackage(d));
+  const withCover = (d: BuildData): void => { try { d.setCover(opts.getCover?.()); } catch { /* no picture: the title page still prints */ } };
+  const saveZip = (d: BuildData): void => { withCover(d); download(zipName(d), 'application/zip', zipPackage(d)); };
   const openBook = (d: BuildData): void => {
+    withCover(d);
     const book = d.files.find((f) => f.name === 'build-book.html');
     if (!book) return;
     const url = URL.createObjectURL(new Blob([book.data as BlobPart], { type: 'text/html' }));
@@ -910,6 +914,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
         h('h3', { class: 'bp-step-title' }, `${s.n}. ${s.title}`, s.kind === 'build' ? '' : h('span', { class: 'bp-kind' }, s.kind)),
         ...(s.goal ? [h('p', { class: 'bp-goal' }, ...ui.text(s.goal))] : []),
         ...(s.why ? [h('p', { class: 'bp-why' }, h('strong', {}, 'What this is for: '), ...ui.text(s.why))] : []),
+        ...(s.plan ? [h('p', { class: 'bp-why' }, h('strong', {}, 'Plan the days: '), s.plan)] : []),
         ...(s.figures.length ? [figureNodes(s, forPrint)] : []),
         ids.length
           ? h('p', { class: 'small bp-step-parts' }, h('strong', {}, `Parts (${ids.length}): `), ui.chips(ids, forPrint ? ids.length : 8))
@@ -1007,7 +1012,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     const real = (v: string | undefined): string => (v && !/^[-–—\s]*$/.test(v) ? v : '');
     out.push(h('div', { class: 'bp-fin-steps' }, ...f.steps.map((s) =>
       h('article', { class: 'bp-card bp-finstep' },
-        h('h4', { class: 'bp-sub' }, `${s.n}. ${s.title}`, s.coats ? h('span', { class: 'muted' }, ` · ${s.coats} coat${s.coats === 1 ? '' : 's'}`) : ''),
+        h('h4', { class: 'bp-sub' }, `F${s.n}. ${s.title}`, s.coats ? h('span', { class: 'muted' }, ` · ${s.coats} coat${s.coats === 1 ? '' : 's'}`) : ''),
         s.items?.length ? ui.instrList(s.items) : h('ol', { class: 'bp-instr' }, ...(s.instructions ?? []).map((t) => h('li', {}, t))),
         s.products.length
           ? table('bp-fin', ['Product', 'Area', 'Coats', 'Qt'], s.products.map((p) => [p.name, `${p.areaFt2.toFixed(0)} ft²`, String(p.coats), p.qtNeeded.toFixed(2)]), `${s.title} products`, { num: [1, 2, 3] })

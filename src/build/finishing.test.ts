@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
-import { defaultParams } from '../params';
+import { THIN_SHEET, defaultParams } from '../params';
 import type { Part } from '../model/types';
 import { finalFrac } from './units';
-import { containers, DOMINO_FLOZ, endGrainAreaIn2, EPOXY_BUY_RE, EPOXY_COVERAGE, EPOXY_RESIN_PARTS, EPOXY_SYSTEM, epoxyTimeFactor, finishAreas, finishMaterial, finishingSchedule, GLUE_FLOZ_PER_FT2, glueEpoxyFlOz, glueJointEstimates, showRuleOf, surfaceAreaIn2, VARNISH_COVERAGE } from './finishing';
+import { containers, DOMINO_FLOZ, DYE, DYE_BUY_RE, endGrainAreaIn2, EPOXY_BUY_RE, EPOXY_COVERAGE, EPOXY_RESIN_PARTS, EPOXY_SYSTEM, epoxyTimeFactor, finishAreas, finishMaterial, finishingSchedule, GLUE_FLOZ_PER_FT2, glueEpoxyFlOz, glueJointEstimates, showRuleOf, surfaceAreaIn2, VARNISH_COVERAGE } from './finishing';
 
-// D-73: this file's numbers are the EXTREME weather spec (epoxy saturation coat on all the plywood, marine varnish, 4 mm okoume thin sheet); the Standard spec is tested in weather-spec.test.ts.
-const p = { ...defaultParams(), weatherSpec: 1 };
+// D-73: this file's numbers are the EXTREME weather spec (epoxy saturation coat on all the plywood, marine varnish, an okoume thin sheet); the Standard spec is tested in weather-spec.test.ts.
+// The thin sheet follows the weather here (D-80: 6 mm okoume under Extreme); the default is now the 5 mm white oak plywood as bought in both specs (2026-10-24).
+const p = { ...defaultParams(), weatherSpec: 1, thinSheetMaterial: THIN_SHEET.followWeather };
 const parts = buildModel(p);
 const sched = finishingSchedule(parts, p);
 
@@ -108,7 +109,7 @@ describe('finishing areas', () => {
     expect(a.detail['storage-side-L'].showFraction).toBe(0.5);
     expect(a.detail['joist-2'].showFt2).toBe(0);
     expect(a.detail['rail-L'].showFt2).toBe(0);
-    expect(a.detail['transom-backer-L'].showFt2).toBe(0);
+    expect(a.detail['transom-backer-L1'].showFt2).toBe(0);
     expect(a.detail['side-L-gunwale'].hiddenFt2).toBe(0);
     // The web: outer face shows, inner face is hidden below the deck: between 0.5 and 1.
     expect(a.detail['side-L-web'].showFraction).toBeGreaterThan(0.5);
@@ -135,11 +136,13 @@ describe('finishing schedule', () => {
     }
   });
 
-  it('tests okoume with conditioner or gel stain on offcuts first', () => {
-    const t = sched.steps[0];
-    expect(t.instructions.join(' ')).toMatch(/conditioner/);
-    expect(t.instructions.join(' ')).toMatch(/gel stain/);
-    expect(t.instructions.join(' ')).toMatch(/blotch/);
+  it('D-99: tests the dye on offcuts first, judged under the epoxy, and dilutes it for the okoume to match the oak', () => {
+    const t = sched.steps[0].instructions.join(' ');
+    expect(t).toMatch(/Mix the dye: TransTint dye, Golden Brown, in water/);
+    expect(t).toMatch(/Epoxy one half of each dyed panel \(one coat\), then varnish over the whole panel/);
+    expect(t).toMatch(/Judge the color under the epoxy, not bare/);
+    expect(t).toMatch(/dilute the dye with water for it .* until the epoxied halves match the oak/);
+    expect(t).not.toMatch(/conditioner|gel stain/);
   });
 
   it('sands 120 then 150 and eases edges to the roundover param', () => {
@@ -158,8 +161,8 @@ describe('finishing schedule', () => {
     const text = e.instructions.join(' ');
     expect(text).toMatch(/U\.S\. Composites 635 thin epoxy: 2 parts resin to 1 part hardener by volume/);
     expect(text).not.toMatch(/105|206|207|West System|\b301\b/);
-    expect(text).toMatch(/oil-based stain needs the stain fully cured/);
-    expect(text).toMatch(/water-based/);
+    expect(text).toMatch(/After the dye has dried: ONE saturation coat/);
+    expect(text).toMatch(/Over the dye, roll and tip without scrubbing/);
     // The seal step washes the blush before sanding and varnishing.
     expect(text).toMatch(/After the seal coat cures, wash the amine blush off with water and a Scotch-Brite pad before sanding and varnishing/);
     expect(text).toMatch(/Pot life is about 35-40 min at 70 °F \(the vendor's list; check the can\)/);
@@ -230,14 +233,17 @@ describe('buy list', () => {
     const total = (re: RegExp): number => sched.buy.filter((b) => re.test(b.item)).reduce((s, b) => s + b.qt, 0);
     const need = (id: string, i = 0): number => sched.steps.find((s) => s.id === id)!.products[i].qtNeeded;
     expect(total(/spar varnish/i)).toBeGreaterThanOrEqual(need('varnish', 0) + need('varnish', 1));
-    expect(total(/conditioner/i)).toBeGreaterThanOrEqual(need('stain', 1));
-    expect(total(/gel stain/i)).toBeGreaterThanOrEqual(need('stain', 2));
-    expect(total(/wood stain/i)).toBeGreaterThanOrEqual(need('stain', 0));
+    // D-99: the dye concentrate by the bottle: one 2 oz bottle makes 2 quarts at the starting strength, more than the show faces need.
+    const dye = sched.buy.filter((b) => DYE_BUY_RE.test(b.item));
+    expect(dye).toHaveLength(1);
+    expect(dye[0]).toMatchObject({ unit: 'bottle', qty: 1 });
+    expect(dye[0].qty * DYE.bottleFlOz / DYE.flOzPerQt).toBeGreaterThanOrEqual(need('stain', 0));
+    expect(sched.buy.some((b) => /conditioner|gel stain|wood stain/i.test(b.item))).toBe(false);
     // the epoxy: 2/3 of the mixed epoxy is resin (seal coat + glue joints), bought as the kit the BOM prices.
     const e = sched.epoxy;
     expect(total(EPOXY_BUY_RE)).toBeGreaterThanOrEqual(e.resinFlOz / 32 - 1e-9);
     for (const b of sched.buy) {
-      expect(['gal', 'qt', 'pt']).toContain(b.unit);
+      expect(DYE_BUY_RE.test(b.item) ? ['bottle'] : ['gal', 'qt', 'pt']).toContain(b.unit);
       expect(Number.isInteger(b.qty * 2)).toBe(true); // whole containers, or a product sold in two sizes as one row ("1 qt + 1 pt" = 1.5 qt)
     }
     // one product is one row: no two rows share an item and a note
@@ -255,13 +261,18 @@ describe('buy list', () => {
     expect(v[0].qty).toBeLessThan(4);
   });
 
-  it('stains and conditions the SHOW faces only, one coat', () => {
+  it('D-99: dyes the SHOW faces only, one coat, with the one dye', () => {
     const st = sched.steps.find((s) => s.id === 'stain')!;
     expect(st.coats).toBe(1);
-    expect(st.products[0].areaFt2).toBeCloseTo(sched.areas.show.oakFt2, 0);
-    expect(st.products[1].areaFt2).toBeCloseTo(sched.areas.show.okoumeFt2, 0);
-    expect(st.products[2].areaFt2).toBeCloseTo(sched.areas.show.okoumeFt2, 0);
-    for (const pr of st.products) expect(pr.coats).toBe(1);
+    expect(st.products).toHaveLength(1);
+    expect(st.products[0].name).toMatch(/^TransTint dye, Golden Brown, mixed with water/);
+    expect(st.products[0].areaFt2).toBeCloseTo(sched.areas.show.totalFt2, 0);
+    expect(st.products[0].coats).toBe(1);
+    const t = st.instructions.join(' ');
+    expect(t).toMatch(/No dye on hidden faces .* or on plywood edges/);
+    expect(t).toMatch(/Keep dye off every glue face: it weakens the bond/);
+    expect(t).toMatch(/Wipe the face with a damp rag and let it dry .* Sand lightly at 220/);
+    expect(t).toMatch(/In a cold shop, 24 h before the epoxy/);
   });
 });
 
@@ -352,18 +363,18 @@ describe('build review round 1: glue epoxy by joint type (MUST-10)', () => {
 });
 
 describe('build review round 1: stain, then seal (MUST-2)', () => {
-  it('stains the show faces, then epoxy-seals them, with water-based dye as the safe route', () => {
+  it('dyes the show faces, then epoxy-seals them, with water-based dye as the safe route (D-99)', () => {
     const ids = sched.steps.map((s) => s.id);
     expect(ids.indexOf('stain')).toBeLessThan(ids.indexOf('epoxy'));
     const stain = sched.steps.find((s) => s.id === 'stain')!;
     const epoxy = sched.steps.find((s) => s.id === 'epoxy')!;
     expect(stain.title).toMatch(/show faces/);
     expect(stain.instructions.join(' ')).toMatch(/Water-based dye under epoxy is the safe route/);
-    expect(stain.instructions.join(' ')).toMatch(/THEN seal/);
+    expect(stain.instructions.join(' ')).toMatch(/Dye every SHOW face before its first coat of epoxy, one coat/);
     expect(epoxy.title).toMatch(/one saturation coat/);
     expect(epoxy.instructions.join(' ')).toMatch(/dados, edges and hidden faces were already coated/);
     expect(epoxy.instructions.join(' ')).not.toMatch(/Seal ALL faces/);
-    expect(sched.steps[0].instructions.join(' ')).toMatch(/BEFORE any show face is sealed/);
+    expect(sched.steps[0].instructions.join(' ')).toMatch(/BEFORE any show face is dyed, sealed or coated/);
   });
   it('runs in two sessions and leaves the hardware off', () => {
     expect(sched.steps[1].instructions.join(' ')).toMatch(/underside while the hull is still inverted/);

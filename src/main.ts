@@ -188,6 +188,11 @@ buildPanel = mountBuildPanel({ rail: $('build-rail'), main: $('build-main') }, {
     render();
   },
   getLink: () => window.location.href,
+  getCover: () => {
+    const p = store.get();
+    const ready: CartView = { steerDeg: 0, rider: 'none', cargo: false, removed: false, seat: 'installed', handle: 'up', brakes: true, lights: true, chocks: false };
+    return viewer.snapshot(build(p, ready), 1600, 1000);
+  },
   setParam: (k, v) => store.set(k, v),
   openBriefing,
 });

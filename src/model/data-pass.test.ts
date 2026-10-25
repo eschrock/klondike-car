@@ -23,7 +23,7 @@ describe('rail step', () => {
   it('is a sloped cut of railStepRunIn over the rise, and the note says that angle (not 45 degrees)', () => {
     const rise = p.railDepthIn - L.railDepthF;
     const deg = Math.round((Math.atan2(rise, p.railStepRunIn) * 180) / Math.PI);
-    expect(deg).toBe(37);
+    expect(deg).toBe(38); // (2026-10-24: 13 mm deck as bought; the rise is 0.04 in more, 37 degrees under the 12 mm deck)
     const rail = get('rail-L');
     expect(rail.notes).toContain(`${deg} degree slope`);
     expect(rail.notes).not.toMatch(/45 degree/);

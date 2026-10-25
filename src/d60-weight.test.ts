@@ -20,7 +20,8 @@ import { PRE_D60, PRE_D66, PRE_D71, PRE_D72 } from './test-fixtures';
 // D-66 moved the tracks, the bow and the load-height rule on; the D-60 package headline numbers (mass, width, rider range, cargo) are recorded for the D-65 design, restored with PRE_D66
 // D-71 (Harbor Freight wheels, 5/8 in axles) changed the wheel, axle and clamp numbers again: this file records the D-60 3/4 in design, restored with PRE_D71
 // D-72/D-73: and the 0.120 in DOM tube and the 4 mm okoume sides, box and lid (PRE_D72)
-const defaults = { ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66 } as Params;
+// 2026-10-24: the defaults are now the sheets as bought (13 mm deck, 5 mm combi-core white oak sides); the D-60 numbers are for the 12 mm deck, so it is put back here
+const defaults = { ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472 } as Params;
 const pre = { ...defaults, ...PRE_D60 } as Params;
 const parts = buildModel(defaults);
 const partsPre = buildModel(pre);
@@ -50,7 +51,7 @@ describe('the changed params (every one cites D-60; the supplier-derived ones ar
   it.each(Object.entries(VALUES) as [ParamKey, number][])('%s = %s', (k, v) => {
     if (k !== 'rollPadRadiusIn') expect(defaults[k]).toBe(v);
     // D-71 moved these three on (the Harbor Freight wheel) and the axle to the solid rod; D-80 made the okoume thin sheet 6 mm (panelPlyIn 0.236); D-83 moved the roll pads out 1/4 in (the 2 in clamp plates)
-    expect(PARAM_DEFS[k].default).toBe(({ wheelMass10Lb: 3, hubLengthIn: 2.25, wheelBoreIn: 0.625, axleWallIn: 0, panelPlyIn: 0.236, rollPadRadiusIn: 9.75 } as Partial<Record<ParamKey, number>>)[k] ?? v);
+    expect(PARAM_DEFS[k].default).toBe(({ wheelMass10Lb: 3, hubLengthIn: 2.25, wheelBoreIn: 0.625, axleWallIn: 0, panelPlyIn: 0.236, rollPadRadiusIn: 9.75, seatBackPlyIn: 0.512 /* (2026-10-24: D-96/97/98) the 13 mm sheet as bought */ } as Partial<Record<ParamKey, number>>)[k] ?? v);
   });
   it.each(Object.keys(VALUES) as ParamKey[])('%s cites D-60 in its ref or note', (k) => {
     expect(`${PARAM_DEFS[k].ref ?? ''} ${PARAM_DEFS[k].note ?? ''}`, k).toMatch(/D-60/);
@@ -67,7 +68,7 @@ describe('the changed params (every one cites D-60; the supplier-derived ones ar
   });
   it('the items the owner chose, and the ones this package leaves alone, are untouched: 14 in rear sides, 24 in body, 12 mm deck, 3/4 in axle, rails, signs on, 8.5 in joist spacing, 5/8 in chine and gunwale', () => {
     expect(defaults).toMatchObject({
-      sideHeightRearIn: 14, bodyWidthIn: 24, deckPlyIn: 0.472, axleDiameterIn: 0.75, railDepthIn: 3, railThicknessIn: 0.75, showSideSigns: 1, crossmemberSpacingIn: 8.5,
+      sideHeightRearIn: 14, bodyWidthIn: 24, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472, axleDiameterIn: 0.75, railDepthIn: 3, railThicknessIn: 0.75, showSideSigns: 1, crossmemberSpacingIn: 8.5,
       sideThicknessIn: 0.625, railBandIn: 1.5, kingBeamLengthIn: 3, seatCushionIn: 1.5, seatBackHeightIn: 16, // lashDoublerThickIn retired at D-76 (the ribs); D-83: the cushion is the 1-1/2 in EVA kneeling pad (was 2 in)
     });
   });
@@ -105,19 +106,19 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
   it('the empty sled is 119.9 lb: the D-60 package gave 120.6 (the study predicted 120.7), 14 in sockets +0.46 = 121.1, the D-62 build fixes +0.1, D-64 the tail light clip -0.15, D-65 the pull-pin brake (shorter flaps, no hinges) -0.97; the package still saves about 20 lb against the PRE_D60 numbers rebuilt with the D-62 sandwich sides, bridle and clamps', () => {
     expect(totalMass(parts)).toBeGreaterThan(118.75); // D-76: 119.3 lb (the side ribs, +0.96); D-74: 118.3 lb (the 2-1/8 in laminated beams, knees and chocks: -1.3 lb); was above 119.4
     expect(totalMass(parts)).toBeLessThan(120.95); // D-77: 120.31 lb (the pivot straps and the knee roofs, +0.87)
-    expect(totalMass(partsPre)).toBeCloseTo(139.8, 0); // D-85: 139.8 (the rear ribs and rings, the box rib moved, no sign strips: +0.74 lb on the new defaults); D-83: 138.7 (the EVA pads are lighter than the baseline's old foam and vinyl cover in this baseline too: -1.0 lb); D-77: 139.7 (the straps and knee roofs are in this baseline too); D-76: 138.8 (the ribs are in this baseline too); // D-74: 137.8 (the baseline takes the 2-1/8 in laminated parts too: -1.8 lb); 139.6 before D-74; 141.2 before D-65 (the pull-pin brake is lighter in this baseline too); the study's B0 was 143.0; the D-62 changes (sandwich sides, no shackle, frameless seat back, ...) are in this baseline too
-    expect(totalMass(partsPre) - totalMass(parts)).toBeGreaterThan(19.1); // D-89: 19.14 (the fixed strip across the box top, three battens on the shorter lid); D-83: 19.29 (the lighter EVA seat pads and the 2 in clamp plates); D-77: 19.37; D-75: 19.47 (the square tongue seat trims the baseline's deeper tongue a little more)
+    expect(totalMass(partsPre)).toBeCloseTo(138.4, 0); // (2026-10-24: D-96/97/98) 138.4: the transom backers are two cross-grain blocks a side (-1.3 lb, D-97) and the seat-back insert pads; D-85: 139.8 (the rear ribs and rings, the box rib moved, no sign strips: +0.74 lb on the new defaults); D-83: 138.7 (the EVA pads are lighter than the baseline's old foam and vinyl cover in this baseline too: -1.0 lb); D-77: 139.7 (the straps and knee roofs are in this baseline too); D-76: 138.8 (the ribs are in this baseline too); // D-74: 137.8 (the baseline takes the 2-1/8 in laminated parts too: -1.8 lb); 139.6 before D-74; 141.2 before D-65 (the pull-pin brake is lighter in this baseline too); the study's B0 was 143.0; the D-62 changes (sandwich sides, no shackle, frameless seat back, ...) are in this baseline too
+    expect(totalMass(partsPre) - totalMass(parts)).toBeGreaterThan(18.9); // (2026-10-24: D-96/97/98) 18.98: the two-block backers save a little more on the 1/2 in transom than on the baseline's 3/4 in one; D-89: 19.14 (the fixed strip across the box top, three battens on the shorter lid); D-83: 19.29 (the lighter EVA seat pads and the 2 in clamp plates); D-77: 19.37; D-75: 19.47 (the square tongue seat trims the baseline's deeper tongue a little more)
     expect(totalMass(partsPre) - totalMass(parts)).toBeLessThan(21);
   });
   it('by group (lb): body 36.5 (D-65: the signs, 0.6 lb, are in the body now, not a removable part), running gear 18.8, front end 16.0, frame 13.5, brake 10.3 (D-65: 11.1 before the pull-pin brake), seat 8.5, storage 7.0, hardware 5.9 (epoxy joints of the sandwich), removable 1.9 (the handle), lighting 1.9', () => {
     const g = groupMass(parts);
-    const want: Record<string, number> = { body: 37.6, /* D-76: the side ribs, knees and box ties */ 'running-gear': 18.8, 'front-end': 16.0, frame: 13.5, brake: 10.5, /* D-77: the pivot straps and the taller knees (+0.87); D-74: 9.31 with the 2-1/8 in knees and chocks */ seat: 8.4, storage: 6.2 /* D-89: oak turn-buttons in place of the draw latches (-0.35) */, hardware: 6.4 /* the pooled fasteners 5.6 and the 8 D-ring brackets 0.9 (D-85); assembly review round 1 added 0.06 */, removable: 1.9, lighting: 1.9 };
+    const want: Record<string, number> = { body: 36.6, /* (2026-10-24: D-96/97/98) the two-block transom backers, -1.3 lb (D-97); 37.6 before */ /* D-76: the side ribs, knees and box ties */ 'running-gear': 18.8, 'front-end': 16.0, frame: 13.5, brake: 10.5, /* D-77: the pivot straps and the taller knees (+0.87); D-74: 9.31 with the 2-1/8 in knees and chocks */ seat: 8.4, storage: 6.2 /* D-89: oak turn-buttons in place of the draw latches (-0.35) */, hardware: 6.4 /* the pooled fasteners 5.6 and the 8 D-ring brackets 0.9 (D-85); assembly review round 1 added 0.06 */, removable: 1.9, lighting: 1.9 };
     for (const [k, v] of Object.entries(want)) expect(Math.abs(g[k] - v), `${k} ${g[k]?.toFixed(2)}`).toBeLessThan(0.6);
     const gp = groupMass(partsPre);
     // the same sled before the package (PRE_D60, rebuilt with the D-62 sandwich sides, bridle and clamps): running gear 26.1, front end 18.7, body 40.1
     expect(gp['running-gear']).toBeCloseTo(26.1, 0);
     expect(Math.abs(gp['front-end'] - 18.4)).toBeLessThan(0.5); // D-75: 18.0 (the square bolt seat on the tongue head); 18.7 before
-    expect(gp.body).toBeCloseTo(41.8, 0); // D-76: +1.0 (the side ribs, knees and box ties); 40.1 before D-65 moved the signs into the body group
+    expect(gp.body).toBeCloseTo(40.6, 0); // (2026-10-24: D-96/97/98) the two-block transom backers (D-97), 41.8 before; D-76: +1.0 (the side ribs, knees and box ties); 40.1 before D-65 moved the signs into the body group
   });
   it('the biggest single savings are where the study said: the hollow axles (3.5 lb), the wheels (4.8 lb), the 1/2 in transom (2.6 lb), the 4 mm side webs, box and lid', () => {
     const saved = (re: RegExp) => massOf(partsPre, re) - massOf(parts, re);
@@ -194,8 +195,8 @@ describe('the analysis after the package (the study predicted: safe 50-250+, gre
   });
   it('the rows the package leans on stay where the study put them: lift 0.67 (1/2 in transom), handle-sockets 0.50 (14 in sockets), bridle-eye 0.63, joists 0.65, rest-load 0.72, wheel-rating 0.56, foot-stop low', () => {
     const u = (id: string) => cs.find((c) => c.id === id)!.util!;
-    expect(u('lift')).toBeCloseTo(0.67, 1);
-    expect(u('handle-sockets')).toBeLessThan(0.75); // 14 in sockets: 3.7 in of post engaged (0.78 at 12 in); D-62 adds the pin end-distance and the notched post: 0.69
+    expect(u('lift')).toBeCloseTo(0.62, 1); // (2026-10-24: D-96/97/98) 0.62: the lighter two-block transom backers (D-97) move the CG forward (0.63 before)
+    expect(u('handle-sockets')).toBeLessThan(0.8); // 0.755 with the 9/16 x 7/32 relief groove that clears the socket-screw washers (2026-10-24 review) // 14 in sockets: 3.7 in of post engaged (0.78 at 12 in); D-62 adds the pin end-distance and the notched post: 0.69
     expect(u('bridle-eye')).toBeCloseTo(0.63, 1);
     expect(u('joists')).toBeCloseTo(0.65, 1);
     expect(u('rest-load')).toBeCloseTo(0.72, 1);

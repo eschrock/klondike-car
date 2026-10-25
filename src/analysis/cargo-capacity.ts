@@ -109,7 +109,8 @@ export function cargoCapacity(p: Params): CargoCapacity {
     const fixed = (u(series[0]) > 1 + 1e-9) || series[0].c.statusCargo === 'fail';
     let failAt: number | null = null, margAt: number | null = null;
     for (let i = 1; i < series.length; i++) {
-      if (margAt === null && u(series[i]) > 0.9) margAt = interpolate(series[i - 1].w, u(series[i - 1]), series[i].w, u(series[i]), 0.9);
+      // A row already within 10% of its limit at the lightest load (the 5 mm combi-core side web, D-96) does not set the comfortable payload: the cargo did not bring it there.
+      if (margAt === null && u(series[0]) <= 0.9 && u(series[i]) > 0.9) margAt = interpolate(series[i - 1].w, u(series[i - 1]), series[i].w, u(series[i]), 0.9);
       if (failAt === null && u(series[i]) > 1) failAt = interpolate(series[i - 1].w, u(series[i - 1]), series[i].w, u(series[i]), 1);
     }
     const here = series.find((s) => s.w === p.cargoPayloadLb)!.c;

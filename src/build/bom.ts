@@ -32,7 +32,7 @@ import type { Joint, Part } from '../model/types';
 import { WEATHER_SPEC, thinSheet, type Params } from '../params';
 import { cutList, fracIn, groupedName, isBuilt, partKey, toCsv, type CsvCell } from './cutlist';
 import { ceilTo, fractionText, fractionizeInches, inchMarks } from './units';
-import { EPOXY_BUY_RE, finishingSchedule, glueEpoxyFlOz } from './finishing';
+import { DYE_BUY_RE, EPOXY_BUY_RE, finishingSchedule, glueEpoxyFlOz } from './finishing';
 import { nestPlywood, oakBoardFeet, widthListText, type OakPlan } from './nesting';
 import {
   EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, FILLERS, FINISH_CONTAINER_FACTOR, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, RESEARCH_DATE,
@@ -462,7 +462,7 @@ export function jointItems(part: Part, j: Joint, byId: PartMap = new Map(), spec
     case 'bolt': return boltItems(part, j, byId, mat);
     case 'pin': {
       // A stainless rod epoxied into two parts (the handlebow pins) is stock to cut; clevis and hitch pins are purchased parts.
-      const r = new RegExp(String.raw`(\d\/\d+)"\s*[×x]\s*${LEN}"?\s*(?:316 )?stainless rod`, 'i').exec(size);
+      const r = new RegExp(String.raw`(\d\/\d+)"\s*[×x]\s*${LEN}"?\s*(?:316 |18-8 \(304\) |304 )?stainless rod`, 'i').exec(size);
       return r ? [{ label: `${mat.ss} stainless rod ${r[1]}" x ${lenText(r[2])}"`, qty: n }] : [];
     }
     default: return [];
@@ -476,8 +476,8 @@ function screwItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): Fastener
   const ins = new RegExp(String.raw`#(\d+)-(\d+)\s*[x×]\s*${LEN}`).exec(size);
   if (/insert/i.test(size) && ins) {
     const out: FastenerItem[] = [{ label: `${mat.insert} threaded insert #${ins[1]}-${ins[2]} x ${lenText(ins[3])}"`, qty: n }];
-    // The hinge leaves are screwed into these inserts (assembly step: "#10-32 x 3/8 screws to the inserts"): a machine screw one leaf thicker than the insert is long.
-    if (/hinge/i.test(`${j.to} ${part.id}`)) out.push({ label: `${mat.ss} flat-head machine screw #${ins[1]}-${ins[2]} x ${fracIn(Math.ceil((Number(eval16(ins[3])) + HINGE_LEAF_IN) * 8 - 1e-6) / 8)}"`, qty: n });
+    // The seat-back hinge leaves are screwed into these inserts: a machine screw as long as the insert plus one leaf, rounded DOWN to 1/8 in, so it cannot bottom (1/2 in for the 0.512 in insert, Eric 2026-10-24).
+    if (/hinge/i.test(`${j.to} ${part.id}`)) out.push({ label: `${mat.ss} flat-head machine screw #${ins[1]}-${ins[2]} x ${fracIn(Math.floor((Number(eval16(ins[3])) + HINGE_LEAF_IN) * 8 + 1e-6) / 8)}"`, qty: n });
     return out;
   }
   const metric = /\bM(\d)\b(?:\s*[x×]\s*(\d+))?/.exec(size);
@@ -554,6 +554,20 @@ function boltItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerI
   const oneWasher = /one washer a bolt/i.test(size); // the D-ring bolts (D-83): a washer under the head only, the nylock bears on the bracket
   const out: FastenerItem[] = [{ label, qty: n }, nut, washer(tnut ? (nylon ? 0 : 1) : type === 'carriage bolt' || nylon || nutSideOnly || oneWasher ? 1 : 2)];
   if (out[2].qty === 0) out.splice(2, 1);
+  // The joint names its washer's outside diameter: buy that size, not the default fender washer. One OD for every bolt ("a 3/4" fender washer under the head", the D-rings),
+  // or one per row ("a fender washer ...: 1-1/2" under the upper three, 7/8" under the lower two", the grab boards).
+  const OD = String.raw`(\d+-\d+\/\d+|\d+\/\d+|\d+)"`;
+  const rows = new RegExp(String.raw`fender washer[^;]*?:\s*${OD} under the upper (\w+),\s*${OD} under the lower (\w+)`, 'i').exec(size);
+  const single = new RegExp(String.raw`${OD}\s*(?:OD\s+)?fender washer`, 'i').exec(size);
+  const w = out.findIndex((q) => /fender washer/.test(q.label));
+  if (w >= 0 && rows) {
+    const word = (t: string): number => ({ one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 } as Record<string, number>)[t.toLowerCase()] ?? Number(t);
+    const up = word(rows[2]), low = word(rows[4]);
+    if (up + low > 0 && n % (up + low) === 0) {
+      const k = n / (up + low), per = 1; // one washer a bolt, on the nut side: the head bears on the strip
+      out.splice(w, 1, { label: `${mat.ss} fender washer ${d}" (${rows[1]}" OD)`, qty: per * up * k }, { label: `${mat.ss} fender washer ${d}" (${rows[3]}" OD)`, qty: per * low * k });
+    }
+  } else if (w >= 0 && single) out[w] = { ...out[w], label: `${out[w].label} (${single[1]}" OD)` };
   if (nylon) out.push({ label: `Nylon washer for ${d}" screw`, qty: n });
   if (/button plugs?/i.test(size)) { const bp = /(\d\/\d+)\s*in\b[^,;]*?button plugs?/i.exec(size); out.push({ label: `Button plug ${bp ? bp[1] : '5/8'}" black nylon`, qty: n }); }
   return out;
@@ -766,11 +780,11 @@ export function bom(parts: Part[], p: Params, opts: BomOptions = {}): Bom {
       if (cache) return cache;
       if (opts.noCompare) return (cache = { computed: false, activeSpec: b.spec, standardUsd: b.spec === 'standard' ? b.totalUsd : NaN, extremeUsd: b.spec === 'extreme' ? b.totalUsd : NaN, deltaUsd: 0, deltaBySection: {}, deltaCoreUsd: 0, deltaTouchesUsd: 0, standardLb: NaN, extremeLb: NaN, deltaLb: 0, thinSheetStandard: '', thinSheetExtreme: '' });
       const otherP: Params = { ...p, weatherSpec: b.spec === 'standard' ? WEATHER_SPEC.extreme : WEATHER_SPEC.standard };
-      const sameSheet = thinSheet(otherP).key === thinSheet(p).key;
-      const otherParts = sameSheet ? parts : buildModel(otherP, EMPTY_VIEW);
+      // Always rebuild: the spec changes more than the thin sheet (316 hardware, epoxy, part masses), so the parts of one spec cannot stand in for the other's.
+      const otherParts = buildModel(otherP, EMPTY_VIEW);
       const o = bom(otherParts, otherP, { noCompare: true });
       const std = b.spec === 'standard' ? b : o, ext = b.spec === 'standard' ? o : b;
-      const mine = totalMass(parts), theirs = sameSheet ? mine : totalMass(otherParts);
+      const mine = totalMass(parts), theirs = totalMass(otherParts);
       const stdLb = b.spec === 'standard' ? mine : theirs, extLb = b.spec === 'standard' ? theirs : mine;
       const deltaBySection: Record<string, number> = {};
       for (const sec of ext.sections) deltaBySection[sec.id] = money(sec.subtotalUsd - (std.sections.find((q) => q.id === sec.id)?.subtotalUsd ?? 0));
@@ -1089,9 +1103,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   // The finish products, container by container, exactly as the schedule's buy list names them.
   const finishKey = (item: string): { key: string; table: string; price: Price } | null => {
     if (/West System/.test(item) || EPOXY_BUY_RE.test(item)) return null; // the epoxy is priced as a kit above
-    if (/conditioner/i.test(item)) return { key: 'conditioner', table: 'conditioner', price: FINISH_PRICE.conditioner };
-    if (/gel stain/i.test(item)) return { key: 'gel-stain', table: 'gelStain', price: FINISH_PRICE.gelStain };
-    if (/stain or dye/i.test(item)) return { key: 'stain', table: 'stain', price: FINISH_PRICE.stain };
+    if (DYE_BUY_RE.test(item)) return { key: 'dye', table: 'dye', price: FINISH_PRICE.dye };
     if (/thinner/i.test(item)) return { key: 'thinner', table: 'thinner', price: FINISH_PRICE.thinner };
     if (/urethane/i.test(item)) return { key: 'urethane', table: 'urethane', price: URETHANE_CONTAINER_PRICE.qt! };
     if (/varnish/i.test(item)) return { key: 'varnish', table: 'varnish', price: FINISH_PRICE.varnish };
@@ -1102,7 +1114,8 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     const k = finishKey(bl.item);
     if (!k) { if (!/West System/.test(bl.item) && !EPOXY_BUY_RE.test(bl.item)) unpriced.push(bl.item); continue; }
     // The real container price where the research found one, else the base per-quart price scaled by the container size.
-    const price: Price = (k.table === 'urethane' ? URETHANE_CONTAINER_PRICE[bl.unit] : FINISH_CONTAINER_PRICE[k.table]?.[bl.unit]) ?? { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
+    // The dye is bought by the bottle (D-99): its price is per bottle.
+    const price: Price = bl.unit === 'bottle' ? k.price : (k.table === 'urethane' ? URETHANE_CONTAINER_PRICE[bl.unit] : FINISH_CONTAINER_PRICE[k.table]?.[bl.unit]) ?? { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
     // The paint marker is bought as a marker, not by the pint (the schedule counts it as a half pint of fill).
     const desc = k.key === 'paint-marker' ? bl.item : `${bl.item}, ${bl.unit}`;
     consumables.push(line('Consumables', k.key === 'paint-marker' ? 'paint-marker' : `${k.key}-${bl.unit}`, desc, bl.qty, price, { vendor: price.source, notes: joinNotes(price.url ? `Price: ${price.note}.` : undefined, bl.note) }));

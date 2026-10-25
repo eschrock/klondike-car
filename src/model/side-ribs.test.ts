@@ -229,8 +229,13 @@ describe('rear rib and the sign (D-85)', () => {
     expect(parts.some((x) => x.id.startsWith('sign-backer'))).toBe(false);
   });
   it('a short box drops the rear rib rather than overlapping the box rib', () => {
-    const q = { ...p, sideRibBoxInsetIn: 6.5, sideRibRearInsetIn: 7 } as Params;
+    // The insets leave the two rib heads one head length apart, so they would touch. (2026-10-24: set from the box length, which grows with the thinner 5 mm white oak sides as bought; fixed 6.5 / 7 in insets no longer made a short box.)
+    const g = storageGeometry(p, L);
+    const rearInset = g.x1 - g.x0 - 6.5 - p.sideRibHeadLengthIn;
+    const q = { ...p, sideRibBoxInsetIn: 6.5, sideRibRearInsetIn: rearInset } as Params;
     expect(sideRibStations(q, computeLayout(q)).map((x) => x.n)).toEqual(expect.not.arrayContaining([4]));
+    const roomy = { ...p, sideRibBoxInsetIn: 6.5, sideRibRearInsetIn: rearInset - 0.5 } as Params; // heads 1/2 in apart: the rear rib stays
+    expect(sideRibStations(roomy, computeLayout(roomy)).map((x) => x.n)).toContain(4);
   });
 });
 

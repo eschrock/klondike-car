@@ -110,13 +110,18 @@ export interface EndJoint {
   widthIn: number;
 }
 
+/** Oak left behind a loose-tenon mortise in its host (in): a fabrication rule, so a slip of the router or a panel planed thin cannot break through the face. */
+const TENON_WALL_IN = 0.25;
+
 /** Joint for the end of a `stockIn`-thick piece into a `hostIn`-thick host over `bandIn` of face: Domino if it fits, else a loose tenon (both parts mortised: CNC or router; shop-made tenon stock). Not an integral CNC tenon (build review S2). */
 export function endJoint(p: Params, stockIn: number, hostIn: number, bandIn: number): EndJoint {
   const d = chooseDomino(p, { stockIn, hostIn, widthIn: bandIn });
   if (d) return { type: 'domino', size: `${d.name} (${d.tool})`, widthIn: d.wMm / MM };
   const w = Math.max(0.25, Math.min(STUB_MAX_WIDTH_IN, bandIn - 0.2));
   const t = Math.max(0.125, Math.round((stockIn / 3) * 16) / 16);
-  return { type: 'mortise-tenon', size: `${frac(t)} × ${frac(w)} × ${frac(p.tenonDepthIn)} deep loose tenon (both parts mortised; rounded-edge tenon stock)`, widthIn: w };
+  // Keep TENON_WALL_IN of oak behind the mortise in the host (a 1/2" transom with a 3/8" mortise left 1/8" behind its show face): a shallower mortise, never a thinner wall.
+  const depth = Math.max(0.125, Math.min(p.tenonDepthIn, Math.floor((hostIn - TENON_WALL_IN) * 16 + 1e-9) / 16));
+  return { type: 'mortise-tenon', size: `${frac(t)} × ${frac(w)} × ${frac(depth)} deep loose tenon (both parts mortised; rounded-edge tenon stock)`, widthIn: w };
 }
 
 // ── Frames ──
@@ -196,6 +201,8 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     ];
     for (const [bandId, what, yf, zf] of bandPairs) for (const [w, xw] of [[web1, xm]] as [string, number][])
       add({ a: bandId, b: w, typeA: 'glue', size: glueSize, pts: [[xw, yf, zf]], noteA: `Glued full-face to the web and bent with it on the plan form (the ${what} of the sandwich).`, noteB: `Oak band glued on this face (${what}).` });
+    // The gunwale cap strip (2026-10-24) is bedded on the web's top edge, between the two gunwale bands, after the outer bands cure.
+    if (L.webCap > 1e-9) add({ a: `${id}-gunwale-cap`, b: web1, typeA: 'glue', size: 'thickened epoxy bed, on the web\'s top edge and against both gunwale bands, full length', pts: [[xm, s * (hw + L.side / 2), topAt(xm) - L.webCap]], noteA: 'Bedded in thickened epoxy in the slot over the web, between the two gunwale bands; planed flush with the band tops after the cure.', noteB: 'Oak cap strip bedded on this top edge.' });
     // The deck edge rises into the gap under the inner chine band, against the web.
     add({ a: `${id}-chine-in`, b: deck, typeA: 'rabbet', size: `${frac(ddS)}" × ${rabbetZ.toFixed(3)}" gap under the inner chine band (deck + ${frac64(ds)}" clearance, thickened epoxy fills it; no routing); the deck edge is cut ${frac(p.deckSideClearIn)}" short of the web on each side (D-63), the slot is filled with thickened epoxy`, pts: [[xj, s * (hw + ddS / 2), L.deckBot + L.ply / 2]], noteB: 'Edge of the deck, in the gap against the web.' });
     // Web end into a dado in the transom (full web height now). The dado runs from the chine up and OUT through the top edge: the web top is within about 0.02 in of the rounded top corner, so a
@@ -355,12 +362,11 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   void deck;
 
   // ── Rear transom backers (S13): glued to the transom (D-73 glue rule), the handle-socket screws pass through both into T-nuts ──
-  for (const { s, tag } of SIDES) {
-    const bk = byId.get(`transom-backer-${tag}`);
+  for (const { tag } of SIDES) for (const n of [1, 2]) {
+    const bk = byId.get(`transom-backer-${tag}${n}`);
     if (!bk) continue;
     const bb = worldAABB(bk);
-    add({ a: bk.id, b: 'transom-rear', typeA: 'glue', size: `${p.weatherSpec === WEATHER_SPEC.extreme ? 'epoxy' : 'Titebond III'}, full face (D-73); the handle-socket screws pass through both into T-nuts set in the backer`, pts: [[bb.min[0], (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2]], noteA: 'Glue on the bench before the transom goes on.' });
-    void s;
+    add({ a: bk.id, b: 'transom-rear', typeA: 'glue', size: `${p.weatherSpec === WEATHER_SPEC.extreme ? 'epoxy' : 'Titebond III'}, full face (D-73), grain matched to the transom's (both across the sled); the handle-socket screw passes through both into a T-nut set in the block`, pts: [[bb.min[0], (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2]], noteA: 'Glue on the bench before the transom goes on.' });
   }
 
   // ── Scuppers through the chine sandwich (M7, D-62): inner band, web and outer band ──

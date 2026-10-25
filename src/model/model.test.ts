@@ -45,10 +45,12 @@ const ALLOW: Allow[] = [
   { a: /^bow-bulkhead$/, b: /^lamp-clip$/, why: 'the lamp clip\'s plug fills the bulkhead\'s lift hand-hold slot (3c-5); the slot is a hole, so the bounding boxes meet' },
   { a: /^transom-rear$/, b: /^rear-lamp-clip$/, why: 'the rear lamp clip\'s plug fills the rear transom\'s lift hand-hold slot (D-64); the slot is a hole, so the bounding boxes meet' },
   { a: /^seat-hinge-[LR]$/, b: /^(seat-wedge-[LR]|seat-back-(panel|stile|rail-bottom)-?[LR]?)$/, why: 'the hinge knuckle sits at the stile\'s front foot, where its leaf is let into the frame (D-57)' },
-  { a: /^seat-pin-[LR]$/, b: /^(seat-back-stile|seat-back-panel|seat-wedge)-?[LR]?$/, why: 'the quick-release pin passes through the stile into the stop block (D-57)' },
+  { a: /^seat-pin-[LR]$/, b: /^(seat-back-stile|seat-back-panel(-pad)?|seat-wedge)-?[LR]?$/, why: 'the quick-release pin passes through the stile into the stop block (D-57); a layout whose latch sits low also bores it through the insert pad' },
+  { a: /^seat-back-panel-pad-[LR]$/, b: /^seat-wedge-[LR]$/, why: 'the hinge-insert pad sits in the relief at the foot of the stop block (Eric 2026-10-24); the block\'s slab boxes fill the relief, so seat-insert-pad.test.ts checks the real outline' },
   // ---- body: captured joints and sloped members
   { a: /^deck$/, b: /^(side-[LR]-(chine|chine-in|web)|transom-rear)$/, why: 'the deck edge rises into the gap under the inner chine band, against the web, and sits in the transom dado (D-35, D-45, D-62)' },
   { a: /^side-[LR]-web$/, b: /^(side-[LR]-(chine|chine-in|gunwale|gunwale-in)|transom-rear)$/, why: 'the oak bands are glued to the faces of the web (the sandwich, D-62; the plan-curved slab boxes meet along the S) and the web ends enter the transom stopped dados (D-35)' },
+  { a: /^side-[LR]-gunwale-cap$/, b: /^side-[LR]-web$/, why: '(2026-10-24: gunwale cap strip) the cap sits on the web\'s top edge in the same plane; that edge follows the sheer, so the 1-1/2 in slab boxes of the two parts overlap by the rise of the sheer over one slab (about 1/8 in); against the bands it is clean' },
   { a: /^side-rib-[LR]\d$/, b: /^side-[LR]-(chine-in|gunwale-in|web)$/, why: 'D-76: the rib\'s back is glued to the inner bands (and to a band-strip filler on the web); in the bow taper the plan-curved band slab boxes (1-1/2 in long) stand proud of the curved face the rib meets' },
   { a: /^seat-(wedge-[LR]|crest-strip)$/, b: /^seat-(back-(stile|pad|panel)|knob|wedge)-?[LR]?$/, why: 'oak wedge/post is a trapezoid extrusion whose sloped face is the stile\'s rear face; its OBB is the bounding box' },
 ];
@@ -67,7 +69,7 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^storage-lid x storage-rim-end-(aft|fore):/,
   /^storage-rim-end-aft x storage-rim-end-fore:/,
   /^handle-(socket|pin)-[LR] x handle-bar:/, // deck 17+ in / rear side 22 in: the handlebow sits at a fixed height above the rear transom's fittings
-  /^transom-backer-[LR] x doubler-lash-[LR]1:/, // sag 3: a lash doubler runs into the transom backer by 0.1 in
+  /^transom-backer-[LR]\d x doubler-lash-[LR]1:/, // sag 3: a lash doubler runs into a transom backer block by 0.1 in
   // Pivoting front axle (D-56), found when the variants were swept; validateParams does not yet catch them:
   /^bridle-tongue x steer-stop-[LR]:/, // lock >= ~25 deg (or a wide body): the tongue plate (2.5 in bar) swings into the inboard stop blocks, which move inward as the lock grows
   /^steer-stop-L x steer-stop-R:/, // lock 35 deg: the stop contact point comes within the block width of the center line
@@ -82,7 +84,7 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^steer-chain-[LR] x (king-beam|clamp-F[LR]\d|bridle-tongue|beam-F|axle-F[LR]|roll-pad-[LR]|king-thrust):/, // chain geometry off the defaults (a different deck height, beam position, wheelbase or lock): the straight chain between the eye rings meets the king beam or something on the beam; the steer-clear row measures the taut chain (D-58)
   /^storage-end-fore x storage-drain-[LR]:/, // seatXMin (3c-4b, reported): the drain nipple meets the front end of the short box
   /^beam-R x brake-chock-[LR]:/, // wheel8 (3c-4b, reported): the chock toe meets the beam end beside a small rear wheel
-  /^transom-backer-[LR] x flag-tube:/, // a narrow body or an under-seat box (3c-4b, reported): the flag tube meets the transom backer
+  /^transom-backer-[LR]\d x flag-tube:/, // a narrow body or an under-seat box (3c-4b, reported): the flag tube meets the transom backer blocks
   /^brake-knee-[LR] x reflector-[LR]1:/, // sideRear8 (3c-4b, reported)
   /^(sign-[LR]|sign-backer-[LR]\d) x seat-grip-(backing|cap)-[LR]:/, // seatXMin (D-84): the grab board is held to the seat, so a short rear box puts the cap and strip back among the side sign and its backers
   /^seat-grip-(backing|cap)-[LR] x reflector-[LR]\d:/, // seatXMin (D-84): the rear reflector cannot move ahead of the sign past the cap
@@ -290,7 +292,7 @@ describe('masses', () => {
     expect(parts.some((x) => x.id === 'seat-base')).toBe(false);
     expect(parts.some((x) => /^(bolster|turntable|kp-|spindle|side-bearer|tie-rod|tongue|ack|caster-|bow-block|tip-swivel|front-hanger-)/.test(x.id))).toBe(false);
     const seatBack = parts.filter((x) => x.id.startsWith('seat-back-') && x.id !== 'seat-back-pad');
-    expect(seatBack.map((x) => x.id).sort()).toEqual(['seat-back-panel']); // D-62: frameless, the oak stiles and rails are gone
+    expect(seatBack.map((x) => x.id).sort()).toEqual(['seat-back-panel', 'seat-back-panel-pad-L', 'seat-back-panel-pad-R']); // D-62: frameless, the oak stiles and rails are gone; Eric 2026-10-24: an oak insert pad behind each hinge
     expect(seatBack.reduce((m, x) => m + x.massLb, 0)).toBeLessThan(4);
     const lid = parts.find((x) => x.id === 'storage-lid')!;
     expect(lid.kind).toBe('sheet');

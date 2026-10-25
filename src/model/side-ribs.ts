@@ -14,7 +14,7 @@
  */
 import { STORAGE_LOCATION, WEATHER_SPEC, thinSheet } from '../params';
 import { STEP, box, frac16 as frac, frac64, SIDES, SIGN_PROUD_IN, stainless, dRingMat, insertMat, INSERT_DRILL_IN, type Ctx } from './build-utils';
-import { extPart, frameMat, SIGN_INSERT_LEN_IN, signBackerPlan, signKnobPlan, signPlacement } from './body';
+import { extPart, frameMat, signBackerPlan, signInsertLenIn, signKnobPlan, signPlacement } from './body';
 import { transformPoint } from './bounds';
 import { joistId } from './frame';
 import { innerHalfWidth, sideSlopeAt, sideTopAt, type Layout } from './layout';
@@ -354,7 +354,7 @@ function addSignKnobJoints(ctx: Ctx, byId: Map<string, Part>): void {
   const sg = signPlacement(ctx), { dz } = signBackerPlan(ctx), kn = signKnobPlan(ctx);
   const ribDepth = (rib: Part): number => (rib.geometry.type === 'extrusion' ? rib.geometry.depth : 0.75);
   const sizeA = (rib: Part) => `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole in the sign, a ${frac64(kn.standoffIn)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${frac64(kn.engagedIn)}" into the insert, tip ${frac64(L.sideBand + ribDepth(rib) - kn.engagedIn)}" short of the back of the rib`;
-  const sizeB = `#10-32 × 5/16 ${insertMat(p)} threaded insert (epoxied) in a blind ${frac(INSERT_DRILL_IN)} in hole bored from outside through the web into the band-strip filler and the oak rib, the insert's top flush with the web's inside face (its threads all in oak), so the hole runs ${frac(Math.max(1 / 16, SIGN_INSERT_LEN_IN + 1 / 16 - L.sideBand))}" deep in the rib behind the filler`;
+  const sizeB = `#10-32 × ${frac64(signInsertLenIn(p))} ${insertMat(p)} threaded insert (flush-mount, no flange, Allen drive; epoxied) in a blind ${frac(INSERT_DRILL_IN)} in hole bored from outside through the web into the band-strip filler and the oak rib, the insert's top flush with the web's inside face (its threads all in oak), so the hole runs ${frac(Math.max(1 / 16, signInsertLenIn(p) + 1 / 16 - L.sideBand))}" deep in the rib behind the filler`;
   for (const { s, tag } of SIDES) {
     const sign = byId.get(`sign-${tag}`);
     if (!sign) continue;

@@ -4,7 +4,7 @@ import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import { BuildData, buildPackage, zipName, zipPackage } from './package';
 import { crc32 } from './zip';
-import { BOOK_SECTIONS } from './build-book';
+import { BOOK_SECTIONS, buildBookHtml } from './build-book';
 import { esc, usd } from '../ui/build-helpers';
 
 const p = defaultParams();
@@ -134,7 +134,7 @@ describe('build book', () => {
     expect(html).toContain('<style>');
     expect(html).toContain('@media print');
     expect(html).toContain('@page');
-    expect(html).not.toMatch(/<script|<link|<img|<iframe|@import|url\(/i);
+    expect(html).not.toMatch(/<script|<link|<img|<iframe|@import|url\((?!#)/i); // url(#id) is an in-page clip path (part drawings), not a fetch
     expect(html).not.toMatch(/\ssrc="/i);
     // the only URLs are the SVG namespace, the design link quoted in the header and the vendor links Eric gave (BOM lines with a `url`)
     // (a line's alternatives are named in its notes with their links, so those links are allowed too)
@@ -142,31 +142,52 @@ describe('build book', () => {
     expect(vendor.size).toBeGreaterThan(0);
     const urls = [...html.matchAll(/https?:\/\/[^\s"'<)]+/g)].map((m) => m[0]);
     // (a link with a ")" in it, such as a Bolt Depot page, is cut there by the pattern: a prefix of a vendor link is fine)
-    expect(urls.filter((u) => u !== 'http://www.w3.org/2000/svg' && u !== 'https://example.test/#x' && ![...vendor].some((v) => v.startsWith(u)))).toEqual([]);
+    expect(urls.filter((u) => u !== 'http://www.w3.org/2000/svg' && u !== 'http://www.shapertools.com/namespaces/shaper' && u !== 'https://example.test/#x' && ![...vendor].some((v) => v.startsWith(u)))).toEqual([]);
     // every external link opens in a new tab without an opener
     const anchors = [...html.matchAll(/<a href="(https?:[^"]+)"([^>]*)>/g)];
     expect(anchors.length).toBeGreaterThan(0);
     for (const a of anchors) { expect(vendor.has(a[1]), a[1]).toBe(true); expect(a[2]).toContain('target="_blank"'); expect(a[2]).toContain('rel="noopener"'); }
-    // the SVGs are the nesting sheets and the assembly step figures
-    expect((html.match(/<svg\b/g) ?? []).length).toBe(pkg.data.nest.sheets.length + pkg.data.steps.reduce((n, s) => n + s.figures.length, 0));
+    // the SVGs are the nesting sheets, the assembly step figures and the part drawings (a form is its files and stock list, built from its own pages)
+    expect((html.match(/<svg\b/g) ?? []).length).toBe(pkg.data.nest.sheets.length + pkg.data.steps.reduce((n, s) => n + s.figures.length, 0) + pkg.data.partDrawings.filter((sh) => sh.features.length > 0).length);
     expect(new TextEncoder().encode(html).length).toBeLessThan(4_000_000);
   });
 
   it('contains every assembly step title, with its clamp and cure text and its checks', () => {
     expect(pkg.data.steps.length).toBeGreaterThan(20);
     for (const s of pkg.data.steps) {
-      expect(html, `step ${s.n}`).toContain(`${s.n}. ${esc(s.title)}`);
+      if (s.id === 'verify') { expect(html).toContain(`<a href="#verify">${s.n}. ${esc(s.title)}</a>`); continue; } // step 0 is its index row; the Verify section is the step
+      expect(html, `step ${s.n}`).toContain(`Step ${s.n}.</span> ${esc(s.title)}`);
       if (s.clampCure) expect(html, `step ${s.n} clampCure`).toContain(esc(s.clampCure));
       for (const c of s.checks) expect(html, `step ${s.n} check`).toContain(esc(c.replace(/:\s*passed$/i, ''))); // a check is a to-do (an empty box), never "passed"
       expect(html, `step ${s.n} goal`).toContain(esc(s.goal));
       // Each item and sub-item, with its part tokens as links to the cut list: the text between the tokens is in the book as written.
       const walk = (items: typeof s.items): string[] => items.flatMap((q) => [q.text, ...walk(q.sub ?? [])]);
-      for (const t of walk(s.items)) for (const piece of t.split(/\{\{[^{}]+\}\}/).map((x) => x.trim()).filter((x) => x.length > 3)) expect(html, `step ${s.n} item`).toContain(esc(piece));
-      for (const id of walk(s.items).flatMap((t) => [...t.matchAll(/\{\{([^{}]+)\}\}/g)].map((m) => m[1]))) {
-        if (html.includes(`id="part-${id}"`)) expect(html, `step ${s.n} link ${id}`).toContain(`href="#part-${id}"`);
-      }
+      // (step 0 points at the Verify section on paper instead of repeating its checks)
+      if (s.id !== 'verify') for (const t of walk(s.items)) for (const piece of t.split(/\{\{[^{}]+\}\}/).map((x) => x.trim()).filter((x) => x.length > 3)) expect(html, `step ${s.n} item`).toContain(esc(piece));
     }
-    expect(html).toMatch(/<a class="part" href="#part-rail-L">/);
+    // A part with a drawing links to it (with its "[Dn]" number for paper); every in-page link has its target.
+    expect(html).toMatch(/<a class="part" href="#drawing-\d+">rail L<\/a> <span class="dref">\[D\d+\]<\/span>/);
+    for (const m of html.matchAll(/href="#([^"]+)"/g)) expect(html, m[1]).toContain(`id="${m[1]}"`);
+  });
+
+  it('opens on a title page (title and, from the app, a picture), a blank back and a checklist of the sections with every step (Eric 2026-10-24)', () => {
+    expect(html).toMatch(/<section class="title-page"><h1>Troop 455 Klondike Derby sled<\/h1><p class="subtitle">Build book<\/p><\/section><div class="blank-page"/);
+    const toc = /<nav aria-label="Contents" class="toc-check">([\s\S]*?)<\/nav>/.exec(html)![1];
+    expect((toc.match(/\u2610/g) ?? []).length).toBe(BOOK_SECTIONS.length + pkg.data.steps.length);
+    const withPic = new BuildData(pkg.data.parts, pkg.data.p, { date });
+    withPic.setCover('data:image/png;base64,iVBORw0KGgo=');
+    expect(buildBookHtml(withPic)).toContain('<img class="cover" src="data:image/png;base64,iVBORw0KGgo="');
+    withPic.setCover('javascript:alert(1)');
+    expect(buildBookHtml(withPic)).not.toContain('<img class="cover"');
+  });
+
+  it('puts a box on every task: each top-level step item and each cut-list row, never on a sub-bullet', () => {
+    const step = /<div class="step" id="step-9">([\s\S]*?)<div class="step" id="step-10">/.exec(html)![1];
+    const items = /<ol class="instr">([\s\S]*)<\/ol>/.exec(step)![1];
+    expect(items).toMatch(/^<li><span class="box"/);
+    expect(items).not.toMatch(/<ul><li><span class="box"/);
+    const cuts = /<h3>1\. Cuts: saw these from the boards<\/h3>([\s\S]*?)<h3>2\. Glue-ups/.exec(html)![1];
+    expect((cuts.match(/<td class="box-cell">/g) ?? []).length).toBe(pkg.data.cutList.cuts.length);
   });
 
   it('contains every Shaper file name', () => {
@@ -257,8 +278,8 @@ describe('readability round 2: the book reads in the shop', () => {
     expect(bookText).not.toMatch(/:\s*passed\b/); // ("the test panel passed" in the finishing text is a sentence, not a check)
     expect(bookText).toContain('\u2610');
     expect((html.match(/\u2610/g) ?? []).length).toBeGreaterThanOrEqual(pkg.data.verify.length);
-    const step0 = pkg.data.steps[0];
-    for (const c of step0.checks) expect(html).toContain(`\u2610</span>${esc(c.replace(/:\s*passed$/i, ''))}`);
+    const step1 = pkg.data.steps[1]; // (step 0 is its index row on paper: the Verify section holds its checks)
+    for (const c of step1.checks) expect(html).toContain(`\u2610</span>${esc(c.replace(/:\s*passed$/i, ''))}`);
   });
 
   it('has no D-number, no Q-number and no parameter name (camelCase) in the sections it generates', () => {
@@ -269,7 +290,7 @@ describe('readability round 2: the book reads in the shop', () => {
       expect(t.replace(/shaper:cutDepth/g, ''), id).not.toMatch(/\b[a-z]+(?:[A-Z][a-z0-9]+)+\b/); // (shaper:cutDepth is the attribute the Shaper reads)
     }
     expect(sectionText('verify')).not.toMatch(/Params:|Guards:/);
-    expect(sectionText('verify')).toContain('Design values this confirms:');
+    expect(sectionText('verify')).not.toContain('Design values this confirms:'); // on paper the check is what to do; the design values are in the app
     expect(sectionText('verify')).toContain('"Wheel hub length"'); // a design value by its parameters-panel label
   });
 

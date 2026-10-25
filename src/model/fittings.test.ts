@@ -42,7 +42,7 @@ describe('seat', () => {
   it('the frameless 12 mm panel (D-62) is hinged at its foot by inserts in its front face, has a latch pin hole at each station, and the matching blind hole is in the stop block behind it', () => {
     const panel = byId.get('seat-back-panel')!;
     expect(panel.material).toMatch(/okoume/);
-    expect(panel.stock!.t).toBeCloseTo(0.472, 9);
+    expect(panel.stock!.t).toBeCloseTo(0.512, 9); // (2026-10-24: D-96/97/98) the 13 mm panel as bought (0.472 before)
     expect(panel.notes).toMatch(/FRAMELESS/);
     for (const tag of ['L', 'R']) {
       expect(panel.joints!.some((j) => j.type === 'pin' && j.to === `seat-pin-${tag}`)).toBe(true);
@@ -170,9 +170,9 @@ describe('storage box', () => {
     expect(L.storage.zTop - L.storage.zBot).toBeLessThanOrEqual(defaults.sideHeightRearIn + defaults.storageOverSideIn + 1e-9);
     expect(L.storage.zTop - L.storage.zBot).toBeGreaterThan(defaults.sideHeightBowIn);
   });
-  it('wall corners are tape-and-fold (no spline) and the wall tops are capped with oak coaming (no exposed ply edge)', () => {
+  it('wall corners are butt corners as the walls are sized, filleted and taped inside (no spline), and the wall tops are capped with oak coaming', () => {
     for (const id of ['storage-side-L', 'storage-end-aft']) {
-      const miters = byId.get(id)!.joints!.filter((j) => /tape-and-fold/.test(j.size ?? ''));
+      const miters = byId.get(id)!.joints!.filter((j) => /butt corner/.test(j.size ?? ''));
       expect(miters.length, id).toBe(2);
       for (const j of byId.get(id)!.joints!) expect(j.size ?? '', id).not.toMatch(/spline/);
     }
@@ -429,6 +429,8 @@ describe('no unintended overlaps for the seat, storage and fittings', () => {
     [/^seat-(wedge-[LR]|crest-strip)$/, /^seat-(back-(stile|pad|panel)|knob|wedge)-?[LR]?$/],
     [/^seat-hinge-[LR]$/, /^(seat-wedge-[LR]|seat-back-(stile|rail|panel))/], // the knuckle at the foot of the back is part of the joint
     [/^seat-pin-[LR]$/, /^(seat-back-stile|seat-back-panel|seat-wedge)-?[LR]?$/], // the pin passes through the panel into the stop block
+    [/^seat-pin-[LR]$/, /^seat-back-panel-pad-[LR]$/], // a low latch (a low box) also bores through the insert pad, which then carries the hole
+    [/^seat-back-panel-pad-[LR]$/, /^seat-wedge-[LR]$/], // the insert pad sits in the relief at the foot of the stop block (its slab boxes fill it); seat-insert-pad.test.ts checks the real outline
     [/^flag-block-/, /^(flag-tube|side-)/], // the blocks hold the tube against the side
     [/^seat-grip-backing-[LR]$/, /^seat-grip-cap-[LR]$/], // D-84: the strip sits in the pocket on the back of the oak cap (the cap is glued on over it) (the pocket is not cut out of the model)
   ];

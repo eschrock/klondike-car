@@ -79,6 +79,8 @@ export const TIRE_TYPE = { pneumatic: 0, flatFree: 1 } as const;
 export const PLY_SPECIES = { okoumeMarine: 0, balticBirchExterior: 1 } as const;
 /** D-73: the weather the sled is built for. Standard = garage-kept, a few uses a year; Extreme = stored outside or near salt. */
 export const WEATHER_SPEC = { standard: 0, extreme: 1 } as const;
+/** D-99: the stain on the show faces, under both weather specs. `waterDye` = TransTint water-based dye, Golden Brown, under the epoxy and the topcoat; `none` = a clear finish. */
+export const STAIN = { none: 0, waterDye: 1 } as const;
 /** D-73, D-80: the thin-sheet material (the side webs, the storage box and lid, the signs). `followWeather` picks 6 mm Baltic birch for Standard and 6 mm okoume for Extreme. */
 export const THIN_SHEET = { followWeather: 0, whiteOakPly: 1, okoumeMarine: 2, balticBirch3mm: 3, balticBirch6mm: 4 } as const;
 /** D-78: how the step-brake knees are mounted. `fixed` = bolted and glued on for good (the default); `removable` = the same four bolts, fitted dry, taken off with a ratchet and wrench. */
@@ -314,6 +316,11 @@ const defs = {
     default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-62, build 3c M4',
     note: 'D-62: nothing is screwed into the 4 mm web (a tee-nut in 0.157 in ply has 0.1 in of bite, and a 1 in screw poked into the cabin). Each side sign hangs on two vertical oak backing strips glued on the INSIDE of the web between the chine and gunwale bands, each with two #10-32 threaded inserts (3/8 long) for the knobs. The strips stand this far inboard of the web (0.27 in proud of the inner band faces), at the sign knob stations behind the box. D-63: the knob screw length is derived from this thickness and the 0.234 in sign standoff (7/8 in at the default: sign + standoff disc + web = 0.55 in, 0.33 in into the insert, 1/8 in of wood left behind its tip).',
   },
+  signInsertLenIn: {
+    label: 'Sign threaded insert length (#10-32, in the rib)', group: 'body', unit: 'in',
+    default: 0.512, min: 0.25, max: 0.787, step: 0.001, status: 'verify', ref: 'D-85',
+    note: 'The bought insert the sign knobs screw into, set in the box rib and the rear rib: Bolt Depot #23869, a flush-mount (no flange) zinc softwood insert, #10-32, Allen drive, 0.512 in (13 mm) long, $0.20 each (read 2026-10-24 via search). No flange, because it is turned in through the bore in the web; no #10-32 wood insert of 5/16 in is sold. The rib behind the web has about 0.94 in of oak (band-strip filler plus the 3/4 in rib), so the bore (web + insert + 1/16 in) leaves about 0.3 in behind it. The under-seat backing strips (1/2 in) cannot take it. Measure the real insert and set this; confirm its drill size on the bag.',
+  },
   signStandoffDiscDiaIn: {
     label: 'Sign standoff disc diameter (oak)', group: 'body', unit: 'in',
     default: 0.75, min: 0.5, max: 1.25, step: 0.125, status: 'assumed', ref: 'D-63',
@@ -342,7 +349,7 @@ const defs = {
   sideWebCapIn: {
     label: 'Side web stops short of the gunwale top', group: 'body', unit: 'in',
     default: 0.125, min: 0, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-61, D-62',
-    note: 'D-61 sandwich sides: the 4 mm web runs the full height of the side between an oak band on each face at the chine and at the gunwale (no grooves). It stops this far under the top of the gunwale bands, and the gap is filled flush with thickened epoxy (or a 1/8 in oak cap strip), so no ply edge shows on the rail.',
+    note: 'D-61 sandwich sides: the 4 mm web runs the full height of the side between an oak band on each face at the chine and at the gunwale (no grooves). It stops this far under the top of the gunwale bands, leaving a slot the web\'s thickness wide; an oak cap strip (one per side, the full length of the bands, ripped from a spare band strip) is bedded in it in thickened epoxy after the outer bands cure and planed flush with the band tops, so no ply edge shows on the rail (2026-10-24, Eric). At 0 there is no slot and no cap strip.',
   },
   grooveSlopIn: {
     label: 'Dado / groove width over the ply thickness', group: 'body', unit: 'in',
@@ -357,7 +364,7 @@ const defs = {
   scupperDiaIn: {
     label: 'Deck scupper (drain hole) diameter', group: 'body', unit: 'in',
     default: 0.375, min: 0.25, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-43',
-    note: 'Epoxy-lined holes through the chines at the rear corners and just behind the bow curl, each with a stainless nipple so no cut ply edge is exposed.',
+    note: 'Drain holes through the sides at deck level, at the rear corners and just behind the bow bulkhead, each bore sealed with epoxy so no cut ply edge is exposed; only the Extreme spec fits a stainless nipple in each (D-83).',
   },
   ventHoleIn: {
     label: 'Dado vent hole diameter', group: 'body', unit: 'in',
@@ -685,8 +692,8 @@ const defs = {
     note: 'About stature × 0.19 + margin for a 13" torso.',
   },
   seatBackThickIn: {
-    label: 'Seat-back thickness (the frameless 12 mm panel)', group: 'seat', unit: 'in',
-    default: 0.472, min: 0.236, max: 1.25, step: 0.001, status: 'assumed', ref: 'D-18, D-62',
+    label: 'Seat-back thickness (the frameless okoume panel)', group: 'seat', unit: 'in',
+    default: 0.512, min: 0.236, max: 1.25, step: 0.001, status: 'assumed', ref: 'D-18, D-62',
     note: 'D-62 (Eric 2026-10-12): the seat back is a frameless 1/2 in (12 mm) okoume panel, so this is the panel thickness (it was a 3/4 in oak frame): keep it equal to seatBackPlyIn. The rear-bottom corner and the stop-block geometry follow it.',
   },
   seatBackFrameWidthIn: {
@@ -733,6 +740,26 @@ const defs = {
     default: 2, min: 1.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-57, D-63',
     note: 'D-57, D-63 (Eric 2026-10-12: 2 in up the panel): one 3/8 in spring-detent quick-release pin per side, pushed in by hand with no tools. UPRIGHT: through the panel into a BLIND hole in the fixed oak stop block behind it, whose depth is set from the block outline at this height (the block is thinner the higher the pin goes: at 3 in it is 1.27 in along the pin, at 2 in 1.53 in, and the box end is only 4 mm ply behind it). FLAT (flipped forward onto the deck): through the same panel hole and the deck into a blind hole in the oak hinge backer. The farther below the stop-block crest, the lower the pin load. The seat-back row checks that at least 1/4 in of oak is left behind each hole.',
   },
+  seatBackInsertLenIn: {
+    label: 'Seat-back hinge insert length (#10-32)', group: 'seat', unit: 'in',
+    default: 0.512, min: 0.25, max: 0.787, step: 0.001, status: 'verify', ref: 'D-62, D-85',
+    note: 'Eric 2026-10-24, build book review: the hinge inserts are the same bought insert as the sign knobs (Bolt Depot #23869, flush-mount #10-32, 0.512 in; signInsertLenIn), so they are one BOM line. The blind hole is this plus 1/16 in, rounded up to 1/32 in (19/32 in), from the front face through the panel into the oak insert pad on the back face (seatBackInsertPadThickIn); the hinge screw is the insert plus the leaf rounded DOWN to 1/8 in (1/2 in), so it cannot bottom. Keep it equal to signInsertLenIn; measure the real insert and set both.',
+  },
+  seatBackInsertPadThickIn: {
+    label: 'Seat-back insert pad thickness (oak, on the back face)', group: 'seat', unit: 'in',
+    default: 0.25, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-62, D-63',
+    note: 'Eric 2026-10-24, build book review: a white oak pad epoxied to the BACK face of the seat back behind each hinge leaf, so the 0.512 in insert fits (no #10-32 wood insert short enough for the bare 13 mm panel is sold): the insert hole runs from the front face through the panel into the pad and leaves 1/8 in or more of oak behind it (0.17 in at 1/4 in; 3/16 in would leave 0.11 in). On the back face the hinge, its knuckle and the flat position do not move; the pads sit in a relief at the foot of each stop block (a front-face pad would set the leaf 1/4 in proud and lift the flat back off the deck).',
+  },
+  seatBackInsertPadLenIn: {
+    label: 'Seat-back insert pad length (across the panel)', group: 'seat', unit: 'in',
+    default: 2, min: 1.5, max: 3, step: 0.125, status: 'assumed', ref: 'D-62, D-63',
+    note: 'Eric 2026-10-24, build book review: centered on the hinge, it covers the leaf\'s three inserts (1 in end to end) with 1/2 in of oak past the outer ones. Its grain runs along it, across the panel.',
+  },
+  seatBackInsertPadHeightIn: {
+    label: 'Seat-back insert pad height (up the panel)', group: 'seat', unit: 'in',
+    default: 1, min: 0.75, max: 1.5, step: 0.0625, status: 'assumed', ref: 'D-62, D-63',
+    note: 'Eric 2026-10-24, build book review: the pad starts a little above the panel\'s bottom edge (3/16 in at the defaults, so its lower back corner stands 1/16 in off the deck when the back is upright) and runs this far up, past the insert row (9/16 in up) by 5/8 in. The seat-back tests keep 3/8 in or more of pad from each insert to its edges.',
+  },
   seatBackLoadFraction: {
     label: 'Share of rider weight that loads the seat back', group: 'seat', unit: '×',
     default: 0.5, min: 0.25, max: 1, step: 0.05, status: 'assumed', ref: 'D-40',
@@ -746,7 +773,7 @@ const defs = {
   seatInsertPulloutLbf: {
     label: 'Seat-back hinge insert pull-out allowable (each)', group: 'seat', unit: 'lbf',
     default: 150, min: 50, max: 400, step: 10, status: 'verify', ref: 'D-62',
-    note: 'D-62: a #10-32 x 3/8 stainless hex-drive threaded insert, epoxied into a blind hole in the 12 mm okoume seat-back panel. Published axial pull-out for a #10 insert in plywood is a few hundred pounds; 150 lbf is a cautious working value (confirm with a pull test on a scrap: hang a bucket from a screwed-in insert).',
+    note: 'D-98 (2026-10-24): the inserts are now the 0.512 in flush #10-32 (the sign insert), through the 13 mm panel into a 1/4 in oak pad on its back face; the pull-out figure below is that of the earlier 5/16 in insert, kept as the conservative value. D-62: a #10-32 x 5/16 hex-drive threaded insert (zinc under Standard, 316 under Extreme), epoxied into an 11/32 in blind hole in the 12 mm okoume seat-back panel. Published axial pull-out for a #10 insert in plywood is a few hundred pounds; 150 lbf is a cautious working value (confirm with a pull test on a scrap: hang a bucket from a screwed-in insert).',
   },
   seatPinPullLbf: {
     label: 'Seat-back latch pin pull (each pin)', group: 'seat', unit: 'lbf',
@@ -877,7 +904,7 @@ const defs = {
   axleCrossHoleFromEndIn: {
     label: 'Axle cross hole: center from the axle end', group: 'wheels', unit: 'in',
     default: 0.375, min: 0.25, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-60',
-    note: 'D-60: with 1 in of axle beyond the hub (axleEndExtraIn) this leaves 5/8 in for the collar and washer. The edge distance (this less half the hole) should be about 1.5 hole diameters or more.',
+    note: 'D-60: with 1 in of axle beyond the hub (axleEndExtraIn) this leaves 5/8 in to the hole center, 0.547 in to its near edge: room for the 1/2 in collar alone, so no washer goes between the hub and the collar. The edge distance (this less half the hole) should be about 1.5 hole diameters or more.',
   },
   axleStyle: {
     label: 'Axle style', group: 'wheels', unit: '',
@@ -1330,10 +1357,30 @@ const defs = {
     label: 'Push-handle socket wall thickness', group: 'brake', unit: 'in',
     default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-39',
   },
+  handleTNutBarrelIn: {
+    label: 'Push-handle socket T-nut barrel length', group: 'brake', unit: 'in',
+    default: 0.3125, min: 0.1875, max: 0.5, step: 0.0625, status: 'verify', ref: 'D-39',
+    note: 'The threaded barrel of the 1/4-20 four-prong T-nut set in the rear-transom backer, flange flush with the backer\'s inside face; only the barrel is threaded, so the socket screw engages only where it overlaps it. 5/16" is typical for a 1/4-20 T-nut: measure the real one (flange face to barrel tip). The screw length is chosen from this so the tip stops at or short of the backer face (the storage box aft wall sits against it) with at least 4 threads engaged.',
+  },
+  handleTNutFlangeDiaIn: {
+    label: 'Push-handle socket T-nut flange diameter', group: 'brake', unit: 'in',
+    default: 0.75, min: 0.5, max: 1, step: 0.0625, status: 'verify', ref: 'D-39, D-97',
+    note: 'The round flange of the 1/4-20 four-prong T-nut, counterbored flush in the backer block\'s inside face. 3/4" is typical: measure the real one. Each rear-transom backer block is sized to keep transomBackerMarginIn of oak around this counterbore.',
+  },
+  transomBackerMarginIn: {
+    label: 'Oak around each fastener in a rear-transom backer block', group: 'body', unit: 'in',
+    default: 0.5, min: 0.25, max: 1, step: 0.0625, status: 'assumed', ref: 'D-97',
+    note: 'Each rear-transom backer is two short blocks with the grain across the sled, like the transom, so the full-face glue line does not fight the transom\'s seasonal movement (Eric, 2026-10-24). A block is sized to its fasteners: this much oak past the T-nut counterbore and the brake-cord eye pilot, except where the inner band limits the outer edge, and the bottom stays 1/2" above the deck.',
+  },
   handlePinDiameterIn: {
     label: 'Push-handle retaining pin diameter', group: 'brake', unit: 'in',
     default: 0.3125, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-39',
     note: 'Clevis (or hitch) pin through both socket walls and the upright; a cotter or lynch pin keeps it in (D-9).',
+  },
+  handleBowPinDiaIn: {
+    label: 'Handlebow pin diameter (stainless rod into each post top)', group: 'brake', unit: 'in',
+    default: 0.25, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-57',
+    note: 'Build book review 2026-10-24: a 3/8 in pin in the 11/16 in post left 5/32 in walls, easy to drill out of and to split; 1/4 in leaves 7/32 in. The pin only locates the bow on the post top (the epoxied post-top joint and the U carry the push); a 1/4 in 304 rod shears at about 1,400 lb.',
   },
   handleHoldbackLbf: {
     label: 'Hold-back pull on the push handle', group: 'brake', unit: 'lbf',
@@ -1774,12 +1821,13 @@ const defs = {
   },
   deckPlyIn: {
     label: 'Deck plywood thickness', group: 'stock', unit: 'in',
-    default: 0.472, min: 0.236, max: 0.709, step: 0.001, status: 'explore', ref: 'D-62',
-    note: 'Okoume marine ply, 12 mm (1/2 in), a full 4 x 8 sheet from a local supplier (Eric, 2026-10-12, D-68). Fallback: 12 mm Baltic birch (about 3 to 4 lb heavier, epoxy-seal every face and edge).',
+    default: 0.512, min: 0.236, max: 0.709, step: 0.001, status: 'locked', ref: 'D-62',
+    note: 'Okoume marine ply, a full 4 x 8 sheet from a local supplier (Eric, 2026-10-12, D-68). The sheet Eric bought calipers 12.90 to 13.00 mm (2026-10-24): the design uses 13 mm, the thick end, so no dado binds. Fallback: 12 mm Baltic birch (about 3 to 4 lb heavier, epoxy-seal every face and edge).',
     options: [
       { value: 0.236, label: '6 mm' },
       { value: 0.354, label: '9 mm' },
       { value: 0.472, label: '12 mm' },
+      { value: 0.512, label: '13 mm (as bought)' },
       { value: 0.709, label: '18 mm' },
     ],
   },
@@ -1796,13 +1844,14 @@ const defs = {
   },
   seatBackPlyIn: {
     label: 'Seat-back panel plywood', group: 'stock', unit: 'in',
-    default: 0.472, min: 0.157, max: 0.472, step: 0.001, status: 'explore', ref: 'D-60, D-62',
-    note: 'Eric 2026-10-12: frameless 1/2 in (12 mm) okoume, cut from the offcut of the deck sheet (the 12 mm sheet from a local supplier, D-68), so no 6 mm sheet is bought at all. The panel IS the seat back (the oak stiles and rails are gone); the seat-back row checks the bare panel: bending as a strip above the crest line, deflection, the hinge inserts and the pin holes in ply. D-60 had it at 6 mm in an oak frame (the row was 0.53 at 6 mm and 1.09 at 4 mm).',
+    default: 0.512, min: 0.157, max: 0.512, step: 0.001, status: 'locked', ref: 'D-60, D-62, D-96',
+    note: 'D-96 (2026-10-24): 13 mm, the deck sheet as bought (it calipers 12.90 to 13.00 mm). Eric 2026-10-12: frameless 1/2 in (12 mm) okoume, cut from the offcut of the deck sheet (the 12 mm sheet from a local supplier, D-68), so no 6 mm sheet is bought at all. The panel IS the seat back (the oak stiles and rails are gone); the seat-back row checks the bare panel: bending as a strip above the crest line, deflection, the hinge inserts and the pin holes in ply. D-60 had it at 6 mm in an oak frame (the row was 0.53 at 6 mm and 1.09 at 4 mm).',
     options: [
       { value: 0.157, label: '4 mm' },
       { value: 0.236, label: '6 mm' },
       { value: 0.354, label: '9 mm' },
       { value: 0.472, label: '12 mm' },
+      { value: 0.512, label: '13 mm (as bought)' },
     ],
   },
   millingAllowanceIn: {
@@ -1982,7 +2031,7 @@ const defs = {
       { value: PLY_SPECIES.okoumeMarine, label: 'Okoume marine (BS 1088)' },
       { value: PLY_SPECIES.balticBirchExterior, label: 'Baltic birch, exterior glue' },
     ],
-    note: 'D-73: this species covers the 12 mm deck and seat-back sheet only; the thin sheet (webs, box, lid, signs) is chosen by thinSheetMaterial. MATERIALS AND SOURCES (Eric, 2026-10-12): the deck and seat back are 12 mm (1/2 in) okoume marine plywood (BS 1088), one FULL 4 x 8 ft sheet from a local supplier (D-68); the thin sheet is 6 mm (D-80). Each side web is one piece. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine). Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK: Standard is clear (no stain, no conditioner: exterior spar urethane over the bare wood, with an epoxy coat on the edges, end grain and deck underside only); Extreme keeps its stain or gel stain, the epoxy saturation coat and marine spar varnish (D-83).',
+    note: 'D-73: this species covers the 12 mm deck and seat-back sheet only; the thin sheet (webs, box, lid, signs) is chosen by thinSheetMaterial. MATERIALS AND SOURCES (Eric, 2026-10-12): the deck and seat back are 12 mm (1/2 in) okoume marine plywood (BS 1088), one FULL 4 x 8 ft sheet from a local supplier (D-68); the thin sheet is 6 mm (D-80). Each side web is one piece. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine). Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK: Standard is exterior spar urethane over the show faces, with an epoxy coat on the edges, end grain and deck underside only; Extreme is the epoxy saturation coat and marine spar varnish (D-83). The stain under either is stainShowFaces (D-99: a water-based dye by default).',
   },
   weatherSpec: {
     label: 'Weather spec', group: 'materials', unit: '',
@@ -1991,11 +2040,20 @@ const defs = {
       { value: WEATHER_SPEC.standard, label: 'Standard (garage-kept)' },
       { value: WEATHER_SPEC.extreme, label: 'Extreme weather' },
     ],
-    note: 'D-73. Standard: garage-kept, used a few times a year, gets wet at most at a rainy derby (Eric, 2026-10-12). Extreme weather: stored outside or near salt. The model reads this for the thin-sheet material ("follow the weather setting": Standard is 6 mm Baltic birch, Extreme is 6 mm okoume marine, D-80), for the drains (Standard: drilled 3/8 in holes with an epoxy-lined bore; Extreme: stainless nipples, D-83). The fasteners, glue and finish that follow the weather spec are chosen in the BOM and finishing schedule: Standard is clear (no stain, urethane); Extreme keeps its stain, epoxy saturation coat and marine varnish (D-83).',
+    note: 'D-73. Standard: garage-kept, used a few times a year, gets wet at most at a rainy derby (Eric, 2026-10-12). Extreme weather: stored outside or near salt. The model reads this for the thin-sheet material ("follow the weather setting": Standard is 6 mm Baltic birch, Extreme is 6 mm okoume marine, D-80), for the drains (Standard: drilled 3/8 in holes with an epoxy-lined bore; Extreme: stainless nipples, D-83). The fasteners, glue and finish that follow the weather spec are chosen in the BOM and finishing schedule: Standard is urethane; Extreme is the epoxy saturation coat and marine varnish (D-83). The stain is its own setting (stainShowFaces, D-99).',
+  },
+  stainShowFaces: {
+    label: 'Stain on the show faces', group: 'materials', unit: '',
+    default: STAIN.waterDye, min: 0, max: 1, step: 1, status: 'locked', ref: 'D-99',
+    options: [
+      { value: STAIN.none, label: 'None (clear finish)' },
+      { value: STAIN.waterDye, label: 'TransTint water-based dye, Golden Brown' },
+    ],
+    note: 'D-99 (Eric, 2026-10-24): the show faces are dyed so the 13 mm okoume deck, the 5 mm white oak plywood sides and the solid oak look alike: TransTint liquid dye, Golden Brown (Homestead Finishing, one 2 oz bottle), mixed with water, wiped on before the first coat of epoxy or urethane, diluted for the okoume to match the oak under the epoxy (offcut test). It applies under both weather specs. The Ready Seal Eric has is an oil stain-and-sealer: epoxy and urethane do not bond over it, so it is not used. None leaves the wood clear.',
   },
   thinSheetMaterial: {
     label: 'Thin-sheet material (webs, box, lid, signs)', group: 'materials', unit: '',
-    default: THIN_SHEET.followWeather, min: 0, max: 4, step: 1, status: 'explore', ref: 'D-73, D-80',
+    default: THIN_SHEET.whiteOakPly, min: 0, max: 4, step: 1, status: 'locked', ref: 'D-73, D-80',
     options: [
       { value: THIN_SHEET.followWeather, label: 'Follow the weather setting' },
       { value: THIN_SHEET.whiteOakPly, label: '1/4" white oak plywood' },
@@ -2003,37 +2061,37 @@ const defs = {
       { value: THIN_SHEET.balticBirch3mm, label: '1/8" (3 mm) Baltic birch' },
       { value: THIN_SHEET.balticBirch6mm, label: '6 mm (1/4") Baltic birch' },
     ],
-    note: 'D-73, D-80: the sheet for the side webs, the storage box, its lid and the signs. The dado widths, the sandwich band thickness ((side - web) / 2), the box and lid panels, the sign blanks, the masses, the web and lid rows, the nesting sheet and the cut list all follow it. The 12 mm deck and seat back stay marine okoume. Follow the weather: Standard is 6 mm (1/4 in) Baltic birch (4 x 8, interior glue probably, garage-kept and sealed: ask), Extreme is 6 mm okoume BS 1088. Other choices: 1/4 in white oak plywood (about 0.21 in real, interior glue), 3 mm Baltic birch (0.118 in, 5 x 5 ft sheet).',
+    note: 'D-96 (2026-10-24): the default is the 5 mm combi-core white oak plywood Eric bought; the other options stay for comparison. D-73, D-80 (retired): the sheet for the side webs, the storage box, its lid and the signs. The dado widths, the sandwich band thickness ((side - web) / 2), the box and lid panels, the sign blanks, the masses, the web and lid rows, the nesting sheet and the cut list all follow it. The deck and seat back stay marine okoume (13 mm as bought). Follow the weather: Standard is 6 mm (1/4 in) Baltic birch (4 x 8, interior glue probably, garage-kept and sealed: ask), Extreme is 6 mm okoume BS 1088. Other choices: 1/4 in white oak plywood (about 0.21 in real, interior glue), 3 mm Baltic birch (0.118 in, 5 x 5 ft sheet).',
   },
   whiteOakPlyThickIn: {
     label: '1/4" white oak plywood real thickness', group: 'materials', unit: 'in',
-    default: 0.21, min: 0.15, max: 0.26, step: 0.005, status: 'verify', ref: 'D-73',
-    note: 'D-73: nominal 1/4 in hardwood plywood runs about 5.3 mm (0.21 in). MEASURE THE SHEET with calipers before cutting a dado (verify item).',
+    default: 0.197, min: 0.15, max: 0.26, step: 0.001, status: 'locked', ref: 'D-73',
+    note: 'D-73: nominal 1/4 in hardwood plywood runs about 5.3 mm (0.21 in). The sheet Eric bought calipers 4.95 to 5.00 mm (2026-10-24): the design uses 5 mm, the thick end, so no dado binds.',
   },
   whiteOakPlyDensityPcf: {
     label: 'White oak plywood density', group: 'materials', unit: 'lb/ft³',
-    default: 40, min: 30, max: 50, step: 0.5, status: 'assumed', ref: 'D-73',
-    note: 'D-73: about 40 pcf, assumed for a hardwood-veneer core (a poplar or lauan core would be lighter, an all-hardwood core heavier; the core varies by mill).',
+    default: 45, min: 30, max: 50, step: 0.5, status: 'verify', ref: 'D-73',
+    note: 'D-73: about 40 pcf for a hardwood-veneer core; MDF crossbands are denser, about 45 pcf. The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate until a break test of an offcut replaces it (Verify).',
   },
   whiteOakPlyMoePsi: {
     label: 'White oak plywood effective E (face grain ∥ span)', group: 'materials', unit: 'psi',
-    default: 1100000, min: 600000, max: 1600000, step: 10000, status: 'assumed', ref: 'D-73',
-    note: 'D-73 ESTIMATE, not a published value for the sheet: between the okoume (0.9 Msi) and Baltic birch (1.3 Msi) values of D-5, since a 3-ply hardwood sheet has two face veneers of oak. Ask the supplier for the construction (plies, core) and replace.',
+    default: 800000, min: 600000, max: 1600000, step: 10000, status: 'verify', ref: 'D-73',
+    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate until a break test of an offcut replaces it (Verify). Before: D-73 ESTIMATE, not a published value for the sheet: between the okoume (0.9 Msi) and Baltic birch (1.3 Msi) values of D-5, since a 3-ply hardwood sheet has two face veneers of oak. Ask the supplier for the construction (plies, core) and replace.',
   },
   whiteOakPlyMorPsi: {
     label: 'White oak plywood effective MOR (face grain ∥ span)', group: 'materials', unit: 'psi',
-    default: 5500, min: 3000, max: 8000, step: 100, status: 'assumed', ref: 'D-73',
-    note: 'D-73 ESTIMATE, between the okoume (5,000) and Baltic birch (7,000) values of D-5; same caveat as the E.',
+    default: 4000, min: 3000, max: 8000, step: 100, status: 'verify', ref: 'D-73',
+    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate until a break test of an offcut replaces it (Verify). Before: D-73 ESTIMATE, between the okoume (5,000) and Baltic birch (7,000) values of D-5; same caveat as the E.',
   },
   whiteOakPlyMoePerpPsi: {
     label: 'White oak plywood effective E (across the face grain)', group: 'materials', unit: 'psi',
-    default: 500000, min: 150000, max: 900000, step: 10000, status: 'assumed', ref: 'D-76',
-    note: 'D-76 ESTIMATE (side-stiffness study): 1/4 in hardwood plywood is usually 3 plies with thin oak faces and a thick cross-banded core, so bending ACROSS the face grain runs along the core grain: about 0.5 Msi. With equal plies it could be 0.25 Msi. The side webs\' face grain runs along x, so every vertical bending of a web (the side-web row, the side-lateral strips) is across it. Ask the supplier for the construction and replace.',
+    default: 350000, min: 150000, max: 900000, step: 10000, status: 'verify', ref: 'D-76',
+    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate until a break test of an offcut replaces it (Verify). Before: D-76 ESTIMATE (side-stiffness study): 1/4 in hardwood plywood is usually 3 plies with thin oak faces and a thick cross-banded core, so bending ACROSS the face grain runs along the core grain: about 0.5 Msi. With equal plies it could be 0.25 Msi. The side webs\' face grain runs along x, so every vertical bending of a web (the side-web row, the side-lateral strips) is across it. Ask the supplier for the construction and replace.',
   },
   whiteOakPlyMorPerpPsi: {
     label: 'White oak plywood effective MOR (across the face grain)', group: 'materials', unit: 'psi',
-    default: 2750, min: 1000, max: 5500, step: 50, status: 'assumed', ref: 'D-76',
-    note: 'D-76 ESTIMATE (side-stiffness study): half the along-grain value (design 1,170 psi after the wet-service and safety factors), for the thick cross-banded core. Same caveat as the E.',
+    default: 2000, min: 1000, max: 5500, step: 50, status: 'verify', ref: 'D-76',
+    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate until a break test of an offcut replaces it (Verify). Before: D-76 ESTIMATE (side-stiffness study): half the along-grain value (design 1,170 psi after the wet-service and safety factors), for the thick cross-banded core. Same caveat as the E.',
   },
   balticThinThickIn: {
     label: '1/8" (3 mm) Baltic birch real thickness', group: 'materials', unit: 'in',
@@ -2589,7 +2647,7 @@ export interface ThinSheet {
 export function thinSheet(p: Params): ThinSheet {
   const key = thinSheetKey(p);
   if (key === THIN_SHEET.whiteOakPly)
-    return { key, name: '1/4 in white oak plywood', material: '1/4 in white oak plywood', nominal: '1/4 in', thicknessIn: p.whiteOakPlyThickIn, densityPcf: p.whiteOakPlyDensityPcf, moePsi: p.whiteOakPlyMoePsi, morPsi: p.whiteOakPlyMorPsi, moePerpPsi: p.whiteOakPlyMoePerpPsi, morPerpPsi: p.whiteOakPlyMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'white-oak-1/4', glue: 'interior / Type II' };
+    return { key, name: p.whiteOakPlyThickIn < 0.2 ? '5 mm white oak plywood' : '1/4 in white oak plywood', material: p.whiteOakPlyThickIn < 0.2 ? '5 mm white oak plywood (combi core)' : '1/4 in white oak plywood', nominal: p.whiteOakPlyThickIn < 0.2 ? '5 mm' : '1/4 in', thicknessIn: p.whiteOakPlyThickIn, densityPcf: p.whiteOakPlyDensityPcf, moePsi: p.whiteOakPlyMoePsi, morPsi: p.whiteOakPlyMorPsi, moePerpPsi: p.whiteOakPlyMoePerpPsi, morPerpPsi: p.whiteOakPlyMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'white-oak-1/4', glue: 'interior / Type II' };
   if (key === THIN_SHEET.balticBirch3mm)
     return { key, name: '3 mm Baltic birch', material: '3 mm Baltic birch plywood', nominal: '1/8 in (3 mm)', thicknessIn: p.balticThinThickIn, densityPcf: p.birchDensityPcf, moePsi: p.birchMoePsi, morPsi: p.birchMorPsi, moePerpPsi: p.balticThinMoePerpPsi, morPerpPsi: p.balticThinMorPerpPsi, sheetWidthIn: 60, sheetLengthIn: 60, priceKey: 'baltic-3mm', glue: 'exterior' };
   if (key === THIN_SHEET.balticBirch6mm)
@@ -2725,7 +2783,7 @@ export function validateParams(input: Params): ParamIssue[] {
   if (p.tireType === TIRE_TYPE.flatFree && p.bumpWheelRateLbIn < 1000)
     warn(['tireType', 'bumpWheelRateLbIn'], `Flat-free tires change the bump rate, not just the mass: the bump model still assumes ${p.bumpWheelRateLbIn} lb/in, a pneumatic tire. Measure the squash of the actual tire (load / squash) and set Effective wheel radial stiffness before trusting the structure rows (a foam tire can be 2,000 lb/in or more).`);
   if (p.axleCrossHoleFromEndIn - p.axleCrossHoleDiaIn / 2 < 1.5 * p.axleCrossHoleDiaIn - 1e-6 || p.axleEndExtraIn - p.axleCrossHoleFromEndIn < 0.5)
-    warn(['axleCrossHoleFromEndIn', 'axleCrossHoleDiaIn', 'axleEndExtraIn'], 'The cotter-pin cross hole is too close to the axle end (want an end distance of 1.5 hole diameters or more) or leaves less than 1/2" for the collar and washer.');
+    warn(['axleCrossHoleFromEndIn', 'axleCrossHoleDiaIn', 'axleEndExtraIn'], 'The cotter-pin cross hole is too close to the axle end (want an end distance of 1.5 hole diameters or more) or leaves less than 1/2" for the collar.');
   // E1 (3c-7): the riding pin hole must have wood below it. At a 12 in socket the hole sat 0.19 in above the post foot (the pin retained nothing).
   {
     const hi = handleInsertion(p);

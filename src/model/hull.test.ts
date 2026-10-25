@@ -7,7 +7,8 @@ import { describe, expect, it } from 'vitest';
 import { defaultParams, derived, STORAGE_LOCATION, thinSheet, validateParams, type Params } from '../params';
 import { buildModel } from './index';
 import { computeLayout } from './layout';
-import { liftBarStressPsi, liftSlot, scupperSites, sideBandLengths } from './body';
+import { liftBarStressPsi, liftSlot, scupperSites, sideBandLengths, transomBackerBlocks, TRANSOM_BACKER_BAND_CLEAR_IN } from './body';
+import { handleGeometry, socketScrewZ } from './handle';
 import { chooseDomino, DOMINOS, endJoint, frac, joinerySummary } from './joinery';
 import { SIGN_PROUD_IN, HULL_STEP, box, makeCtx } from './build-utils';
 import { localBounds, transformPoint, worldAABB } from './bounds';
@@ -91,7 +92,7 @@ describe('no exposed plywood edges (acceptance, D-35)', () => {
     const web = get(parts, 'side-L-web');
     expect(web.edges).toBe('captured'); // the full-height panel: the rear end in the transom dado, the front end in the bulkhead's dado, top and bottom covered by the oak bands glued on both faces (D-62)
     expect(web.joints!.filter((j) => j.type === 'dado').map((j) => j.to).sort()).toEqual(['bow-bulkhead', 'transom-rear']);
-    expect(web.joints!.filter((j) => j.type === 'glue' && /^side-[LR]-/.test(j.to)).map((j) => j.to).sort()).toEqual(['side-L-chine', 'side-L-chine-in', 'side-L-gunwale', 'side-L-gunwale-in']);
+    expect(web.joints!.filter((j) => j.type === 'glue' && /^side-[LR]-/.test(j.to)).map((j) => j.to).sort()).toEqual(['side-L-chine', 'side-L-chine-in', 'side-L-gunwale', 'side-L-gunwale-cap', 'side-L-gunwale-in']); // (2026-10-24: gunwale cap strip) the cap bedded on its top edge
     expect(web.joints!.filter((j) => j.type === 'glue' && /^side-rib-/.test(j.to)).map((j) => j.to).sort()).toEqual(['side-rib-L1', 'side-rib-L2', 'side-rib-L3', 'side-rib-L4']); // D-76, D-85: the ribs glued to its inside face
     const deck = get(parts, 'deck');
     // D-52/D-57: one deck, in the chine rabbets all the way along, in a dado in the rear transom and in a dado in the bow bulkhead.
@@ -113,12 +114,12 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
   const { L } = ctx;
   const dd = defaults.deckCaptureDepthIn;
   const rearTx = -10 + 0.5; // the rear transom's inner face: x = -rearOverhang + 1/2 (D-60; was 3/4)
-  it('the layout agrees with the hand numbers (24 in body, 22.75 in inside, deck 8, ply 0.472, rear face -9.5, side bar 1.5 in)', () => {
+  it('the layout agrees with the hand numbers (24 in body, 22.75 in inside, deck 8, ply 0.512, rear face -9.5, side bar 1.5 in)', () => {
     expect(L.xSideStart).toBeCloseTo(rearTx, 9);
     expect(L.hwC).toBeCloseTo(24 / 2 - 0.625, 9);
-    expect(L.deckBot).toBeCloseTo(8 - 0.472, 9);
+    expect(L.deckBot).toBeCloseTo(8 - 0.512, 9); // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
     expect(L.chineBot).toBeCloseTo(L.deckBot, 9); // one deck level: the chine bottom is the deck underside
-    expect(L.web.z0).toBeCloseTo(8 - 0.472 + 1.5, 9); // the chine top
+    expect(L.web.z0).toBeCloseTo(8 - 0.512 + 1.5, 9); // the chine top
     expect(L.sideTop).toBeCloseTo(8 + 14, 9);
     expect(L.sideH).toBe(4);
   });
@@ -531,15 +532,20 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
   const { L } = ctx;
   const p = defaults;
 
-  it('transoms are 1/2" (D-60; was 3/4"), chines and gunwales 5/8" thick as a sandwich of two 0.1945" bands and the 6 mm Baltic birch web (D-62, D-73, D-80; 0.2075" on the 1/4 in white oak plywood, 0.234" on the 4 mm okoume)', () => {
+  it('transoms are 1/2" (D-60; was 3/4"), chines and gunwales 5/8" thick as a sandwich of two 0.214" bands and the 5 mm white oak plywood web (D-62, D-73, D-80; 0.1945" on the 6 mm Baltic birch, 0.2075" on a 0.21 in white oak sheet, 0.234" on the 4 mm okoume)', () => {
     expect(L.transom).toBe(0.5);
     expect(L.side).toBe(0.625);
-    // D-61/D-62: no grooves; a band of (0.625 - web) / 2 on each face of the web: D-80's default web is the 0.236 in (6 mm) Baltic birch
-    expect(thinSheet(p).thicknessIn).toBeCloseTo(0.236, 9);
-    expect(L.sideBand).toBeCloseTo(0.1945, 4);
-    expect(get(parts, 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.19[45]" oak strip/);
-    // the 1/4 in white oak plywood option (0.21 in): bands of 0.2075"
-    expect(computeLayout({ ...p, thinSheetMaterial: 1 }).sideBand).toBeCloseTo(0.2075, 4);
+    // D-61/D-62: no grooves; a band of (0.625 - web) / 2 on each face of the web: the default web is the 0.197 in (5 mm) white oak plywood (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
+    expect(thinSheet(p).thicknessIn).toBeCloseTo(0.197, 9);
+    expect(L.sideBand).toBeCloseTo(0.214, 4);
+    expect(get(parts, 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.214" oak strip/);
+    // D-80's follow-the-weather web is the 0.236 in (6 mm) Baltic birch: bands of 0.1945"
+    const fw = { ...p, thinSheetMaterial: 0 };
+    expect(thinSheet(fw).thicknessIn).toBeCloseTo(0.236, 9);
+    expect(computeLayout(fw).sideBand).toBeCloseTo(0.1945, 4);
+    expect(get(buildModel(fw), 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.19[45]" oak strip/);
+    // a nominal 1/4 in white oak plywood sheet (0.21 in, D-73): bands of 0.2075"
+    expect(computeLayout({ ...p, thinSheetMaterial: 1, whiteOakPlyThickIn: 0.21 }).sideBand).toBeCloseTo(0.2075, 4);
     // the okoume option at 4 mm (panelPlyIn 0.157): the D-62 bands of 0.234"
     const ok = { ...p, thinSheetMaterial: 2, panelPlyIn: 0.157 };
     expect(computeLayout(ok).sideBand).toBeCloseTo(0.2338, 3);
@@ -595,14 +601,52 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
   });
 
   it('rear transom backers sit inside the transom behind the sockets, and the rear box starts behind them (S13)', () => {
-    for (const tag of ['L', 'R']) {
-      const b = worldAABB(get(parts, `transom-backer-${tag}`));
+    for (const tag of ['L', 'R']) for (const n of [1, 2]) {
+      const bk = get(parts, `transom-backer-${tag}${n}`);
+      const b = worldAABB(bk);
       expect(b.min[0]).toBeCloseTo(L.xRear + L.transom, 6);
       expect(b.max[0] - b.min[0]).toBeCloseTo(p.blockingThickIn, 6);
       expect(b.max[1] <= L.hwC + 1e-9 || b.min[1] >= -L.hwC - 1e-9).toBe(true);
-      expect(get(parts, `transom-backer-${tag}`).joints!.some((j) => j.to === 'transom-rear')).toBe(true);
+      expect(bk.joints!.some((j) => j.to === 'transom-rear')).toBe(true);
     }
     expect(L.storage.x0).toBeCloseTo(L.xRear + L.transom + L.rearLane, 6);
+  });
+
+  it('each side has two backer blocks, grain across the sled like the transom, each sized to its socket screw T-nut and brake-cord eye (Eric 2026-10-24)', () => {
+    const tr = get(parts, 'transom-rear');
+    expect(tr.grain).toBe('x'); // the transom's local x runs across the sled
+    const blocks = transomBackerBlocks(p, L);
+    expect(blocks.map((b) => b.pos)).toEqual(['low', 'high']);
+    const h = handleGeometry(p, L);
+    const [zLo, zHi] = socketScrewZ(h);
+    const rT = p.handleTNutFlangeDiaIn / 2 + p.transomBackerMarginIn;
+    for (const b of blocks) {
+      const zT = b.pos === 'low' ? zLo : zHi;
+      expect(b.tnut[1]).toBeCloseTo(zT, 9);
+      expect(b.tnut[0] - b.y[0]).toBeGreaterThanOrEqual(rT - 1e-9); // 1/2 in of oak inboard of the T-nut counterbore
+      expect(b.z[1] - zT).toBeGreaterThanOrEqual(b.pos === 'high' ? Math.min(rT, h.zTop - zT) - 1e-9 : rT - 1e-9);
+      if (b.pos === 'high') expect(zT - b.z[0]).toBeGreaterThanOrEqual(rT - 1e-9);
+      else expect(b.z[0]).toBeCloseTo(L.deckTop + 0.5, 9); // the lower block stays 1/2 in over the deck
+      expect(b.eye[1]).toBeGreaterThan(b.z[0]); // the cord eye's pilot lands in the block
+      expect(b.eye[1]).toBeLessThan(b.z[1]);
+      expect(b.y[1]).toBeCloseTo(L.hwC - TRANSOM_BACKER_BAND_CLEAR_IN, 9);
+      // edges on the 1/16 in grid
+      for (const v of [...b.y, ...b.z]) expect(Math.abs(v * 16 - Math.round(v * 16))).toBeLessThan(1e-6);
+    }
+    for (const tag of ['L', 'R']) for (const n of [1, 2]) expect(get(parts, `transom-backer-${tag}${n}`).grain).toBe('y');
+    // the defaults: lower 1-5/8 in tall, upper 2-13/16 in, both 2-13/16 in across the sled; nothing between them
+    expect(blocks[0].z[1] - blocks[0].z[0]).toBeCloseTo(1.625, 9);
+    expect(blocks[1].z[1] - blocks[1].z[0]).toBeCloseTo(2.8125, 9);
+    expect(blocks[0].y[1] - blocks[0].y[0]).toBeCloseTo(2.8125, 9);
+    expect(blocks[1].z[0] - blocks[0].z[1]).toBeGreaterThan(8);
+    // the flag tube still bears on a backer block level with each of its two holding blocks
+    const tube = worldAABB(get(parts, 'flag-tube'));
+    const bl = [1, 2].map((n) => worldAABB(get(parts, `transom-backer-L${n}`)));
+    expect(tube.min[0]).toBeCloseTo(bl[0].max[0], 6);
+    for (const id of ['flag-block-bottom', 'flag-block-top']) {
+      const f = worldAABB(get(parts, id));
+      expect(bl.some((b) => Math.min(b.max[2], f.max[2]) - Math.max(b.min[2], f.min[2]) > 1 && b.max[1] > tube.min[1]), id).toBe(true);
+    }
   });
 
   it('assembly order is data (M4, D-45): deck 4 < sides 4.2 < transom 4.4, and every closed dado is vented', () => {

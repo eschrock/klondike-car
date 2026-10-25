@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { computeLayout } from '../model/layout';
 import { defaultParams } from '../params';
-import { cutListFor, drawnParts, frac, partDims, partDrawings } from './part-drawings';
+import { cutListFor, drawnParts, FEATURE_WRAP_IN, frac, MIN_TEXT_IN, PAGE_W_IN, partDims, partDrawings, textExtents, wrapToWidth } from './part-drawings';
 import { roughFrac } from './units';
 
 const p = defaultParams();
@@ -138,6 +138,26 @@ describe('part drawings', () => {
     }
   });
 
+  it('fits every sheet on the printed page at 1:1, with no text under 7.5 pt and none off the sheet (Standard and Extreme weather)', () => {
+    for (const [name, pp] of [['standard', p], ['extreme', { ...p, weatherSpec: 1 }]] as const) {
+      for (const s of partDrawings(buildModel(pp), pp)) {
+        const where = `${name} ${s.partId}`;
+        expect(s.widthIn, where).toBeLessThanOrEqual(PAGE_W_IN + 1e-9);
+        // widthIn / heightIn are the SVG's true size in inches
+        const m = /<svg [^>]*width="([\d.]+)in" height="([\d.]+)in" viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(s.svg)!;
+        expect(Number(m[1]), where).toBeCloseTo(s.widthIn, 2);
+        expect(Number(m[2]), where).toBeCloseTo(s.heightIn, 2);
+        expect(Number(m[3]), where).toBeCloseTo(s.widthIn, 2);
+        const sizes = [...s.svg.matchAll(/<text [^>]*font-size="([\d.]+)"/g)].map((q) => Number(q[1]));
+        expect(sizes.length, where).toBeGreaterThan(0);
+        expect(Math.min(...sizes), where).toBeGreaterThanOrEqual(MIN_TEXT_IN - 1e-9);
+        const ex = textExtents(s.svg);
+        expect(ex.minX, where).toBeGreaterThanOrEqual(0);
+        expect(ex.maxX, where).toBeLessThanOrEqual(s.widthIn + 0.02);
+      }
+    }
+  });
+
   it('summarizes a part for the popover', () => {
     const rail = parts.find((x) => x.id === 'rail-L')!;
     const d = partDims(rail, parts, p);
@@ -149,11 +169,9 @@ describe('part drawings', () => {
     expect(partDims(rail).features.length).toBeGreaterThan(0);
   });
 
-  it('writes every feature line plainly: no coordinates, bracketed ids, decision numbers or long decimals, and two lines at most', () => {
-    const wrapLines = (t: string, chars: number): number => { let n = 0, cur = ''; for (const w of t.split(' ')) { if ((`${cur} ${w}`).trim().length > chars && cur) { n++; cur = w; } else cur = `${cur} ${w}`.trim(); } return n + (cur ? 1 : 0); };
+  it('writes every feature line plainly: no coordinates, bracketed ids, decision numbers or long decimals, and three lines at most on the page-wide table', () => {
     let checked = 0;
     for (const s of sheets) {
-      const chars = Math.floor((s.widthIn - 2 * 0.4 - 0.3) / (0.52 * 0.105));
       for (const f of s.features) {
         const where = `${s.partId} ${f.label}: ${f.text.slice(0, 90)}`;
         expect(f.text, where).not.toMatch(/\bx =/);
@@ -161,7 +179,7 @@ describe('part drawings', () => {
         expect(f.text, where).not.toMatch(/D-\d/);
         expect(f.text, where).not.toMatch(/\d\.\d{4,}/);
         expect(f.text, where).not.toMatch(/as the joint says|Position:|Fastener:/);
-        if (f.kind !== 'note') expect(wrapLines(f.text, chars), where).toBeLessThanOrEqual(2);
+        if (f.kind !== 'note') expect(wrapToWidth(f.text, MIN_TEXT_IN, FEATURE_WRAP_IN).length, where).toBeLessThanOrEqual(3); // as the sheet wraps it, on the 7-1/2" page
         checked++;
       }
     }
@@ -272,13 +290,13 @@ describe('part drawings read their sizes from the cut list (readability round 2)
   it('uses the cut list\'s sizes for the final size: T × W × L for a board, thick × tall × across for the brake knee block, a diameter for a rod', () => {
     const knee = sheets.find((s) => s.partNo === 'brake-knee')!;
     const fin = cl.finished.find((f) => f.ids.includes('brake-knee-L'))!;
-    expect(fin.finalText).toBe('2-1/8" thick × 9-1/2" tall × 3-11/16" across');
+    expect(fin.finalText).toBe('2-1/8" thick × 9-9/16" tall × 3-11/16" across'); // (2026-10-24: 13 mm deck as bought; 9-1/2" tall under the 12 mm deck)
     expect(head(knee.svg)).toContain(`final ${fin.finalText}`);
     expect(head(knee.svg)).not.toContain(`${fin.finalText} (T × W × L`);
     for (const s of sheets) {
       const f = cl.finished.find((q) => q.ids.includes(s.partId));
       if (f && f.partNo !== 'brake-knee' && f.partNo !== 'sign-standoff') expect(head(s.svg), s.partId).toContain(`final ${f.finalText} (T × W × L`);
-      if (f && f.partNo === 'sign-standoff') expect(head(s.svg), s.partId).toMatch(/final 3\/4(&quot;|")? dia × 1\/4/); // a disc reads as a diameter and a thickness
+      if (f && f.partNo === 'sign-standoff') expect(head(s.svg), s.partId).toMatch(/final 3\/4(&quot;|")? dia × 9\/32/); // a disc reads as a diameter and a thickness (2026-10-24: 9/32" with the 5 mm white oak sides as bought; 1/4" before)
     }
     const d = partDims(parts.find((x) => x.id === 'brake-knee-L')!, parts, p);
     expect(d.size).toBe(fin.finalText);

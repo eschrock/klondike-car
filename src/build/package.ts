@@ -17,7 +17,7 @@ import { formDrawings, tileForLetter, type FormDrawing } from './forms';
 import { lampClipStls } from './stl';
 import { assemblySteps, type BuildStep } from './assembly';
 import { partDrawings, type PartDrawingSheet } from './part-drawings';
-import { finishingSchedule, type FinishSchedule } from './finishing';
+import { finishingSchedule, isDyed, type FinishSchedule } from './finishing';
 import { verifyChecklist, type VerifyCheck } from './verify';
 import { frac, hash6 } from './svg-util';
 import { zipStore } from './zip';
@@ -74,7 +74,7 @@ export const SHAPER_NOTES: string[] = [
   'Every pocket, hole and engraving names its bit in the file and the book: 1/8 in straight bit for the narrow web dados, mortises and 17/64 in holes and for the on-line lettering, 1/4 in for the wide deck dados and the 13/32 in holes. Use a bit no wider than the feature.',
   `DEEP CUT parts (the bow bulkhead, the thickest solid): the stock is deeper than a Shaper bit reaches, so the file cuts the outline and hand hole ${SHAPER_MAX_DEPTH_IN} in deep from one face (verify YOUR bit's flute length), then you bandsaw the rest and finish with a flush-trim (pattern) bit riding the wall the Shaper cut.`,
   'All text in these files (titles, tags, notes, dimension labels) is annotation only: stroke-only blue text inside a group marked as a guide, outside the cut area, never a cut path. Origin should ignore it; if it shows glyph outlines they are guides, not cuts. Before the first real cut, import transom-rear.svg once and confirm that only the outline, dados, mortises and holes show as cuts.',
-  'VERIFY the insert drill: the six blind insert holes in the seat-back panel are drawn at 5/16 in (assumed) by 11/32 in deep. Check the insert maker\'s drill chart for the exact bit and depth, and test in a scrap of 12 mm okoume, before drilling the panel.',
+  'VERIFY the insert drill: the six insert holes in the seat-back panel are drawn at 5/16 in (assumed) by 19/32 in deep from the front face: they go through the 13 mm panel and into the oak insert pads, which are glued to its back face first. Check the insert maker\'s drill chart for the exact bit, and test in a scrap of 13 mm okoume with an oak pad glued behind, before drilling the panel.',
   'Check the 1:1 scale before cutting: a file is exactly as large as its part (width and height in inches).',
 ];
 
@@ -88,7 +88,7 @@ export const LASER_CONVENTIONS: { color: string; name: string; meaning: string }
 /** Notes Eric needs next to the laser files (also in the README). */
 export const LASER_NOTES: string[] = [
   "Every file is full size and in real inches: its width and height are its true size, and the pieces are laid out along the conveyor (the long side is the X axis). Import it in XCS and check the size XCS shows against the file's size in the list before cutting.",
-  `Limits used to flag the cut list and to decide which files exist: pieces up to ${frac(LASER_MAX_WIDTH_IN)} wide and ${frac(LASER_MAX_LENGTH_IN)} long (the S1 conveyor's processing area; the basic 39 in rail set is too short for the 59-1/2 in web and rail patterns, so fit the extension rails) and ${frac(LASER_MAX_THICKNESS_IN)} thick (the machine holds material to 0.55 in, but 1/4 in is the cut-through figure used here). Both are constants in laser-svg.ts: VERIFY them on your machine, change them if they are wrong, and the flags and files follow.`,
+  `Limits used to flag the cut list and to decide which files exist: pieces up to ${frac(LASER_MAX_WIDTH_IN)} wide and ${frac(LASER_MAX_LENGTH_IN)} long (the S1 conveyor's processing area; the basic 39 in rail set is too short for the 59-1/2 in web and rail patterns, so fit the extension rails) and ${frac(LASER_MAX_THICKNESS_IN)} thick (the machine holds material to 0.55 in, but 1/4 in is the cut-through figure used here). Check both on your machine before the first cut; if yours differ, the design's laser limits need changing before you regenerate the files.`,
   'Give the red strokes your cut setting for the sheet (test it on a scrap of the same plywood first) and the blue strokes a light score setting. In XCS set the inner shapes to cut before the outline (the files list them first, but XCS orders its own paths), so a piece cannot shift as it drops free.',
   'The outlines are drawn exactly as the part is, with no kerf offset. A diode kerf is a fraction of a millimeter; the templates need about 1/32 in, so none is allowed for. Check the first template against the printed drawing.',
   'Templates are cut in 1/4 in Baltic birch plywood rather than hardboard. A piece wider than the bed would be cut in bands that butt on the bench.',
@@ -103,8 +103,18 @@ export class BuildData {
   /** Short hash of the params (same stamp as the form title blocks). */
   readonly revision: string;
 
+  /** A picture of the sled for the build book's title page (a PNG data URL from the app's 3D view); no picture when absent (headless). Not part of the revision. */
+  cover?: string;
+
   constructor(readonly parts: Part[], readonly p: Params, readonly opts: PackageOptions = {}) {
     this.revision = hash6(JSON.stringify(p));
+  }
+
+  /** Set the title-page picture; the book (and the zip's file list) is rebuilt with it on next use. */
+  setCover(url: string | undefined): void {
+    if (url === this.cover) return;
+    this.cover = url;
+    this.cache.delete('files');
   }
 
   private memo<T>(key: string, f: () => T): T {
@@ -197,7 +207,7 @@ function readme(d: BuildData, others: string[]): string {
   lines.push('============================================');
   lines.push(`Generated: ${d.opts.date ?? '(date not given)'}`);
   lines.push(`Design revision: ${d.revision} (a code made from every design number; the form title blocks print the same stamp)`);
-  lines.push(`Weather spec: ${SPEC_NAME[d.bom.spec]} (${d.bom.spec === 'standard' ? 'garage-kept: 304 / 18-8 fasteners, beech Dominos, Titebond III, epoxy only where it earns it, clear spar urethane, no stain' : 'stored outside or near salt: 316, beech Dominos epoxied in, epoxy everywhere, marine varnish'}). Thin sheet: ${d.bom.thinSheetName}.`);
+  lines.push(`Weather spec: ${SPEC_NAME[d.bom.spec]} (${d.bom.spec === 'standard' ? 'garage-kept: 304 / 18-8 fasteners, beech Dominos, Titebond III, epoxy only where it earns it, spar urethane' : 'stored outside or near salt: 316, beech Dominos epoxied in, epoxy everywhere, marine varnish'}; ${isDyed(d.p) ? 'show faces dyed Golden Brown (TransTint) under the finish' : 'clear, no stain'}). Thin sheet: ${d.bom.thinSheetName}.`);
   const wl = weatherLine(d.bom.weatherCompare);
   if (wl) lines.push(wl);
   if (d.opts.link) lines.push(`Design link: ${d.opts.link}`);
@@ -228,8 +238,9 @@ function readme(d: BuildData, others: string[]): string {
   lines.push('');
   lines.push('Build book');
   lines.push('----------');
-  lines.push('  build-book.html is the whole build on paper: the verify checklist, the cut list, the board shopping list, the plywood nesting drawings, the BOM, the assembly');
-  lines.push('  steps, the finishing schedule and the Shaper file index. Open it in a browser and print it (Letter, scale 100%) or save it as a PDF.');
+  lines.push('  build-book.html is the build on paper: a start-here page, the verify checklist, the cut list, the board shopping list, the plywood nesting drawings, the BOM, the assembly');
+  lines.push('  steps, the finishing schedule, the forms and templates (how to build each), every part drawing, and the Shaper and laser file indexes. Open it in a browser and print it');
+  lines.push('  (Letter, scale 100%) or save it as a PDF. Print the tiled forms (forms/tiled/) separately at 100%.');
   lines.push('');
   lines.push('Files');
   lines.push('-----');

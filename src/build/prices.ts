@@ -148,6 +148,7 @@ export const isOakStocked = (nominal: string): boolean => OAK_STOCKED[nominal] !
  * Plywood, full 4 x 8 sheets. The key of the THIN sheet is its `ThinSheet.priceKey` (D-80: 'baltic-6mm', 'okoume-6mm', 'white-oak-1/4', 'baltic-3mm'); the 12 mm deck sheet is keyed '12 mm'.
  * The BOM prices the thin-sheet line by the priceKey of the sheet in effect, never by its thickness class.
  */
+const PLY12: Price = quoted(90, 'sheet', WOODYARD, '4 x 8 ft x 1/2" marine plywood; the deck and, from its offcut, the seat back. VERIFY the species is okoume: meranti marine ply is about 30% heavier (+3 lb on the deck). May be sourced elsewhere: ask Peach State or Randall Brothers (Atlanta) for 12 mm okoume BS 1088 (Boulter lists it at $150, 9 ply)', WOODYARD_PLYWOOD_URL);
 export const PLYWOOD_PRICE: Record<string, Price> = {
   'baltic-6mm': foundCP(49, 'sheet', 'Peach State Lumber, Kennesaw GA, plus tax', PEACH_STATE_PLYWOOD_URL, '4 x 8 ft x 6 mm (1/4") Baltic birch from the plywood list ("last updated 8/9"; the list gives no ply count and no glue type): the Standard thin sheet (sides, box, lid, signs). Count the plies at an edge (5 expected; the side-web margin assumes 5-ply), measure 6.0 to 6.5 mm, and ask the glue (probably interior, fine garage-kept once sealed). Toledo Plywood lists 4 x 8 BB/BB at $34.95 with exterior glue but delivers only within 80 miles'),
   'okoume-6mm': withAlts(
@@ -159,7 +160,9 @@ export const PLYWOOD_PRICE: Record<string, Price> = {
     quoted(113, 'sheet', WOODYARD, '4 x 8 ft x 1/4" white oak plywood (about 5.3 mm; interior / Type II glue, fine garage-kept once sealed; MEASURE the sheet); the sides, box, lid and signs if chosen', WOODYARD_PLYWOOD_URL),
     [foundCP(75, 'sheet', 'Peach State Lumber, Kennesaw GA', PEACH_STATE_PLYWOOD_URL, '1/4" B-2 white oak veneer-core plywood, 4 x 8 ft (the veneer grade is lower: look at the face before buying)')]),
   'baltic-3mm': quoted(40, 'sheet', WOODYARD, '5 x 5 ft x 1/8" (3 mm) Baltic birch plywood (exterior glue); the sides, box, lid and signs if chosen. Every part must nest on a 60 x 60 in sheet', WOODYARD_PLYWOOD_URL),
-  '12 mm': quoted(90, 'sheet', WOODYARD, '4 x 8 ft x 1/2" marine plywood; the deck and, from its offcut, the seat back. VERIFY the species is okoume: meranti marine ply is about 30% heavier (+3 lb on the deck). May be sourced elsewhere: ask Peach State or Randall Brothers (Atlanta) for 12 mm okoume BS 1088 (Boulter lists it at $150, 9 ply)', WOODYARD_PLYWOOD_URL),
+  '12 mm': PLY12,
+  // D-96: the deck sheet Eric bought calipers 13 mm; priced as the 12 mm sheet (same supplier class) until he gives the receipt.
+  '13 mm': { ...PLY12, note: '4 x 8 ft marine okoume, 13 mm as bought (D-96); priced as the 12 mm sheet. The deck and, from its offcut, the seat back.' },
 };
 
 // ── Metal stock ($/ft, cut to length) ─────────────────────────────────────────
@@ -325,7 +328,7 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /end plug/i, price: packed(10, 5, 'ea', FAST, 'plastic flanged plug for the DOM tube bore; pack of 10') },
   { match: /button plug/i, price: foundPack(25, 4.55, 'ea', 'DigiKey (Keystone)', 'https://www.digikey.com.mx/en/products/detail/keystone-electronics/8604/317044', 'Keystone 8604 black nylon hole plug, 0.625", about $0.18 each at 25; pack of 25', true) },
   { match: /nylon washer/i, price: withEach(foundPackCP(100, 5.17, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Product-Details?product=15939', 'nylon 6/6 flat washer 1/4" (#15939) under the button head, $0.09 each or 5.17 per 100'), 0.09) },
-  { match: /stainless rod/i, price: foundCP(2.275, 'ea', 'Speedy Metals', 'https://www.speedymetals.com/p-2616-x.aspx', '3/8" 316 stainless round, cold finished and annealed, by the inch ($0.91 an inch): 5 in ($4.55) cuts both 2-1/4" pins on the metal bandsaw') },
+  { match: /stainless rod/i, price: est(2.275, 'ea', 'Speedy Metals', 'ESTIMATE: 1/4" 316 stainless round by the inch, 5 in cuts both 2-1/4" pins on the metal bandsaw; the quote was for 3/8" ($0.91 an inch), and 1/4" costs less (https://www.speedymetals.com/p-2616-x.aspx)') },
   // D-79: beech Dominos from the shop in both specs (the Sipo packs and the Sipo 4x20 decision are gone).
   { match: /^Domino/, price: DOMINO_OWNED },
   { match: /screw eye/, price: notFound(est(1.25, 'ea', FAST, '316 #10 screw eye (only long NZ screw eyes and eye nuts turned up)')) },
@@ -342,6 +345,7 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /machine screw #8-32 x 2"/, price: foundCP(0.28, 'ea', BOLT_DEPOT, `${BD_PRODUCT}16902`, '316 Phillips flat-head machine screw #8-32 x 2" (#16902), $0.28 each (the pan head, #16819, is $0.37)') },
   { match: /fender washer #8/, price: foundCP(0.21, 'ea', BOLT_DEPOT, `${BD_PRODUCT}19564`, '316 fender washer #8 x 3/4" (#19564), $0.21 each') },
   { match: /lock nut #8-32/, price: foundCP(0.16, 'ea', BOLT_DEPOT, `${BD_PRODUCT}16005`, '316 hex nylon-insert lock nut #8-32 (#16005), $0.16 each (Bolts and Nuts $0.20)') },
+  { match: /flat-head machine screw #10-32 x 1\/2"/, price: est(0.14, 'ea', BOLT_DEPOT, 'ESTIMATE: 316 Phillips flat-head machine screw #10-32 x 1/2" for the seat-back hinges (into the 0.512" inserts), scaled from the 3/8" (#16938, $0.12 each); not read') },
   { match: /flat-head machine screw #10-32 x 3\/8"/, price: foundCP(0.12, 'ea', BOLT_DEPOT, `${BD_PRODUCT}16938`, '316 Phillips flat-head machine screw #10-32 x 3/8" (#16938), $0.12 each (Bolts and Nuts $0.18)') },
   { match: /machine screw/, price: packed(50, 11, 'ea', FAST, 'pack of 50') },
   // Wood screws: Bolt Depot 316 Phillips flat-head, by the 100 (the lengths the research read; the rest keep their estimate).
@@ -368,6 +372,8 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /narrow flat washer 3\/8/, price: withEach(packed(100, 30, 'ea', FAST, `ESTIMATE: 316 narrow flat washer 3/8" x 7/8" OD, under each brake-knee bolt head (not in the ${RESEARCH_DATE} research; the 3/8" x 1-1/2" fender washer is 0.81 each, a narrow one is about half); pack of 100`), 0.4) },
   { match: /fender washer 5\/8/, price: packed(25, 15, 'ea', FAST, 'pack of 25') },
   { match: /fender washer 3\/8/, price: withEach(foundPack(100, 50.48, 'ea', BOLT_DEPOT, 'https://www.boltdepot.com/Fender_washers_Stainless_steel_316.aspx', '316 fender washer 3/8" x 1-1/2" (16042), $0.81 each or 50.48 per 100; the 2" OD washers of the eye bolts were not searched; pack of 100', true), 0.81) },
+  // A joint that names its washer's outside diameter (the grab boards, the D-rings): an estimate, since the quoted pack is the 1-1/4" OD washer.
+  { match: /fender washer 1\/4" \(\S+" OD\)/, price: est(0.35, 'ea', 'Hardware store (bin, sold each)', 'ESTIMATE: 1/4" stainless fender or flat washer of the outside diameter named, bought by the piece') },
   { match: /fender washer 1\/4/, price: withEach(foundPack(100, 27.26, 'ea', BOLT_DEPOT, 'https://www.boltdepot.com/Fender_washers_Stainless_steel_316.aspx', '316 fender washer 1/4" x 1-1/4" (16040), $0.46 each or 27.26 per 100; pack of 100', true), 0.46) },
   { match: /fender washer/, price: packed(100, 20, 'ea', FAST, 'pack of 100') },
   { match: /carriage bolt 3\/8/, price: { ...est(3.99, 'ea', BOLT_DEPOT, 'ESTIMATE: 316 carriage bolt 3/8-16 x 6-1/2". The research read the 6" bolt (18411, $3.68 each, 28.31 per 10); 6-1/2" is that price x 6.5/6 until quoted. 6-1/4" is not a stock length, and the 6" bolt stops 1/16" short of the top of the nylock nut on this stack', 'https://boltdepot.com/Product-Details?product=18411'), decision: CARRIAGE_DECISION } },
@@ -429,12 +435,9 @@ export const NOTE_PRICE: Record<string, Price> = {
  */
 export const GLASS_TAPE: Price = foundCP(0.7, 'yd', 'U.S. Composites', 'https://uscomposites.com/prices.html', '8.7 oz glass cloth tape, 2" wide, sold by the yard ($0.70; 20 ft is $4.67). The West 729-10 (9 oz, 10 ft roll) is $14.88');
 
-const FINISH = 'Paint store / marine supplier';
-const OAK_TREE = 'Oak Tree Supply';
 export const FINISH_PRICE: Record<string, Price> = {
-  stain: est(18, 'qt', FINISH, 'wipe-on oak stain (or leave natural)'),
-  conditioner: est(16, 'qt', FINISH, 'pre-stain conditioner or gel stain for the okoume, which blotches (DESIGN.md finishing)'),
-  gelStain: est(20, 'qt', FINISH, 'gel stain for the okoume'),
+  // D-99: one 2 oz bottle of the concentrate, mixed with water; not looked up (Eric's figure, about $20 at Rockler or Woodcraft).
+  dye: est(20, 'bottle', 'Rockler / Woodcraft', 'TransTint liquid dye concentrate, Golden Brown, 2 oz bottle (Homestead Finishing), about $20'),
   varnish: found(53.99, 'qt', 'TotalBoat', 'https://www.totalboat.com/products/lust-marine-spar-varnish', 'TotalBoat Lust Rapid Recoat marine spar varnish, quart (heavily fortified with UV stabilizers)'),
   // D-83: the lid legend is filled with a black oil-based paint marker, not a half pint of enamel.
   enamel: foundCP(4.9, 'ea', 'Walmart (Sharpie)', 'https://www.walmart.com/ip/seort/5468037669', 'Sharpie oil-based paint marker, fine point, black (Rust-Oleum gloss black half pint is $9.99), for the lid legend grooves', true),
@@ -445,7 +448,6 @@ export const FINISH_PRICE: Record<string, Price> = {
 };
 /**
  * Researched container prices (the real products), keyed like `FINISH_PRICE`; a container without one is priced as the base per-quart price times `FINISH_CONTAINER_FACTOR`.
- * Conditioner: no pint of the water-based product exists, so the pint line buys the quart.
  */
 export const FINISH_CONTAINER_PRICE: Record<string, Partial<Record<'pt' | 'qt' | 'gal', Price>>> = {
   enamel: { pt: FINISH_PRICE.enamel },
@@ -455,12 +457,6 @@ export const FINISH_CONTAINER_PRICE: Record<string, Partial<Record<'pt' | 'qt' |
       [foundPack(2, 95.99, 'qt', 'TotalBoat', 'https://www.totalboat.com/products/lust-marine-spar-varnish', 'the 2-quart kit is $95.99, cheaper than two quarts ($107.98)', false, '2-quart kit')]),
     gal: found(139.99, 'gal', 'TotalBoat', 'https://www.totalboat.com/products/lust-marine-spar-varnish', 'TotalBoat Lust Rapid Recoat marine spar varnish, gallon (360-400 ft2 at 3 mil wet); four quarts would be $216'),
   },
-  stain: { pt: found(19.6, 'pt', OAK_TREE, 'https://www.oaktreesupply.com/products/gf-water-based-dye', 'General Finishes water-based dye, pint (Woodcraft 20.99, item 148600; dark colors up to 29.95)', true) },
-  conditioner: {
-    pt: found(16.77, 'pt', 'Walmart / Ace / Alper\'s', 'https://www.walmart.com/ip/Minwax-Pre-Stain-Wood-Conditioner-Clear-1-Pint/17300083', 'Minwax water-based pre-stain wood conditioner: NO pint of the water-based product was found, so the pint line buys the QUART at $16.77 (Walmart sale; $21.99 at Ace or Alper\'s)', true),
-    qt: found(16.77, 'qt', 'Walmart / Ace / Alper\'s', 'https://www.walmart.com/ip/Minwax-Pre-Stain-Wood-Conditioner-Clear-1-Pint/17300083', 'Minwax water-based pre-stain wood conditioner, quart (Walmart sale; $21.99 at Ace or Alper\'s)', true),
-  },
-  gelStain: { pt: found(28, 'pt', OAK_TREE, 'https://www.oaktreesupply.com/collections/general-finishes/type_oil-based-stains', 'General Finishes oil-based gel stain, pint ("from 28" up to 37.95 by color; Woodcraft half pint 20.99)', true) },
 };
 
 /** Price of a container relative to a quart, for the finishing schedule's buy list: a pint costs about 0.6 of a quart, a gallon about 3.2 quarts. */
@@ -535,6 +531,8 @@ export const FASTENER_PRICE_STANDARD: Array<{ match: RegExp; price: Price }> = [
     [bd18(2556, 'ea', 'Bolt Depot 18-8 nylon-insert lock nut 3/8-16 (#2556)', 0.36, 50, 12.07, '26 by the piece is 9.36')]) },
   { match: /narrow flat washer 3\/8/, price: withEach(packed(100, 12, 'ea', FAST_STD, `ESTIMATE (Standard spec): 18-8 narrow flat washer 3/8" x 7/8" OD, under each brake-knee bolt head (not in the Standard research); pack of 100`), 0.15) },
   { match: /fender washer #8/, price: withEach(packed(100, 14, 'ea', FAST_STD, 'ESTIMATE (Standard spec): 18-8 fender washer for #8, 3/4" OD (not in the Standard research); pack of 100'), 0.2) },
+  // A joint that names its washer's outside diameter (the grab boards, the D-rings): an estimate, since the quoted pack is the 1-1/4" OD washer.
+  { match: /fender washer 1\/4" \(\S+" OD\)/, price: est(0.35, 'ea', 'Hardware store (bin, sold each)', 'ESTIMATE: 1/4" stainless fender or flat washer of the outside diameter named, bought by the piece') },
   { match: /fender washer 1\/4/, price: bd18(BD_FENDER_18_8, 'ea', '18-8 fender washer 1/4" x 1-1/4"', 0.28, 100, 18.81, '48 by the piece is cheaper than the bag; Home Depot Everbilt 20-pack 5.97 (0 in stock)') },
   { match: /fender washer 3\/8/, price: bd18(BD_FENDER_18_8, 'ea', '18-8 fender washer 3/8" x 1-1/2"', 0.41, 50, 14.51, 'the bag of 50 covers 46; the page listed 0.29 a washer in the bag against 0.41 each') },
   { match: /fender washer/, price: notFound(withEach(packed(100, 20, 'ea', FAST_STD, '18-8 fender washer'), 0.3)) },
@@ -543,11 +541,13 @@ export const FASTENER_PRICE_STANDARD: Array<{ match: RegExp; price: Price }> = [
     bd18(14571, 'ea', '18-8 cotter pin 5/32" x 1-1/2" (#14571)', 0.32, 100, 22.64, 'Bolts and Nuts extended-prong $0.65 each'),
     [gap(bd18(14570, 'ea', '18-8 cotter pin 5/32" x 1-1/4" (#14570)', 0.27, 100, 19.43), 'the pin is 1-1/4" long, not 1-1/2"')]) },
   { match: /shaft collar/i, price: foundCP(4.52, 'ea', 'Penn Tool Co.', 'https://www.penntoolco.com/87986402', 'Climax C-062 one-piece set-screw collar, 5/8" bore, 1-1/8" OD x 1/2", zinc plated: the Standard weather spec (garage-kept). PartsSource GSC-062-Z zinc is $4.99; 316 (Climax CRC-062-S) is $19.89 at Newegg/Zoro (the Extreme spec)') },
-  { match: /stainless rod/i, price: est(2.5, 'ea', FAST_STD, 'cut from a 3/8" x 12" 304 rod (about $10): five pins per rod. ESTIMATE, scaled from the 316 estimate; not in the Standard research') },
+  { match: /stainless rod/i, price: est(2.5, 'ea', FAST_STD, 'cut from a 1/4" x 12" 304 rod (about $10 or less): five pins per rod. ESTIMATE, scaled from the 316 estimate; not in the Standard research') },
   { match: /screw eye/, price: withAlts(
     { ...packed(2, 1.57, 'ea', 'Home Depot (Everbilt)', 'ESTIMATE (Standard spec): Everbilt 1/4" x 2" stainless screw eye, 2-piece pack at $1.57 (model 824351; 4 packs for the 8). The size is eye diameter x length, not a #10 shank, and the grade is not stated: check the package for 304 and that the eye takes the brake cord tie'), url: 'https://www.homedepot.com/s/stainless%20steel%20screw%20eye' },
     [withEach({ ...packed(20, 12.82, 'ea', BOLT_DEPOT, 'Bolt Depot 18-8 screw eye, trade size 8 (1/2" I.D., #15513): $1.08 each or 12.82 per 20; the smallest at Bolt Depot, bigger than a #10'), url: `${BD_PRODUCT}15513` }, 1.08),
      gap(foundPack(1, 2.79, 'ea', 'Ace Hardware (National Hardware)', 'https://www.acehardware.com/departments/hardware/screw-eyes/5700620', 'National Hardware stainless 5/8" screw eye, 75 lb, $2.79 each [S] (this listing and 5700554 were not told apart)', true), 'a 5/8" eye, not the #10 size')]) },
+  // The sign inserts in the oak ribs (a flush, no-flange insert, turned in through the bore in the web; signInsertLenIn) and, since Eric 2026-10-24, the seat-back hinge inserts (seatBackInsertLenIn, in the panel and its oak pad): one line.
+  { match: /threaded insert #10-32 x 33\/64"/, price: withEach({ ...quoted(14.71 / 100, 'ea', BOLT_DEPOT, 'Bolt Depot #23869, flush-mount softwood insert, Allen drive, die-cast zinc alloy, #10-32 x 0.512" (13 mm), no flange: $0.20 each, 14.71 per 100 (135.00 per 1,000). The drill size is not on the listing (McMaster lists 9/32" for its zinc 0.516"): drill a scrap of oak first. Zinc is fine in a dry garage [Bolt Depot, 2026-10-24; price read via search, confirm on the page]', `${BD_PRODUCT}23869`), packQty: 100, packUsd: 14.71 }, 0.2) },
   { match: /threaded insert/, price: withAlts(
     withEach({ ...packed(100, 18.71, 'ea', BOLT_DEPOT, 'ESTIMATE (Standard spec): zinc flanged softwood threaded insert, #10-32, Allen drive (#23861), 0.25 each or 18.71 per 100. The research (2026-10-12, and again 2026-10-14) found NO 18-8 or zinc #10-32 screw-in insert for hardwood at a readable price, only pronged T-nuts (Bolts and Nuts zinc #10-32 x 5/16 3-prong T-nut $0.24, hammer-in) and an 18-8 hardwood insert in #8-32 x 3/8" at 4.78 each; this one is a softwood type, 0.512" long (the model asks for 3/8" and 5/16"). Fine in a dry garage; confirm the drill size'), url: `${BD_PRODUCT}23861` }, 0.25),
     [gap(foundPack(25, 88.61, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Threaded_inserts', 'Bolt Depot 18-8 hardwood insert, #8-32 x 0.375", $4.78 each, 88.61 per 25', true), 'a #8-32 thread, not #10-32, and about 20x the price')]) },
@@ -563,6 +563,7 @@ export const FASTENER_PRICE_STANDARD: Array<{ match: RegExp; price: Price }> = [
   { match: /machine screw #8-32 x 2"/, price: bd18(1352, 'ea', '18-8 Phillips pan-head machine screw #8-32 x 2" (#1352); the flat head (#1254) is $0.27', 0.3, 100, 20.06) },
   { match: /lock nut #8-32/, price: bd18(2551, 'ea', '18-8 hex nylon-insert lock nut #8-32 (#2551)', 0.1, 100, 6.93) },
   { match: /fender washer #8/, price: bd18(7147, 'ea', '18-8 fender washer #8 x 3/4" (#7147)', 0.15, 100, 9.86) },
+  { match: /flat-head machine screw #10-32 x 1\/2"/, price: est(0.15, 'ea', BOLT_DEPOT, 'ESTIMATE: 18-8 Phillips flat-head machine screw #10-32 x 1/2" for the seat-back hinges (into the 0.512" inserts), scaled from the 3/8" (#1267, $0.13 each); not read') },
   { match: /flat-head machine screw #10-32 x 3\/8"/, price: foundCP(0.13, 'ea', BOLT_DEPOT, `${BD_PRODUCT}1267`, '18-8 Phillips flat-head machine screw #10-32 x 3/8" (#1267), $0.13 each') },
   { match: /^18-8 screw M3 x 8 mm$/, price: foundCP(0.05, 'ea', BOLT_DEPOT, `${BD_PRODUCT}6831`, '18-8 Phillips pan-head machine screw M3 x 0.5 x 8 mm (#6831), $0.05 each') },
   { match: /^18-8 screw M4 x 10 mm$/, price: foundCP(0.08, 'ea', BOLT_DEPOT, `${BD_PRODUCT}5167`, '18-8 Phillips pan-head machine screw M4 x 0.7 x 10 mm (#5167), $0.08 each') },

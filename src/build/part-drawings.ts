@@ -1243,26 +1243,67 @@ const scaleText = (s: number): string => {
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
 /** Scales the thickness views may take when they are drawn at their own scale. */
 const N_SCALES = [4, 3, 2, 3 / 2, 1, 3 / 4, 1 / 2, 1 / 3, 1 / 4, 1 / 6, 1 / 8, 1 / 12, 1 / 16];
-/** Widest row of views (in) on the sheet. */
-const ROW_W_IN = 9.2;
+/** The printed content width of a build-book page (in): US Letter less 1/2" margins. Every sheet is at most this wide, so it prints at 1:1. */
+export const PAGE_W_IN = 7.5;
+/** A sheet this tall (in) or less fits one page; a sheet takes a coarser scale (more rows) to stay under it only while the drawing stays readable. */
+const PAGE_H_IN = 9.5;
+/** The smallest text on a sheet (in, at 1:1): about 7.5 pt, readable at the bench. */
+export const MIN_TEXT_IN = 0.105;
+/** The sheet's own margin (in) around its content. */
+const SHEET_M = 0.25;
+/** The width (in) the feature-table lines wrap to: the page less the margins and the letter column. */
+export const FEATURE_WRAP_IN = PAGE_W_IN - 2 * SHEET_M - 0.25;
 
-/** Push sorted label positions apart to at least `gap`, then pull them back toward their targets from the far end. */
-function spread(targets: number[], gap: number): number[] {
+/** Helvetica / Arial advance widths (1/1000 em), for measuring text on a sheet. */
+const HELV: Record<string, number> = (() => {
+  const t: Record<string, number> = {};
+  const set = (cs: string, wd: number): void => { for (const c of cs) t[c] = wd; };
+  set("'", 191); set('ijl', 222); set('|', 260); set(' !,./:;[\\]ftI', 278); set('()-r`', 333); set('"', 355); set('*', 389); set('°', 400); set('^', 469);
+  set('cksvxyzJ', 500); set('0123456789abdeghnopquL_#$?', 556); set('+<=>~×', 584); set('FTZ', 611); set('ABEKPSVXY&', 667); set('CDHNRUw', 722); set('GOQ', 778);
+  set('mM', 833); set('%', 889); set('W', 944); set('@', 1015);
+  return t;
+})();
+/** The width (in) of a line of text at a font size (in). */
+export function textWidthIn(s: string, size: number, bold = false): number {
+  let u = 0;
+  for (const c of s) u += HELV[c] ?? (c.charCodeAt(0) < 128 ? 600 : 800);
+  return (u / 1000) * size * (bold ? 1.08 : 1);
+}
+/** Wrap a line of text to a width (in) at a font size (in). */
+export function wrapToWidth(s: string, size: number, maxW: number, bold = false): string[] {
+  const out: string[] = [];
+  let cur = '';
+  for (const word of s.split(' ')) {
+    const next = cur ? `${cur} ${word}` : word;
+    if (cur && textWidthIn(next, size, bold) > maxW) { out.push(cur); cur = word; } else cur = next;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/** Push sorted label positions apart to at least `gap`, then pull them back toward their targets from the far end; with `hi`, the last stays at or before it (and the rest make room). */
+function spread(targets: number[], gap: number, hi = Infinity): number[] {
   const out = [...targets];
   for (let i = 1; i < out.length; i++) if (out[i] < out[i - 1] + gap) out[i] = out[i - 1] + gap;
+  if (out.length && out[out.length - 1] > hi) out[out.length - 1] = Math.max(hi, targets[0] + (out.length - 1) * gap);
   for (let i = out.length - 2; i >= 0; i--) if (out[i] > out[i + 1] - gap) out[i] = out[i + 1] - gap;
   return out;
 }
 
-/** Wrap a line of text to about `chars` characters. */
-function wrap(s: string, chars: number): string[] {
-  const out: string[] = [];
-  let cur = '';
-  for (const word of s.split(' ')) {
-    if ((cur + ' ' + word).trim().length > chars && cur) { out.push(cur); cur = word; } else cur = (cur + ' ' + word).trim();
+/** The leftmost and rightmost x (in) of the horizontal text on a sheet, measured: for the test that no text runs off the sheet. */
+export function textExtents(svg: string): { minX: number; maxX: number } {
+  let minX = Infinity, maxX = -Infinity;
+  const unesc = (t: string): string => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  for (const m of svg.matchAll(/<text ([^>]*)>([^<]*)<\/text>/g)) {
+    const at = m[1];
+    if (/rotate\(/.test(at)) continue;
+    const x = Number(/\bx="([-\d.]+)"/.exec(at)?.[1] ?? 0), size = Number(/font-size="([\d.]+)"/.exec(at)?.[1] ?? 0);
+    const wd = textWidthIn(unesc(m[2]), size, /font-weight="bold"/.test(at));
+    const anchor = /text-anchor="(\w+)"/.exec(at)?.[1];
+    const x0 = anchor === 'end' ? x - wd : anchor === 'middle' ? x - wd / 2 : x;
+    minX = Math.min(minX, x0); maxX = Math.max(maxX, x0 + wd);
   }
-  if (cur) out.push(cur);
-  return out;
+  return { minX, maxX };
 }
 
 export interface PartDrawingSheet {
@@ -1375,7 +1416,7 @@ interface Mark { u: number; letter?: string }
  * LAYERS block of a cross-laminated part (the brake knee, D-75): an edge view of the stack (layer lines, the grain of each layer) and a face view of what each layer is cut as (its boards,
  * the off-center edge joint), at a small scale. Every size is the cut list's. Null when the part's layers all run the same way. `y0` is the top of the block; `h` is its height.
  */
-function layersBlock(part: Part, cl: CutList, x0: number, y0: number, face: string): { svg: string; h: number } | null {
+function layersBlock(part: Part, cl: CutList, x0: number, y0: number, face: string): { svg: string; h: number; w: number } | null {
   const row = cl.oak.flatMap((g) => g.rows).find((r) => r.ids.includes(part.id));
   const lps = row?.layerPieces ?? [];
   if (new Set(lps.map((q) => q.grainWord)).size < 2) return null;
@@ -1392,66 +1433,77 @@ function layersBlock(part: Part, cl: CutList, x0: number, y0: number, face: stri
   const joint = part.stock ? edgeJointUp(part, part.stock.w) : undefined;
   const kinds: typeof layers = [];
   for (const q of layers) if (!kinds.some((z) => z.same === q.same)) kinds.push(q);
-  // The edge view and the face views sit side by side: the largest scale at which they all fit across the sheet (8.2" less margins) and the tallest layer fits 4".
-  const gapOf = (q: { widths: number[] }): number => (q.widths.length > 1 && joint !== undefined ? 1.55 : 0.6);
-  const slotW = (z: { hz: number; widths: number[] }, q: number): number => Math.max(z.hz * q + gapOf(z), 2.35); // a face view's heading ("LAYERS 1 and 3, from the rear face") is about 2.3" wide
-  const needW = (q: number): number => maxH * q + 0.45 + kinds.reduce((a, z) => a + slotW(z, q), 0);
-  const k = [1 / 3, 1 / 4, 1 / 6, 1 / 8].find((q) => needW(q) <= 7.4 && maxV * q <= 4) ?? 1 / 8;
+  // The edge view and the face views sit side by side: the largest scale at which they all fit across the page and the tallest layer fits 4". Every word goes beside or under
+  // the sketches (never over a grain arrow), so the text sets each column's width as much as the sketch does.
+  const F = MIN_TEXT_IN, LH = 0.15;
+  const edgeLabel = (q: { n: number; upright: boolean }): string => `${q.n}  ${q.upright ? 'upright' : 'across the sled'}`;
+  const labW = Math.max(...layers.map((q) => textWidthIn(edgeLabel(q), F)));
+  const headOf = (z: { same: string }): string => { const same = layers.filter((y) => y.same === z.same).map((y) => y.n); return `LAYER${same.length > 1 ? 'S' : ''} ${same.join(' and ')}, from the rear face`; };
+  /** The lines under a face view: its size, its boards (or its one piece) and the edge joint. */
+  const under = (z: { hz: number; vt: number; widths: number[] }): Array<{ t: string; fill: string; bold?: boolean }> => [
+    { t: `${frac(z.hz)} across the sled ×`, fill: DIM }, { t: `${frac(z.vt)} up the leg`, fill: DIM },
+    ...(z.widths.length > 1
+      ? [...z.widths.map((bw, i) => ({ t: `board ${i + 1}${i === 0 ? ' (bottom edge)' : ' (top)'}: ${frac(bw)} wide`, fill: INK })),
+        ...(joint !== undefined ? [{ t: `edge joint: ${frac(joint)} up from`, fill: FEAT, bold: true }, { t: 'the finished bottom edge', fill: FEAT, bold: true }] : [])]
+      : [{ t: `ONE piece, ${frac(z.widths[0])} wide across its grain`, fill: INK }]),
+  ];
+  const slotW = (z: { hz: number; vt: number; widths: number[]; same: string }, q: number): number => Math.max(z.hz * q + 0.45, textWidthIn(headOf(z), F, true) + 0.25, ...under(z).map((l) => textWidthIn(l.t, F, l.bold) + 0.25));
+  const edgeW = (q: number): number => Math.max(maxH * q + 0.15 + labW, textWidthIn('EDGE VIEW, from the TOP end', F, true), 1.6) + 0.3;
+  const needW = (q: number): number => edgeW(q) + kinds.reduce((a, z) => a + slotW(z, q), 0) - 0.25;
+  const k = [1 / 3, 1 / 4, 1 / 6, 1 / 8].find((q) => needW(q) <= PAGE_W_IN - 2 * SHEET_M && maxV * q <= 4) ?? 1 / 8;
   const o: string[] = [];
-  const top = y0 + 0.3;
-  o.push(txt(x0, y0 + 0.12, `LAYERS: how the block is laminated (layer 1 is the ${face}; sketch at ${scaleText(k)}, the layers 2x thicker than that)`, 0.12, { bold: true }));
+  const heads = wrapToWidth(`LAYERS: how the block is laminated (layer 1 is the ${face}; sketch at ${scaleText(k)}, the layers 2x thicker than that)`, 0.12, PAGE_W_IN - 2 * SHEET_M, true);
+  heads.forEach((t, i) => o.push(txt(x0, y0 + 0.12 + i * 0.17, t, 0.12, { bold: true })));
+  const top = y0 + 0.3 + (heads.length - 1) * 0.17;
   const arrow = (a0: Vec2, a1: Vec2): string => {
     const d: Vec2 = [Math.sign(a1[0] - a0[0]), Math.sign(a1[1] - a0[1])];
     return line(a0, a1, GRAIN, 0.012) + line(a1, [a1[0] - d[0] * 0.08 - d[1] * 0.04, a1[1] - d[1] * 0.08 + d[0] * 0.04], GRAIN, 0.012) + line(a1, [a1[0] - d[0] * 0.08 + d[1] * 0.04, a1[1] - d[1] * 0.08 - d[0] * 0.04], GRAIN, 0.012);
   };
-  // Edge view (seen from the top end): the layers stacked, rear layer on top, each as wide as it is across the sled.
+  // Edge view (seen from the top end): the layers stacked, rear layer on top, each as wide as it is across the sled, its grain mark inside and its name to the right.
   const thk = (q: { t: number }): number => q.t * k * 2;
   const eW = maxH * k, ex = x0, cx = ex + eW / 2;
-  o.push(txt(ex, top + 0.05, 'EDGE VIEW, from the TOP end', 0.1, { bold: true }));
+  o.push(txt(ex, top + 0.05, 'EDGE VIEW, from the TOP end', F, { bold: true }));
   let ey = top + 0.18;
   for (const q of layers) {
     const w = q.hz * k, h = thk(q);
     o.push(polyEl([[cx - w / 2, ey], [cx + w / 2, ey], [cx + w / 2, ey + h], [cx - w / 2, ey + h]], INK, 0.014, WOOD));
-    o.push(txt(cx - w / 2 + 0.06, ey + h / 2 + 0.035, `${q.n}  ${q.upright ? 'upright' : 'across the sled'}`, 0.095));
-    if (q.upright) o.push(ellipse([cx + w / 2 - 0.2, ey + h / 2], 0.07, 0.07, GRAIN, 0.012), ellipse([cx + w / 2 - 0.2, ey + h / 2], 0.015, 0.015, GRAIN, 0.01, '', GRAIN));
-    else o.push(arrow([cx + w / 2 - 0.55, ey + h / 2], [cx + w / 2 - 0.1, ey + h / 2]));
+    o.push(txt(ex + eW + 0.15, ey + h / 2 + 0.037, edgeLabel(q), F));
+    if (q.upright) o.push(ellipse([cx, ey + h / 2], 0.07, 0.07, GRAIN, 0.012), ellipse([cx, ey + h / 2], 0.015, 0.015, GRAIN, 0.01, '', GRAIN));
+    else { const L = Math.min(0.45, w * 0.6); o.push(arrow([cx - L / 2, ey + h / 2], [cx + L / 2, ey + h / 2])); }
     ey += h;
   }
-  o.push(txt(ex, ey + 0.17, 'Layer lines are glue lines.', 0.085, { fill: HID }), txt(ex, ey + 0.28, 'The dot is grain running toward you.', 0.085, { fill: HID }));
-  const edgeBottom = ey + 0.36;
-  // Face views (seen from the rear face): one rectangle per distinct layer.
-  let fx = ex + eW + 0.45;
+  const caps = ['Layer lines are glue lines.', 'The dot is grain running toward you.'].flatMap((c) => wrapToWidth(c, F, edgeW(k) - 0.3));
+  caps.forEach((c, i) => o.push(txt(ex, ey + 0.18 + i * LH, c, F, { fill: HID })));
+  const edgeBottom = ey + 0.18 + caps.length * LH;
+  // Face views (seen from the rear face): one rectangle per distinct layer, the sizes, boards and joint under it.
+  let fx = ex + edgeW(k);
   const mid = top + 0.18 + maxV * k / 2;
   let bottom = edgeBottom;
   for (const q of kinds) {
-    const same = layers.filter((z) => z.same === q.same).map((z) => z.n);
     const w = q.hz * k, h = q.vt * k, y1 = mid - h / 2;
-    o.push(txt(fx, top + 0.05, `LAYER${same.length > 1 ? 'S' : ''} ${same.join(' and ')}, from the rear face`, 0.1, { bold: true }));
+    o.push(txt(fx, top + 0.05, headOf(q), F, { bold: true }));
     o.push(polyEl([[fx, y1 + 0.18], [fx + w, y1 + 0.18], [fx + w, y1 + 0.18 + h], [fx, y1 + 0.18 + h]], INK, 0.014, WOOD));
     const yb = y1 + 0.18 + h;
-    if (q.upright) o.push(arrow([fx + w / 2, yb - h * 0.2], [fx + w / 2, yb - h * 0.8]), txt(fx + w / 2 + 0.06, yb - h * 0.5, 'grain up the leg', 0.085, { fill: GRAIN }));
-    else o.push(arrow([fx + w * 0.2, yb - h * 0.94], [fx + w * 0.8, yb - h * 0.94]), txt(fx + w / 2, yb - h * 0.94 - 0.06, 'grain across the sled', 0.085, { anchor: 'middle', fill: GRAIN }));
+    if (q.upright) o.push(arrow([fx + w / 2, yb - h * 0.2], [fx + w / 2, yb - h * 0.8]), txt(fx + w / 2 + 0.15, yb - h * 0.5, 'grain up the leg', F, { fill: GRAIN, anchor: 'middle', rot: -90 }));
+    else o.push(arrow([fx + w * 0.2, yb - h * 0.9], [fx + w * 0.8, yb - h * 0.9]), txt(fx + w / 2, yb - h * 0.9 + 0.17, 'grain across the sled', F, { anchor: 'middle', fill: GRAIN }));
     if (q.widths.length > 1) {
       let yy = yb;
       q.widths.forEach((bw, i) => {
         const hh = bw * k;
         if (i > 0) o.push(line([fx, yy], [fx + w, yy], FEAT, 0.014));
-        o.push(txt(fx + 0.06, yy - hh / 2 + 0.035, `board ${i + 1}${i === 0 ? ' (bottom edge)' : ' (top)'}: ${frac(bw)} wide`, 0.09, { fill: INK }));
+        o.push(txt(fx + 0.08, yy - hh / 2 + 0.037, `${i + 1}`, F, { bold: true }));
         yy -= hh;
       });
       if (joint !== undefined) {
-        const jy = yb - q.widths[0] * k;
-        o.push(txt(fx + w + 0.08, jy + 0.035, `edge joint: ${frac(joint)} up from`, 0.09, { fill: FEAT, bold: true }), txt(fx + w + 0.08, jy + 0.14, 'the finished bottom edge', 0.09, { fill: FEAT, bold: true }));
         const fy = yb - Math.max(0, q.widths[0] - joint) * k;
-        o.push(line([fx - 0.08, fy], [fx + w + 0.04, fy], DIM, 0.008, DASH), txt(fx - 0.1, fy + 0.03, 'finished bottom edge', 0.075, { anchor: 'end', fill: DIM }));
+        o.push(line([fx - 0.08, fy], [fx + w + 0.04, fy], DIM, 0.008, DASH), txt(fx + 0.06, fy - 0.05, 'finished bottom edge', F, { fill: DIM }));
       }
-    } else if (w < 2) o.push(txt(fx, yb + 0.28, `ONE piece, ${frac(q.widths[0])} wide across its grain`, 0.085, { fill: INK })); // too narrow to hold the words: they go under the sizes
-    else o.push(txt(fx + 0.06, yb - 0.06, `ONE piece, ${frac(q.widths[0])} wide across its grain`, 0.085, { fill: INK }));
-    o.push(txt(fx, yb + 0.15, `${frac(q.hz)} across the sled \u00d7 ${frac(q.vt)} up the leg`, 0.09, { fill: DIM }));
-    bottom = Math.max(bottom, yb + (q.widths.length === 1 && w < 2 ? 0.36 : 0.22));
+    }
+    under(q).forEach((l, i) => o.push(txt(fx, yb + LH * (i + 1), l.t, F, { fill: l.fill, bold: l.bold })));
+    bottom = Math.max(bottom, yb + LH * under(q).length + 0.07);
     fx += slotW(q, k);
   }
-  return { svg: `<g id="layers">${o.join('')}</g>`, h: bottom - y0 + 0.1 };
+  return { svg: `<g id="layers">${o.join('')}</g>`, h: bottom - y0 + 0.1, w: needW(k) };
 }
 
 function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: CutList, title?: string): { svg: string; W: number; H: number; scale: string; features: DrawingFeature[] } {
@@ -1486,29 +1538,6 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   }
   if (!b.rod && (part.kind === 'lumber' || part.kind === 'bentlam' || part.kind === 'metal')) { if (!need.top && !need.bottom) need.top = true; if (!need.endL && !need.endR) need.endR = true; }
 
-  // Scale and rows: a long part with many features is split into 2 rows (3 if very long) so the scale stays readable.
-  const nFeat = a.feats.filter((f) => f.k !== 'note').reduce((s, f) => s + (f.k === 'hole' ? f.pts.length : f.k === 'region' ? f.boxes.length : 1), 0);
-  const rowsMax = nFeat > 8 ? (ext[0] > 90 ? 3 : 2) : 1;
-  const endsW = (need.endL ? 1 : 0) + (need.endR ? 1 : 0);
-  const fit = (maxRows: number): { s: number; rows: number } => {
-    for (const k of SCALES) {
-      const nW0 = Math.min(Math.max(ext[2] * k, 0.3), 2.4);
-      const r = Math.ceil((ext[0] * k) / (ROW_W_IN - endsW * (nW0 + 0.5)) - 1e-9);
-      if (r <= maxRows && ext[1] * k <= 3.6) return { s: k, rows: Math.max(1, r) };
-    }
-    return { s: SCALES[SCALES.length - 1], rows: 1 };
-  };
-  // One row when it is readable at 1:4 or better; otherwise rows at the largest scale.
-  const one = fit(1);
-  const { s, rows } = one.s >= 1 / 4 || rowsMax === 1 ? one : fit(rowsMax);
-  // The thickness in the edge and end views: enlarged when thin (to 0.3" on paper, at most 4x), shortened when it is the part's long side (2.4" at most).
-  const N0 = Math.max(ext[2], 1e-6);
-  const nS = N0 * s < 0.2 ? N_SCALES.find((k) => k <= Math.min(0.3 / N0, 4 * s)) ?? s : N0 * s > 4 ? N_SCALES.find((k) => k * N0 <= 3) ?? s : s;
-  const nNote = Math.abs(nS - s) > s * 0.01;
-  const nW = ext[2] * nS;
-  const winLen = ext[0] / rows, OV = rows > 1 ? Math.min(1, winLen * 0.05) : 0;
-  const wins = Array.from({ length: rows }, (_, k) => [Math.max(0, k * winLen - OV), Math.min(ext[0], (k + 1) * winLen + OV)] as [number, number]);
-
   // ── Geometry to draw, in board coordinates, per view ──
   type Op = { kind: 'poly'; pts: Vec2[]; stroke: string; w: number; fill: string; dash: string; clip?: boolean } | { kind: 'ell'; c: Vec2; rx: number; ry: number; stroke: string; dash: string; cross: boolean } | { kind: 'line'; a: Vec2; c: Vec2; stroke: string; w: number; dash: string };
   const ops: Record<'main' | 'top' | 'bottom' | 'endL' | 'endR', Op[]> = { main: [], top: [], bottom: [], endL: [], endR: [] };
@@ -1516,6 +1545,8 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   const uMarks: Mark[] = [{ u: 0 }, { u: ext[0] }];
   const vMarks: number[] = [0, ext[1]];
   const nMarks: Record<'top' | 'bottom', number[]> = { top: [], bottom: [] };
+  /** Heights of the features in each end view, for its own ordinates when the end views sit below the rows. */
+  const endV: Record<'endL' | 'endR', number[]> = { endL: [], endR: [] };
   const feats: DrawingFeature[] = [];
   const P = (pts: Vec2[], stroke: string, wd: number, fill = 'none', dash = ''): Extract<Op, { kind: 'poly' }> => ({ kind: 'poly', pts, stroke, w: wd, fill, dash });
 
@@ -1592,6 +1623,7 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
             ops[vName].push({ kind: 'ell', c, rx: r, ry: r, stroke: FEAT, dash: f.blind !== undefined && ((ax === 2 && !hiSide) || f.from !== undefined) ? DASH : '', cross: true });
             if (vName === 'top') nMarks.top.push(q[2]);
             if (vName === 'bottom') nMarks.bottom.push(q[2]);
+            if (vName === 'endL' || vName === 'endR') endV[vName].push(q[1]);
           }
           if (ax !== 2) {
             // the hole's run seen from the side (hidden), in the main view
@@ -1620,7 +1652,7 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
         const fillV = vis && f.kind !== 'notch' ? 'rgba(179,38,30,0.14)' : 'none';
         ops.main.push({ ...P([[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]], vis ? FEAT : HID, 0.01, fillV, vis ? '' : DASH), clip: true });
         for (const ev of ['top', 'bottom'] as const) if (need[ev] && (ev === 'top' ? hi[1] > ext[1] - 0.01 || (face?.ax === 1 && face.hi) : lo[1] < 0.01 || (face?.ax === 1 && !face.hi))) ops[ev].push(P([[lo[0], lo[2]], [hi[0], lo[2]], [hi[0], hi[2]], [lo[0], hi[2]]], FEAT, 0.01, 'rgba(179,38,30,0.14)'));
-        for (const ev of ['endL', 'endR'] as const) if (need[ev] && (ev === 'endR' ? hi[0] > ext[0] - 0.01 : lo[0] < 0.01)) ops[ev].push(P([[lo[2], lo[1]], [hi[2], lo[1]], [hi[2], hi[1]], [lo[2], hi[1]]], FEAT, 0.01, 'rgba(179,38,30,0.14)'));
+        for (const ev of ['endL', 'endR'] as const) if (need[ev] && (ev === 'endR' ? hi[0] > ext[0] - 0.01 : lo[0] < 0.01)) { ops[ev].push(P([[lo[2], lo[1]], [hi[2], lo[1]], [hi[2], hi[1]], [lo[2], hi[1]]], FEAT, 0.01, 'rgba(179,38,30,0.14)')); endV[ev].push(lo[1], hi[1]); }
         const edges = f.kind === 'notch' || f.kind === 'dado' || f.kind === 'slot' || f.kind === 'groove';
         if (hi[0] - lo[0] < ext[0] - 0.02) { if (edges) uMarks.push({ u: lo[0] }, { u: hi[0] }); else uMarks.push({ u: (lo[0] + hi[0]) / 2 }); }
         if (!face || face.ax !== 1 || f.kind === 'notch' || f.kind === 'slot') { if (edges) vMarks.push(lo[1], hi[1]); else vMarks.push((lo[1] + hi[1]) / 2); }
@@ -1643,36 +1675,157 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   }
   for (const f of a.feats) if (f.k === 'note') feats.push({ label: '-', text: f.text, kind: 'note', count: 1, ...(f.to ? { to: f.to } : {}), ...(f.joint ? { joint: f.joint } : {}) });
 
-  // ── Layout (paper inches, y down) ──
-  const M = 0.4, ORD_W = 0.95, ORD_H = 0.72, GAP = 0.5, LET = 0.32, ROWGAP = 0.35;
-  const mainH = ext[1] * s;
-  const xEndL = M;
-  const xMain = M + (need.endL ? nW + GAP : 0) + ORD_W;
-  const rowW = Math.max(...wins.map(([u0, u1]) => (u1 - u0) * s));
-  const xEndR = xMain + rowW + GAP;
-  const contentW = Math.max(xEndR + (need.endR ? nW + 0.5 : 0), xMain + rowW + 1.6) + M;
-  const W = Math.max(contentW, 8.2);
-  const chars = Math.floor((W - 2 * M - 0.3) / (0.52 * 0.105));
+  // ── Layout (paper inches, y down): every sheet fits the printed page (PAGE_W_IN) at 1:1, with its text at MIN_TEXT_IN or larger ──
+  const M = SHEET_M, GAP = 0.5, LET = 0.32, R_PAD = 0.15, SM = MIN_TEXT_IN;
+  const ROWGAP = need.top ? 0.15 : 0.35; // an edge view over the row brings its own space
+  const AVAIL = PAGE_W_IN - 2 * M;
+  const uniq = (vals: number[], tol = 1 / 32): number[] => [...vals].sort((x, z) => x - z).filter((x, i, arr) => i === 0 || x - arr[i - 1] > tol);
+  const uLabel = (u: number): string => (w.center !== undefined ? (Math.abs(u - w.center) < 1 / 64 ? 'CL' : frac(Math.abs(u - w.center))) : u < 1e-6 ? `0 ${w.side[0][0].split(' ')[0]}` : frac(u));
+  const vLabel = (v: number): string => (v < 1e-6 ? `0 ${w.side[1][a.vref].split(' ')[0]}` : frac(v));
+  const widest = (xs: string[]): number => Math.max(0, ...xs.map((t) => textWidthIn(t, SM)));
+  const uAll = uniq([...uMarks.map((m2) => m2.u), ...(w.center !== undefined ? [w.center] : [])].filter((u) => u >= -0.01 && u <= ext[0] + 0.01));
+  const vAll = uniq(vMarks.filter((v) => v >= -0.01 && v <= ext[1] + 0.01).map((v) => (a.vref ? ext[1] - v : v)), 1 / 32);
+  // Left of the main view: the height ordinates; in the edge views, the across ordinates and the thickness left of them.
+  const nLabW = widest([...nMarks.top, ...nMarks.bottom].filter((n) => n > 0.01 && n < ext[2] - 0.01).map((n) => frac(ext[2] - n)));
+  const thickOff = 0.12 + (nLabW > 0 ? nLabW + 0.1 : 0);
+  const ORD_W = Math.max(0.6, 0.21 + widest(vAll.map(vLabel)) + 0.06, need.top || need.bottom ? 0.08 + thickOff + textWidthIn(frac(ext[2]), SM) + 0.06 : 0);
+  // Below the main view: the length ordinates, read sideways.
+  const ORD_H = Math.max(0.6, 0.26 + widest(uAll.map(uLabel)) + 0.06);
+
+  // Scale, rows and where the end views go. A long part with many features is split into rows (3 at most, 4 if very long) so the scale stays readable; the end views sit beside
+  // the rows when they fit, else in a strip under them.
+  const nFeat = a.feats.filter((f) => f.k !== 'note').reduce((n, f) => n + (f.k === 'hole' ? f.pts.length : f.k === 'region' ? f.boxes.length : 1), 0);
+  const rowsMax = nFeat > 8 ? (ext[0] > 90 ? 4 : 3) : 1;
+  const N0 = Math.max(ext[2], 1e-6);
+  // The thickness in the edge and end views: enlarged when thin (to 0.3" on paper, at most 4x), shortened when it is the part's long side.
+  const nSOf = (k: number): number => (N0 * k < 0.2 ? N_SCALES.find((q) => q <= Math.min(0.3 / N0, 4 * k)) ?? k : N0 * k > 4 ? N_SCALES.find((q) => q * N0 <= 3) ?? k : k);
+  const winsOf = (n: number): Array<[number, number]> => {
+    const winLen = ext[0] / n, OV = n > 1 ? Math.min(1, winLen * 0.05) : 0;
+    return Array.from({ length: n }, (_, k) => [Math.max(0, k * winLen - OV), Math.min(ext[0], (k + 1) * winLen + OV)] as [number, number]);
+  };
+  const endBalW = (e: 'endL' | 'endR'): number => (balloons.some((q) => q.view === e) ? 0.3 : 0.05);
+  const endTitle = (e: 'endL' | 'endR'): string => w.side[0][e === 'endR' ? 1 : 0];
+  const hasEnds = need.endL || need.endR;
+  /** How far the holes drawn in the top / bottom view stand past its outer edge (a big hole at the far face), so the title or the balloons there clear them. */
+  const overOf = (ev: 'top' | 'bottom', nS: number): number => Math.max(0, ...ops[ev].map((o) => (o.kind === 'ell' && o.rx > 0 ? (o.ry - (ev === 'top' ? o.c[1] : o.c[1])) * nS : 0)));
+  /** The end views in a strip under the rows: each with its own height ordinates, side by side, onto a new line when the page is full. */
+  const endStrip = (mainH: number, nW: number): { items: Array<{ e: 'endL' | 'endR'; x: number; y: number; gutter: number; vals: number[] }>; h: number; right: number } => {
+    const items: Array<{ e: 'endL' | 'endR'; x: number; y: number; gutter: number; vals: number[] }> = [];
+    let x = M, y = 0, lineH = 0, right = M;
+    for (const e of ['endL', 'endR'] as const) {
+      if (!need[e]) continue;
+      const vals = uniq([0, ext[1], ...endV[e]].filter((v) => v >= -0.01 && v <= ext[1] + 0.01).map((v) => (a.vref ? ext[1] - v : v)));
+      const gutter = Math.max(0.3, 0.21 + widest(vals.map(vLabel)) + 0.06);
+      const nb = balloons.filter((q) => q.view === e).length;
+      const wd = gutter + Math.max(nW + endBalW(e), textWidthIn(endTitle(e), SM, true));
+      const ht = 0.3 + Math.max(mainH, 0.1 + nb * 0.22) + 0.4;
+      if (x > M && x + wd > PAGE_W_IN - M) { x = M; y += lineH; lineH = 0; }
+      items.push({ e, x, y, gutter, vals });
+      right = Math.max(right, x + wd); lineH = Math.max(lineH, ht); x += wd + GAP;
+    }
+    return { items, h: y + lineH, right };
+  };
+  interface Lay { s: number; rows: number; beside: boolean; nS: number; nW: number; xMain: number; rowW: number; rowH: number; viewsH: number }
+  const layOf = (k: number, beside: boolean, maxRows: number): Lay | null => {
+    if (ext[1] * k > 3.6) return null;
+    const nS = nSOf(k), nW = ext[2] * nS;
+    const xMain = M + (beside && need.endL ? nW + GAP : 0) + ORD_W;
+    const avail = PAGE_W_IN - M - xMain - (beside && need.endR ? GAP + Math.max(nW + endBalW('endR'), textWidthIn(endTitle('endR'), SM, true)) : R_PAD);
+    if (avail < 0.5) return null;
+    if (!beside && endStrip(ext[1] * k, nW).right > PAGE_W_IN - M) return null;
+    for (let r = 1; r <= maxRows; r++) {
+      const rowW = Math.max(...winsOf(r).map(([u0, u1]) => (u1 - u0) * k));
+      if (rowW > avail + 1e-9) continue;
+      const rowH = (need.top ? 0.42 + overOf('top', nS) + nW + 0.2 : 0) + LET + ext[1] * k + ORD_H + (need.bottom ? 0.3 + nW + overOf('bottom', nS) + 0.15 : 0);
+      return { s: k, rows: r, beside, nS, nW, xMain, rowW, rowH, viewsH: r * (rowH + ROWGAP) + (!beside && hasEnds ? endStrip(ext[1] * k, nW).h : 0) };
+    }
+    return null;
+  };
+
   // ── Title block ──
   const dims = [...ext].sort((x, z) => x - z);
   const tallBlock = !!part.stock && isTallBlock(part, part.stock);
-  const hl: Array<{ t: string; size: number; bold?: boolean; fill?: string }> = [{ t: title ?? part.name, size: 0.2, bold: true }];
-  const hw = (t: string, size: number, o: { bold?: boolean; fill?: string } = {}) => { for (const l of wrap(t, Math.floor(chars * 0.105 / size))) hl.push({ t: l, size, ...o }); };
-  hw(`qty ${qty}   scale ${scaleText(s)}${rows > 1 ? ` (in ${rows} rows)` : ''}   final ${b.rod ? `${frac(b.rod.dia)} dia × ${frac(part.geometry.type === 'cylinder' ? part.geometry.length : ext[0])}` : finalText(part, cl, dims)}${b.rod || tallBlock ? '' : ` (T × W × L${b.developed ? ', L along the curve' : ''})`}   ${part.material}`, 0.12);
-  hw(`Stock: ${boardText(part, cl)}`, 0.105);
-  hw(`Grain: ${grainWords}.`, 0.105, { fill: DIM });
-  hw(b.rod ? `Datums: lengths from the ${w.side[0][0]}. Fractions to 1/32", drills to 1/64".` : `Datums: lengths from the ${w.center !== undefined ? 'CENTER LINE (the ends are scribed)' : w.side[0][0]}, heights from the ${w.side[1][a.vref]}, across from the ${w.side[2][1]}. Fractions to 1/32", drills to 1/64".`, 0.105, { fill: DIM });
-  if (makeNote) hw(makeNote, 0.12, { bold: true, fill: FEAT });
+  const titleOf = (sc: number, nRows: number): Array<{ t: string; size: number; bold?: boolean; fill?: string }> => {
+    const hl: Array<{ t: string; size: number; bold?: boolean; fill?: string }> = [];
+    const hw = (t: string, size: number, o: { bold?: boolean; fill?: string } = {}): void => { for (const l of wrapToWidth(t, size, AVAIL, o.bold)) hl.push({ t: l, size, ...o }); };
+    hw(title ?? part.name, 0.2, { bold: true });
+    hw(`qty ${qty}   scale ${scaleText(sc)}${nRows > 1 ? ` (in ${nRows} rows)` : ''}   final ${b.rod ? `${frac(b.rod.dia)} dia × ${frac(part.geometry.type === 'cylinder' ? part.geometry.length : ext[0])}` : finalText(part, cl, dims)}${b.rod || tallBlock ? '' : ` (T × W × L${b.developed ? ', L along the curve' : ''})`}   ${part.material}`, 0.12);
+    hw(`Stock: ${boardText(part, cl)}`, 0.105);
+    hw(`Grain: ${grainWords}.`, 0.105, { fill: DIM });
+    hw(b.rod ? `Datums: lengths from the ${w.side[0][0]}. Fractions to 1/32", drills to 1/64".` : `Datums: lengths from the ${w.center !== undefined ? 'CENTER LINE (the ends are scribed)' : w.side[0][0]}, heights from the ${w.side[1][a.vref]}, across from the ${w.side[2][1]}. Fractions to 1/32", drills to 1/64".`, 0.105, { fill: DIM });
+    if (makeNote) hw(makeNote, 0.12, { bold: true, fill: FEAT });
+    return hl;
+  };
+  const titleHOf = (hl: Array<{ size: number }>): number => hl.reduce((h, l) => h + l.size * 1.45, 0.05) + 0.1;
+
+  // ── Feature table and notes ──
+  const TW = FEATURE_WRAP_IN;
+  const disc = b.rod && part.kind === 'lumber' && part.geometry.type === 'cylinder' && part.geometry.length < 2 * part.geometry.radius;
+  const tableOf = (ty0: number, notes: string[]): { svg: string[]; ty: number } => {
+    let ty = ty0;
+    const rowsSvg: string[] = [txt(M, ty, 'FEATURES (letters on the drawing; positions from the datums above)', 0.12, { bold: true })];
+    ty += 0.2;
+    if (disc && part.geometry.type === 'cylinder') {
+      for (const l of wrapToWidth(`Make it: plane a strip to the thickness above, then cut each disc with a ${frac(discStrip(1, 2 * part.geometry.radius).sawIn)} hole saw (its plug comes out about ${frac(2 * part.geometry.radius)} across; check it on a scrap), from both faces of the strip. The saw's 1/4" pilot drill makes the center hole.`, SM, TW)) { rowsSvg.push(txt(M + 0.25, ty, l, SM)); ty += 0.15; }
+      ty += 0.05;
+    }
+    if (!feats.length) { for (const l of wrapToWidth(b.rod ? 'None: cut to length, square the ends and break the edges (a light chamfer).' : 'None: a plain board, cut to the final size above.', SM, TW)) { rowsSvg.push(txt(M + 0.25, ty, l, SM)); ty += 0.15; } ty += 0.05; }
+    for (const f of feats) {
+      rowsSvg.push(txt(M, ty, f.label, 0.11, { bold: true, fill: FEAT }));
+      for (const l of wrapToWidth(f.text, SM, TW)) { rowsSvg.push(txt(M + 0.25, ty, l, SM)); ty += 0.15; }
+      ty += 0.04;
+    }
+    if (notes.length) {
+      ty += 0.08; rowsSvg.push(txt(M, ty, 'NOTES', 0.12, { bold: true })); ty += 0.19;
+      for (const n of notes) for (const l of wrapToWidth(n, SM, AVAIL)) { rowsSvg.push(txt(M, ty, l, SM)); ty += 0.15; }
+    }
+    return { svg: rowsSvg, ty };
+  };
+  const notes = [...a.notes, ...extraNotes];
+
+  // Choose the layout: one row when it is readable at 1:4 or better (or the part has few features); otherwise rows at the largest scale that keeps the sheet on one page, if any does.
+  const layH = layersBlock(part, cl, M, 0, w.side[2][1])?.h ?? 0;
+  const textH = M + titleHOf(titleOf(1 / 12, 4)) + 0.15 + 0.15 + (layH ? layH + 0.1 : 0) + tableOf(0, [...notes, 'x']).ty + M;
+  const byScale: Lay[] = [];
+  for (const k of SCALES) {
+    const opts = [layOf(k, true, rowsMax), hasEnds ? layOf(k, false, rowsMax) : null].filter((x): x is Lay => !!x);
+    if (opts.length) byScale.push(opts.sort((x, z) => x.rows - z.rows || x.viewsH - z.viewsH)[0]);
+  }
+  const one = byScale.find((l) => l.rows === 1);
+  // The readable start, then up to two scales coarser (never coarser than 1:4 for a part with many features, unless that crowds nothing) to keep the sheet on one page.
+  const startIdx = one && (one.s >= 1 / 4 || rowsMax === 1) ? byScale.indexOf(one) : byScale.findIndex((l) => !one || l.s > one.s);
+  // Crowding: the gaps between neighboring ordinates that are closer on paper than their labels; a coarser scale than 1:4 is taken only when it crowds no more than one more.
+  const crowd = (k: number): number => [uAll, vAll].reduce((n, xs) => n + xs.slice(1).filter((x, i) => (x - xs[i]) * k < 0.13).length, 0);
+  const floorS = startIdx < 0 ? 0 : Math.min(byScale[startIdx].s, 1 / 4);
+  const tries = startIdx < 0 ? [] : byScale.slice(startIdx, startIdx + 3).filter((l, i) => i === 0 || rowsMax === 1 || l.s >= floorS || crowd(l.s) <= crowd(floorS) + 1);
+  // When none does, a coarser scale is taken only if it makes the sheet clearly (15%) shorter.
+  let lay: Lay | null | undefined = tries.find((l) => textH + l.viewsH <= PAGE_H_IN) ?? tries.reduce<Lay | undefined>((best, l) => (!best || textH + l.viewsH < 0.85 * (textH + best.viewsH) ? l : best), undefined) ?? one;
+  lay ??= layOf(SCALES[SCALES.length - 1], !hasEnds, 99) ?? layOf(SCALES[SCALES.length - 1], true, 99);
+  if (!lay) throw new Error(`part drawing ${part.id}: no layout fits the page`);
+  const { s, rows, nS, nW, xMain, rowW, rowH, beside } = lay;
+  const nNote = Math.abs(nS - s) > s * 0.01;
+  const wins = winsOf(rows);
+  const mainH = ext[1] * s;
+  const xEndL = M;
+  const xEndR = xMain + rowW + GAP;
+
+  const hl = titleOf(s, rows);
   const head: string[] = [];
   let hy = M + 0.05;
   for (const l of hl) { hy += l.size * 1.45; head.push(txt(M, hy, l.t, l.size, { bold: l.bold, fill: l.fill })); }
   const titleH = hy - M + 0.1;
-  const topBlock = need.top ? 0.42 + nW + 0.2 : 0;
-  const botBlock = need.bottom ? 0.3 + nW + 0.15 : 0;
-  const rowH = topBlock + LET + mainH + ORD_H + botBlock;
+  const topOver = need.top ? overOf('top', nS) : 0, botOver = need.bottom ? overOf('bottom', nS) : 0;
+  const topBlock = need.top ? 0.42 + topOver + nW + 0.2 : 0;
   const yRows0 = M + titleH + 0.15;
   const out: string[] = [];
-  const uniq = (vals: number[], tol = 1 / 32): number[] => [...vals].sort((x, z) => x - z).filter((x, i, arr) => i === 0 || x - arr[i - 1] > tol);
+  /** A label at x, moved left (to the margin at most) so it ends before `right`; the first of the variants that fits. */
+  const fitTxt = (x: number, y: number, variants: string[], size: number, o: { bold?: boolean; fill?: string } = {}, right = PAGE_W_IN - M): { svg: string; used: number } => {
+    for (let i = 0; i < variants.length; i++) {
+      const wd = textWidthIn(variants[i], size, o.bold);
+      if (wd <= right - M || i === variants.length - 1) return { svg: txt(Math.max(M, Math.min(x, right - wd)), y, variants[i], size, o), used: i };
+    }
+    return { svg: '', used: 0 };
+  };
 
   const drawOps = (list: Op[], map: (q: Vec2) => Vec2, sx: number, sy: number): string => list.map((o) => {
     if (o.kind === 'poly') return polyEl(o.pts.map(map), o.stroke, o.w, o.fill, o.dash);
@@ -1682,11 +1835,22 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
     const rx = Math.max(0.02, o.rx * sx), ry = Math.max(0.02, o.ry * sy);
     return ellipse(c, rx, ry, o.stroke, 0.012, o.dash) + (o.cross ? line([c[0] - rx - 0.04, c[1]], [c[0] + rx + 0.04, c[1]], o.stroke, 0.006) + line([c[0], c[1] - ry - 0.04], [c[0], c[1] + ry + 0.04], o.stroke, 0.006) : '');
   }).join('');
+  const endMap = (e: 'endL' | 'endR', x0: number, yM: number) => (q: Vec2): Vec2 => (e === 'endR' ? [x0 + (ext[2] - q[0]) * nS, yM + mainH - q[1] * s] : [x0 + q[0] * nS, yM + mainH - q[1] * s]);
+  /** One end view at (x0, yM): its outline and features, the end's name over it, the thickness under it and its balloons to its right. */
+  const endViewAt = (e: 'endL' | 'endR', x0: number, yM: number): void => {
+    const mp = endMap(e, x0, yM);
+    out.push(drawOps(ops[e], mp, nS, s));
+    out.push(txt(x0, yM - 0.12, endTitle(e), SM, { bold: true }));
+    out.push(line([x0, yM + mainH + 0.1], [x0 + nW, yM + mainH + 0.1], DIM, 0.008), txt(x0 + nW / 2, yM + mainH + 0.25, frac(ext[2]), SM, { anchor: 'middle', fill: DIM }));
+    balloons.filter((q) => q.view === e).forEach((q, i) => { const pt = mp(q.at); const bp: Vec2 = [x0 + nW + 0.18, yM + 0.1 + i * 0.22]; out.push(line(bp, pt, FEAT, 0.006), balloon(bp, q.letter)); });
+  };
+  let developedNote = false;
 
   wins.forEach(([ua, ub], ri) => {
     const y0 = yRows0 + ri * (rowH + ROWGAP);
-    const yTop = y0 + 0.42, yLet = y0 + topBlock, yMain = yLet + LET, yOrd = yMain + mainH + 0.04, yBot = yOrd + ORD_H + 0.3;
+    const yTop = y0 + 0.42 + topOver, yLet = y0 + topBlock, yMain = yLet + LET, yOrd = yMain + mainH + 0.04, yBot = yOrd + ORD_H + 0.3;
     const X = (u: number): number => xMain + (u - ua) * s;
+    const rowEnd = X(Math.min(ub, ext[0])) + R_PAD;
     const mainMap = (q: Vec2): Vec2 => [X(q[0]), yMain + mainH - q[1] * s];
     const topMap = (q: Vec2): Vec2 => [X(q[0]), yTop + q[1] * nS]; // seen from the top: the near (n = N) face is next to the main view, below
     const botMap = (q: Vec2): Vec2 => [X(q[0]), yBot + (ext[2] - q[1]) * nS]; // seen from the bottom: the near face on top
@@ -1708,102 +1872,106 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
       const d: Vec2 = grainAx === 0 ? [1, 0] : [0, -1];
       const a0: Vec2 = [c[0] - (d[0] * L) / 2, c[1] - (d[1] * L) / 2], a1: Vec2 = [c[0] + (d[0] * L) / 2, c[1] + (d[1] * L) / 2];
       g.push(line(a0, a1, GRAIN, 0.012), line(a1, [a1[0] - d[0] * 0.08 - d[1] * 0.04, a1[1] - d[1] * 0.08 + d[0] * 0.04], GRAIN, 0.012), line(a1, [a1[0] - d[0] * 0.08 + d[1] * 0.04, a1[1] - d[1] * 0.08 - d[0] * 0.04], GRAIN, 0.012));
-      g.push(txt(a0[0], a0[1] - 0.04, 'GRAIN', 0.08, { fill: GRAIN }));
+      g.push(txt(a0[0], a0[1] - 0.04, 'GRAIN', SM, { fill: GRAIN }));
     }
     out.push(`<g clip-path="url(#${clip})">${g.join('')}</g>`);
     // break marks where the row is cut
-    if (ua > 0) out.push(line([X(ua), yMain - 0.08], [X(ua), yMain + mainH + 0.08], HID, 0.012, '0.08 0.04'), txt(X(ua) + 0.04, yMain - 0.04, `◂ continued from row ${ri}`, 0.08, { fill: HID }));
-    if (ub < ext[0]) out.push(line([X(ub), yMain - 0.08], [X(ub), yMain + mainH + 0.08], HID, 0.012, '0.08 0.04'), txt(X(ub) - 0.04, yMain - 0.04, `continued in row ${ri + 2} ▸`, 0.08, { fill: HID, anchor: 'end' }));
+    // (on the view-title line, clear of the balloons)
+    const cont = `continued in row ${ri + 2} ▸`;
+    const titleRight = ub < ext[0] ? X(ub) - textWidthIn(cont, SM) - 0.2 : PAGE_W_IN - M;
+    if (ua > 0) out.push(line([X(ua), yMain - 0.08], [X(ua), yMain + mainH + 0.08], HID, 0.012, '0.08 0.04'));
+    if (ub < ext[0]) out.push(line([X(ub), yMain - 0.08], [X(ub), yMain + mainH + 0.08], HID, 0.012, '0.08 0.04'), txt(X(ub), yLet + 0.02, cont, SM, { fill: HID, anchor: 'end' }));
     // view titles
-    out.push(txt(xMain, yLet + 0.02, ri === 0 ? `MAIN VIEW, seen from the ${w.side[2][1]}${b.developed ? ' (developed: lengths measured along the bent member)' : ''}` : `MAIN VIEW, row ${ri + 1}`, 0.1, { bold: true }));
+    if (ri === 0) {
+      const t = fitTxt(xMain, yLet + 0.02, [`MAIN VIEW, seen from the ${w.side[2][1]}${b.developed ? ' (developed: lengths measured along the bent member)' : ''}`, `MAIN VIEW, seen from the ${w.side[2][1]}`], SM, { bold: true }, titleRight);
+      out.push(t.svg); developedNote = b.developed && t.used > 0;
+    } else out.push(fitTxt(xMain, yLet + 0.02, [`MAIN VIEW, row ${ri + 1} (◂ continued from row ${ri})`, `MAIN VIEW, row ${ri + 1}`], SM, { bold: true }, titleRight).svg);
     const nWord = nNote ? (nS > s ? ' (thickness enlarged)' : ` (across at ${scaleText(nS)})`) : '';
-    if (need.top) out.push(txt(xMain, yTop - 0.24, `seen from the ${w.side[1][1]}${nWord}; across: from the ${w.side[2][1]}`, 0.1, { bold: true }));
-    if (need.bottom) out.push(txt(xMain, yBot - 0.07, `seen from the ${w.side[1][0]}${nWord}; across: from the ${w.side[2][1]}`, 0.1, { bold: true }));
-    // balloons: main-view ones in a row above the view with leaders, edge-view ones beside their point
+    if (need.top) out.push(fitTxt(xMain, yTop - topOver - 0.24, [`seen from the ${w.side[1][1]}${nWord}; across: from the ${w.side[2][1]}`, `seen from the ${w.side[1][1]}${nWord}`], SM, { bold: true }).svg);
+    if (need.bottom) out.push(fitTxt(xMain, yBot - 0.07, [`seen from the ${w.side[1][0]}${nWord}; across: from the ${w.side[2][1]}`, `seen from the ${w.side[1][0]}${nWord}`], SM, { bold: true }).svg);
+    // balloons: main-view ones in a row above the view with leaders, edge-view ones beside their point; all kept inside the row's width
     const mb = balloons.filter((q) => q.view === 'main' && inWin(q.at[0])).sort((x, z) => x.at[0] - z.at[0]);
-    const bx = spread(mb.map((q) => Math.max(X(ua) + 0.1, X(q.at[0]))), 0.22);
+    const bx = spread(mb.map((q) => Math.max(X(ua) + 0.1, X(q.at[0]))), 0.22, rowEnd - 0.09);
     mb.forEach((q, i) => { const by = yLet + LET * 0.62; out.push(line([bx[i], by + 0.085], mainMap(q.at), FEAT, 0.006), balloon([bx[i], by], q.letter)); });
     for (const ev of ['top', 'bottom'] as const) {
       const eb = balloons.filter((q) => q.view === ev && inWin(q.at[0])).sort((x, z) => x.at[0] - z.at[0]);
-      const ex = spread(eb.map((q) => X(q.at[0]) + 0.16), 0.2);
-      eb.forEach((q, i) => { const pt = (ev === 'top' ? topMap : botMap)(q.at); const by = ev === 'top' ? yTop - 0.1 : yBot + nW + 0.14; out.push(line([ex[i], by + (ev === 'top' ? 0.085 : -0.085)], pt, FEAT, 0.006), balloon([ex[i], by], q.letter)); });
+      const ex = spread(eb.map((q) => X(q.at[0]) + 0.16), 0.2, rowEnd - 0.09);
+      eb.forEach((q, i) => { const pt = (ev === 'top' ? topMap : botMap)(q.at); const by = ev === 'top' ? yTop - topOver - 0.1 : yBot + nW + botOver + 0.14; out.push(line([ex[i], by + (ev === 'top' ? 0.085 : -0.085)], pt, FEAT, 0.006), balloon([ex[i], by], q.letter)); });
     }
     // u ordinates (vertical labels, from the u datum)
     // A scribed member's ordinates run both ways from its center line (CL), like its feature table.
-    const uVals = uniq([...uMarks.map((m2) => m2.u), ...(w.center !== undefined ? [w.center] : [])].filter((u) => u >= -0.01 && u <= ext[0] + 0.01 && inWin(u)));
-    const uPos = spread(uVals.map(X), 0.125);
+    const uVals = uAll.filter((u) => inWin(u));
+    const uPos = spread(uVals.map(X), 0.13, rowEnd - 0.08);
     out.push(line([X(Math.max(ua, 0)), yOrd + 0.08], [X(Math.min(ub, ext[0])), yOrd + 0.08], DIM, 0.008));
     uVals.forEach((u, i) => {
       const x = X(u);
       out.push(line([x, yMain + mainH + 0.015], [x, yOrd + 0.08], DIM, 0.005), line([x, yOrd + 0.08], [uPos[i], yOrd + 0.18], DIM, 0.005));
-      const uLabel = w.center !== undefined ? (Math.abs(u - w.center) < 1 / 64 ? 'CL' : frac(Math.abs(u - w.center))) : u < 1e-6 ? `0 ${w.side[0][0].split(' ')[0]}` : frac(u);
-      out.push(txt(uPos[i] + 0.034, yOrd + 0.22, uLabel, 0.095, { rot: 90, fill: DIM }));
+      out.push(txt(uPos[i] + 0.037, yOrd + 0.22, uLabel(u), SM, { rot: 90, fill: DIM }));
     });
     // v ordinates (from the v datum), to the left of the main view
-    const vVals = uniq(vMarks.filter((v) => v >= -0.01 && v <= ext[1] + 0.01).map((v) => (a.vref ? ext[1] - v : v)), 1 / 32);
     const vY = (v: number): number => (a.vref ? yMain + v * s : yMain + mainH - v * s);
-    const order = [...vVals].sort((x, z) => vY(x) - vY(z));
-    const vPos = spread(order.map(vY), 0.12);
+    const order = [...vAll].sort((x, z) => vY(x) - vY(z));
+    const vPos = spread(order.map(vY), 0.13);
     const xo = xMain - 0.08;
     out.push(line([xo, yMain], [xo, yMain + mainH], DIM, 0.008));
     order.forEach((v, i) => {
       out.push(line([xMain - 0.015, vY(v)], [xo, vY(v)], DIM, 0.005), line([xo, vY(v)], [xo - 0.1, vPos[i]], DIM, 0.005));
-      out.push(txt(xo - 0.13, vPos[i] + 0.034, v < 1e-6 ? `0 ${w.side[1][a.vref].split(' ')[0]}` : frac(v), 0.095, { anchor: 'end', fill: DIM }));
+      out.push(txt(xo - 0.13, vPos[i] + 0.037, vLabel(v), SM, { anchor: 'end', fill: DIM }));
     });
     // n ordinates in the top / bottom views (from the near face), and the thickness
     for (const ev of ['top', 'bottom'] as const) {
       if (!need[ev]) continue;
       const yv = ev === 'top' ? yTop : yBot;
       const ny = (n: number): number => (ev === 'top' ? yv + n * nS : yv + (ext[2] - n) * nS);
-      out.push(line([xo, yv], [xo, yv + nW], DIM, 0.008), txt(xo - 0.5, yv + nW / 2 + 0.034, frac(ext[2]), 0.095, { anchor: 'end', fill: DIM }));
+      out.push(line([xo, yv], [xo, yv + nW], DIM, 0.008), txt(xo - thickOff, yv + nW / 2 + 0.037, frac(ext[2]), SM, { anchor: 'end', fill: DIM }));
       const vals = uniq(nMarks[ev]).filter((n) => n > 0.01 && n < ext[2] - 0.01);
       const ord = [...vals].sort((x, z) => ny(x) - ny(z));
-      const pos = spread(ord.map(ny), 0.11);
-      ord.forEach((n, i) => out.push(line([xMain - 0.015, ny(n)], [xo, ny(n)], DIM, 0.005), line([xo, ny(n)], [xo - 0.08, pos[i]], DIM, 0.005), txt(xo - 0.1, pos[i] + 0.03, frac(ext[2] - n), 0.085, { anchor: 'end', fill: DIM })));
+      const pos = spread(ord.map(ny), 0.13);
+      ord.forEach((n, i) => out.push(line([xMain - 0.015, ny(n)], [xo, ny(n)], DIM, 0.005), line([xo, ny(n)], [xo - 0.08, pos[i]], DIM, 0.005), txt(xo - 0.1, pos[i] + 0.037, frac(ext[2] - n), SM, { anchor: 'end', fill: DIM })));
     }
     // end views beside the first (left) and the last (right) row
-    const endMap = (e: 'endL' | 'endR', yM: number) => (q: Vec2): Vec2 => (e === 'endR' ? [xEndR + (ext[2] - q[0]) * nS, yM + mainH - q[1] * s] : [xEndL + q[0] * nS, yM + mainH - q[1] * s]);
-    for (const e of ['endL', 'endR'] as const) {
+    if (beside) for (const e of ['endL', 'endR'] as const) {
       if (!need[e] || (e === 'endL' && ri !== 0) || (e === 'endR' && ri !== rows - 1)) continue;
-      const mp = endMap(e, yMain);
-      const x0 = e === 'endR' ? xEndR : xEndL;
-      out.push(drawOps(ops[e], mp, nS, s));
-      out.push(txt(x0, yMain - 0.12, `${w.side[0][e === 'endR' ? 1 : 0]}`, 0.095, { bold: true }));
-      out.push(line([x0, yMain + mainH + 0.1], [x0 + nW, yMain + mainH + 0.1], DIM, 0.008), txt(x0 + nW / 2, yMain + mainH + 0.24, frac(ext[2]), 0.095, { anchor: 'middle', fill: DIM }));
-      const eb = balloons.filter((q) => q.view === e);
-      eb.forEach((q, i) => { const pt = mp(q.at); const bp: Vec2 = [x0 + nW + 0.18, yMain + 0.1 + i * 0.22]; out.push(line(bp, pt, FEAT, 0.006), balloon(bp, q.letter)); });
+      endViewAt(e, e === 'endR' ? xEndR : xEndL, yMain);
     }
   });
+
+  // ── End views in a strip under the rows, each with its own height ordinates ──
+  let yAfter = yRows0 + rows * (rowH + ROWGAP);
+  let stripRight = 0;
+  if (!beside && hasEnds) {
+    const st = endStrip(mainH, nW);
+    for (const it of st.items) {
+      const x0 = it.x + it.gutter, yM = yAfter + it.y + 0.3;
+      endViewAt(it.e, x0, yM);
+      const vY = (v: number): number => (a.vref ? yM + v * s : yM + mainH - v * s);
+      const order = [...it.vals].sort((x, z) => vY(x) - vY(z));
+      const vPos = spread(order.map(vY), 0.13);
+      const xo = x0 - 0.08;
+      out.push(line([xo, yM], [xo, yM + mainH], DIM, 0.008));
+      order.forEach((v, i) => out.push(line([x0 - 0.015, vY(v)], [xo, vY(v)], DIM, 0.005), line([xo, vY(v)], [xo - 0.1, vPos[i]], DIM, 0.005), txt(xo - 0.13, vPos[i] + 0.037, vLabel(v), SM, { anchor: 'end', fill: DIM })));
+    }
+    yAfter += st.h;
+    stripRight = st.right;
+  }
 
   void p;
 
   // ── Layers (a cross-laminated part): the stack, each layer's grain, its boards and the glue joint ──
-  let ty = yRows0 + rows * (rowH + ROWGAP) + 0.15;
-  const lay = layersBlock(part, cl, M, ty, w.side[2][1]);
-  if (lay) { out.push(lay.svg); ty += lay.h + 0.1; }
+  let ty = yAfter + 0.15;
+  const lay2 = layersBlock(part, cl, M, ty, w.side[2][1]);
+  if (lay2) { out.push(lay2.svg); ty += lay2.h + 0.1; }
 
-  // ── Feature table ──
-  const rowsSvg: string[] = [txt(M, ty, 'FEATURES (letters on the drawing; positions from the datums above)', 0.12, { bold: true })];
-  ty += 0.2;
-  const disc = b.rod && part.kind === 'lumber' && part.geometry.type === 'cylinder' && part.geometry.length < 2 * part.geometry.radius;
-  if (disc && part.geometry.type === 'cylinder') {
-    for (const l of wrap(`Make it: plane a strip to the thickness above, then cut each disc with a ${frac(discStrip(1, 2 * part.geometry.radius).sawIn)} hole saw (its plug comes out about ${frac(2 * part.geometry.radius)} across; check it on a scrap), from both faces of the strip. The saw's 1/4" pilot drill makes the center hole.`, chars)) { rowsSvg.push(txt(M + 0.25, ty, l, 0.105)); ty += 0.15; }
-    ty += 0.05;
-  }
-  if (!feats.length) { rowsSvg.push(txt(M + 0.25, ty, b.rod ? 'None: cut to length, square the ends and break the edges (a light chamfer).' : 'None: a plain board, cut to the final size above.', 0.105)); ty += 0.2; }
-  for (const f of feats) {
-    rowsSvg.push(txt(M, ty, f.label, 0.11, { bold: true, fill: FEAT }));
-    for (const l of wrap(f.text, chars)) { rowsSvg.push(txt(M + 0.25, ty, l, 0.105)); ty += 0.15; }
-    ty += 0.04;
-  }
-  const notes = [...a.notes, ...extraNotes];
+  // ── Feature table and notes ──
+  if (developedNote) notes.push('The main view is developed: lengths are measured along the bent member.');
   if (nNote) notes.push(nS > s ? `The thickness in the edge and end views is drawn at ${scaleText(nS)} (enlarged) so the features in it can be seen.` : `The ${frac(ext[2])} across the edge and end views is drawn at ${scaleText(nS)} (shortened) so the sheet stays small.`);
-  if (notes.length) {
-    ty += 0.08; rowsSvg.push(txt(M, ty, 'NOTES', 0.12, { bold: true })); ty += 0.19;
-    for (const n of notes) for (const l of wrap(n, chars + 4)) { rowsSvg.push(txt(M, ty, l, 0.1)); ty += 0.145; }
-  }
-  const H = ty + M;
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(W)}in" height="${fmt(H)}in" viewBox="0 0 ${fmt(W)} ${fmt(H)}">\n<title>${esc(`${plainName(part.name)} shop drawing`)}</title>\n<rect x="0" y="0" width="${fmt(W)}" height="${fmt(H)}" fill="#ffffff"/>\n<g id="title">${head.join('')}</g>\n<g id="views">${out.join('')}</g>\n<g id="features">${rowsSvg.join('')}</g>\n</svg>\n`;
+  const tbl = tableOf(ty, notes);
+  const H = tbl.ty + M;
+  // The sheet is as wide as its content (the views, the text), never wider than the page.
+  const body = `<g id="title">${head.join('')}</g>\n<g id="views">${out.join('')}</g>\n<g id="features">${tbl.svg.join('')}</g>`;
+  const viewsRight = Math.max(beside && need.endR ? xEndR + Math.max(nW + endBalW('endR'), textWidthIn(endTitle('endR'), SM, true)) : xMain + rowW + R_PAD, stripRight, lay2 ? M + lay2.w : 0);
+  const W = Math.min(PAGE_W_IN, Math.max(viewsRight, textExtents(body).maxX) + M);
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(W)}in" height="${fmt(H)}in" viewBox="0 0 ${fmt(W)} ${fmt(H)}">\n<title>${esc(`${plainName(part.name)} shop drawing`)}</title>\n<rect x="0" y="0" width="${fmt(W)}" height="${fmt(H)}" fill="#ffffff"/>\n${body}\n</svg>\n`;
   return { svg, W, H, scale: scaleText(s), features: feats };
 }
 

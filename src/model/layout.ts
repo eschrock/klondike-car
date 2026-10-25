@@ -74,7 +74,7 @@ export interface Layout {
   hwC: number;
   /** The FREE web between the chine band and the gunwale band: its bottom z (the chine top); its top is the gunwale line minus the gunwale band. The web itself runs the full height of the side, from the chine bottom to `webCap` under the gunwale top (D-62). */
   web: { z0: number };
-  /** The web stops this far under the top of the gunwale bands; the top edge is filled with thickened epoxy so no ply edge shows (D-62). */
+  /** The web stops this far under the top of the gunwale bands; an oak cap strip bedded in thickened epoxy fills the slot over it, so no ply edge shows (D-62; 2026-10-24). */
   webCap: number;
   /** Rear axle beam, and the pivoting front axle beam (center at the kingpin, x = wheelbase). */
   beamR: Beam;

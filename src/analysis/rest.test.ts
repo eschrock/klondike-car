@@ -76,7 +76,7 @@ describe('the row', () => {
     expect(PARAM_DEFS.standDeflectionRatio.note).toMatch(/tad looser/);
   });
   it('the 3c-4a finding is reproduced with the old values (10 in joist spacing, span/300): 223 lb, the deck ply deflection is the one failing detail', () => {
-    const o = mk({ crossmemberSpacingIn: 10, standDeflectionRatio: 300 });
+    const o = mk({ crossmemberSpacingIn: 10, standDeflectionRatio: 300, deckPlyIn: 0.472 }); // 2026-10-24: and the 12 mm deck of 3c-4a (the defaults are the 13 mm sheet as bought)
     expect(restMaxLb(o.ctx)).toBeGreaterThan(215);
     expect(restMaxLb(o.ctx)).toBeLessThan(230);
     const r = restLoadCheck(o.ctx);
