@@ -157,7 +157,7 @@ Everything is a pure function of the parameters.
 
 | Section | What it gives you |
 |---|---|
-| Verify | the checks to make on real parts before ordering (wheel hub, sheet thickness, axle steel, and so on); with removable knees, a refit check (flat seat, a slip of paper at the joint, the backing plate in its recess, no washer pressed into the oak, bolts after the first outing, the chock cord eye, wobble) |
+| Verify | eight fit checks on real parts: one wheel's bore and hub length, the axle steel grade and the strip bend test before ordering; the real lights and the truck bed before cutting; the first brake knee, the bow-post boot clearance and the grab-board reach at their steps (D-100) |
 | Cut list | the actual cuts (an edge-glued panel is its boards, then the glue-up), rough sizes rounded up to 1/8", laminate allowances, board yields, a bandsaw resaw check; each plywood row says whether the laser cuts it (plain rectangles are sawn) |
 | Nesting | plywood layouts on 4' × 8' sheets; the oak shopping list as linear feet by whole-inch width per thickness, with the longest piece (any board at least that wide and long enough rips down; yards sell random lengths), then the whole-board plan the BOM prices and the board feet |
 | BOM | priced lines with vendor links, quoted vs estimated, Standard vs Extreme; the price research is in docs/price-research/price-research-2026-10.md and docs/price-research/price-research-standard-2026-10.md |

@@ -233,7 +233,7 @@ function startSection(d: BuildData): string {
   out.push('<h3>1. Before the first cut, now that the lumber is home</h3>');
   out.push(`<ol class="instr">
 <li>Let the oak and plywood sit in the shop a week, stickered, then check the oak with a moisture meter: 6% to 9% is ready.</li>
-<li>Do the "Before cutting" checks in section ${secNo('verify')}: above all, caliper both plywood sheets and count the plies of the 6 mm sheet, and bend a test strip.</li>
+<li>Do the "Before cutting" checks in section ${secNo('verify')}.</li>
 <li>If a measured number differs from the design (the plywood thickness most of all: the dado widths and the Shaper and laser files follow it), change it in the app and download a fresh build package before you cut anything. The revision at the foot of every page tells two printouts apart.</li>
 <li>The board plan in section ${secNo('boards')} is an example layout for boards of the sizes it lists. Your boards will differ: lay the cuts in section ${secNo('cutlist')} out on the boards you have, longest and widest first.</li>
 <li>Hardware not yet bought: do its "Before ordering" checks in section ${secNo('verify')} before you order it.</li>

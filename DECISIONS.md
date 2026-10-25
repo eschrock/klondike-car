@@ -2,7 +2,7 @@
 
 The decisions that hold today, each with its reason. Code comments, tests and `ref` fields in `src/params.ts` cite these IDs. The sled itself is described in [DESIGN.md](DESIGN.md). Decisions that no longer hold are mapped to what replaced them in [Retired IDs](#retired-ids), because old comments may still cite them.
 
-Units are inches, pounds and degrees. "Verify" marks a value to confirm on real parts or measurements before ordering.
+Units are inches, pounds and degrees. "Verify" marks a value to measure on a real part because a purchase or a cut depends on it (D-100).
 
 ## Conventions
 
@@ -128,6 +128,7 @@ Units are inches, pounds and degrees. "Verify" marks a value to confirm on real 
 |---|---|
 | D-23 | **The truck bed stays fully parametric.** Every bed dimension is a live param, the Truck fit view shows the margin, and the defaults are estimates until measured (Q-1). |
 | D-30 | **A Simple view is the default; Advanced and Build are one click away.** Simple answers "is it safe, and for what rider weights?": a rider-weight sweep (50 to 250 lb) with a safe-range bar, six plain-English traffic lights, a spec card and "watch it" sim demos. |
+| D-100 | **Pre-checks are only the fits that change a purchase or a cut** (Eric, 2026-10-24: a fun scout project, not an engineering exercise). The Verify list keeps one wheel's bore and hub, the axle grade, the strip bend test, the real lights, the truck bed, the first brake knee, the bow-post boot clearance and the grab-board reach. Vendor ratings, material strengths, friction and rope stretch are `assumed` with the design's margins, not things to look up or test; the plywood is calipered at its own assembly steps. |
 
 ## Open questions
 

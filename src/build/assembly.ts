@@ -50,7 +50,7 @@ import { GRIP_BOLT_ROWS_IN, INSERT_DRILL_IN, latchGeometry, PIN_R_IN } from '../
 import { lidOpenAngleDeg } from '../model/storage';
 import { STOP_EYE_ABOVE_DECK_IN } from '../model/brake-layout';
 import { chainKeeper } from '../model/chain-keeper';
-import { SQUASH_TEST_PSI, verifyChecklist, verifyGroups } from './verify';
+import { verifyChecklist, verifyGroups } from './verify';
 import { stepFigures } from './figures';
 import type { StepFigure } from './figures/kit';
 
@@ -1082,14 +1082,13 @@ const TEMPLATES_1: Template[] = [
     kind: 'prep',
     steps: [0],
     view: 'iso',
-    tools: ['calipers', 'ruler', 'scale', 'luggage scale'],
+    tools: ['calipers', 'ruler'],
     build: (c) => {
       const all = verifyChecklist(c.parts, c.p);
       return {
-        goal: 'Prove the wheels, steel and plywood against the design before anything is committed.',
+        goal: 'Check the few fits that change a purchase or a cut: one wheel, the axle steel and a test bend of the oak strips. Everything else is designed with margin to spare.',
         items: [
           ...verifyGroups(all).map((g) => I(g.text, g.titles)),
-          I('The wheel and axle notes are in the Verify section.'),
           I('Enter every measured value in the design and re-run the checks before going on.'),
         ],
         checks: ['Every check above is done, with its measured value entered in the design', 'The checks re-run clean after the values went in'],
@@ -1219,7 +1218,7 @@ const TEMPLATES_1: Template[] = [
         goal: 'Cut the 12 mm deck and the seat back from their files, before anything else is cut to size: the deck is the reference the frame and the sides are checked against.',
         items: [
           I(`Before you cut: measure the ${Math.round(c.p.deckPlyIn * 25.4)} mm sheet and check it lies flat.`, [
-            `Calipers at 4 places, 1" in from the edges: the design is ${fin64(ply)} (12 mm). Under 7/16" or over 1/2", return the sheet. Otherwise enter the average in the design (Advanced, parameters panel: ${PARAM_DEFS.deckPlyIn.label.toLowerCase()}) before anything is cut: the dados in the transom and the bulkhead, the deck slot under the chine bands and its spacer stick all follow it (Verify, plywood thickness).`,
+            `Calipers at 4 places, 1" in from the edges: the design is ${fin64(ply)} (12 mm). Under 7/16" or over 1/2", return the sheet. Otherwise enter the average in the design (Advanced, parameters panel: ${PARAM_DEFS.deckPlyIn.label.toLowerCase()}) before anything is cut: the dados in the transom and the bulkhead, the deck slot under the chine bands and its spacer stick all follow it.`,
             'Lay the sheet on a flat floor: it must lie down under its own weight. A sheet that stands more than 1/8" off the floor anywhere goes back: a bowed deck glues to the frame bowed.',
           ]),
           I('Optional proof cut: run the deck file on a 4\' × 8\' sheet of 1/8" hardboard first (about an hour).', [
@@ -1328,7 +1327,7 @@ const TEMPLATES_1: Template[] = [
             I('Before you cut the webs: prove the forms with the test web, and measure the deck\'s edge and the web sheet.', [
               'Bend the test web dry on the S-ramp, then on the mirror ramp (turned over, outside face up), weighted with the bags: it must lie down on each with no step at the start of the S, its top edge 1/8" off every cleat. Fix a ramp or a cleat now.',
               deckLen !== undefined ? `Measure the deck's edge along its curve with a flexible steel tape, from its rear corner to its bow corner, on both sides: ${fin(deckLen)} (the web's bottom edge is the same length, since it sits on the rail beside the deck edge), within 1/16". If it is off, stop: the deck and the web file disagree; find out which (measure the deck against its file) before the sheet is cut.` : false,
-              `The web sheet (${thinSheet(c.p).name}): count the plies at an edge and measure it with calipers at 4 places: the design is ${fin64(sheetT)}. Under ${fin64(sheetT - 1 / 32)} or over ${fin64(sheetT + 1 / 32)}, return the sheet; otherwise enter what you measure in the design (Advanced, parameters panel: ${thinLabel(c.p).toLowerCase()}) before the webs are cut (Verify, plywood thickness).`,
+              `The web sheet (${thinSheet(c.p).name}): count the plies at an edge and measure it with calipers at 4 places: the design is ${fin64(sheetT)}. Under ${fin64(sheetT - 1 / 32)} or over ${fin64(sheetT + 1 / 32)}, return the sheet; otherwise enter what you measure in the design (Advanced, parameters panel: ${thinLabel(c.p).toLowerCase()}) before the webs are cut.`,
               'Keep the test web: it is the dry web for re-setting the cleats for the right side and between the cures.',
             ]),
             I(`Cut the two webs, ${tl(['side-L-web', 'side-R-web'])}, from the thin sheet, placed as the nesting drawing shows.`, [
@@ -2485,7 +2484,7 @@ const TEMPLATES_2: Template[] = [
         items: [
           I('Check the running gear is all on and snug: the rear axle and its plates, the front stub axles, their plates and the roll pads. If anything came off, refit it from its tagged bag.'),
           I(`Put the ${plural(wheels.length, 'wheel')} on the axles.`, [`${fin(c.p.wheelBoreIn)} bore on the ${fin(c.p.axleDiameterIn)} ${axleWord(c.p)}, sealed bearings.`, `Collar straight against the hub (no washer), set screw snug, cotter pin through the cross hole ${fin(c.p.axleCrossHoleFromEndIn)} in from the ${axleWord(c.p)} end.`], wheels.map((x) => x.id)),
-          I(`Check the track: ${fin(c.p.frontTrackIn)} front, ${fin(c.p.rearTrackIn)} rear.`, [`Inflate each tire to ${SQUASH_TEST_PSI} psi, the pressure of the tire squash test in [[step:verify]].`]),
+          I(`Check the track: ${fin(c.p.frontTrackIn)} front, ${fin(c.p.rearTrackIn)} rear.`, ['Inflate each tire to the pressure on its sidewall.']),
           I('Spin each wheel.', ['No rub on the beam end, the clamp plates or the brake knee.', `Re-check the knee-to-tire margin (first checked at [[step:brake-knees]]), wheels on${isRemovable(c.p) ? '' : ' and knees cured'}: about ${fin(brakeOf(c.p).knee.x0 - (brakeOf(c.p).O[0] + brakeOf(c.p).r))} from the front of each rear tire to its knee's rear face.`, `End float: no more than the ${fin(c.p.frontTrackIn / 2 - c.p.hubLengthIn / 2 - computeLayout(c.p).beamF.len / 2)} gap between the hub and the beam end.`]),
           ...(flapFit ? [I('Try the brake flap template on each knee and tire now, while both are on: the flaps are made to it at [[step:brake-flaps]].', [
             'The brake flap router template (Forms section, 1/4" plywood on the laser). Hold it level over the tire at the flap\'s height, its pivot end resting on the floor of the knee\'s pocket and its scored pivot line over the knee\'s pin line.',
@@ -2762,7 +2761,7 @@ const TEMPLATES_2: Template[] = [
       return {
         goal: 'Glue the side ribs and their knees inside the hull, now the deck is in. The D-ring and grab-board holes are the next step.',
         items: [
-          ...(bowStation ? [I(`Before the bow posts are cut: sit a booted rider in the bare hull and confirm the bow-post station (${fromTransom(bowStation.x)} from the transom).`, ['His boots and knees must clear it. If they do not, move the station (Verify) before you cut anything.'])] : []),
+          ...(bowStation ? [I(`Before the bow posts are cut: sit a booted rider in the bare hull and confirm the bow-post station (${fromTransom(bowStation.x)} from the transom).`, ['Their boots and knees must clear it. If they do not, move the station (Verify) before you cut anything.'])] : []),
           I('Bandsaw the ribs and knees from their cut-list blanks (4/4, planed to 3/4"), to the outline on each one\'s drawing.', [
             ...sts.map((st) => `${short[st.n]} (L, R)${st.kind === 'box' ? ' (short: they stop above the deck)' : ''}: ${ribDims(st)}.`),
             ...knees.map((st) => {
@@ -2896,7 +2895,7 @@ const TEMPLATES_2: Template[] = [
             gripIds.length && gripPlace ? `A straightedge on the inner gunwale band where each board goes, from ${gripPlace.from} to ${gripPlace.to} from the transom's outer face, held on the band at the board's rear end.${gripTurn ? ` The side turns in toward the bow there: the gap under the straightedge at the front end of the board's lap is about ${fin(gripTurn.d)} by design. Measure yours: the back of the board's front end is planed to it.` : ' The band is straight there: a gap over 1/32" means a side sprang in; plane the back of the board to the band.'}` : false,
           ]),
           ...(lashIds.length ? [I(`The ${lashIds.length} D-ring brackets (one per rib head, both sides).`, [
-            `Hold each bracket on the inner face of its rib head, centered on the head and on its mid height. Check its two holes first (Verify): they should be ${fin(2 * LASH_HOLE_DX_IN)} apart along the gunwale; if yours differ, drill to the bracket. The bracket is the template.`,
+            `Hold each bracket on the inner face of its rib head, centered on the head and on its mid height. Check its two holes first: they should be ${fin(2 * LASH_HOLE_DX_IN)} apart along the gunwale; if yours differ, drill to the bracket. The bracket is the template.`,
             'Clamp a scrap block on the outside of the side behind the holes, to stop tear-out.',
             `Drill both holes through the bracket, the head, the inner band, the web and the outer band in one pass with a ${lashBit} bit, square to the side.`,
             'Brush epoxy into each hole to seal the plies of the web, let it cure, then run the bit through again so the bolts slide in.',
@@ -3225,7 +3224,6 @@ const TEMPLATES_2: Template[] = [
           ], ['seat-back-panel-pad-L', 'seat-back-panel-pad-R'])] : []),
           I(`Set the hinge inserts: 3 per hinge, #10-32 × ${insLen ?? '33/64'}" ${insertMat(c.p)}, flush-mount, hex-drive.`, [
             `Hold each 2" butt hinge on the front face at the bottom edge, its knuckle at the edge${hingeB ? `, centered ${fin((hingeB.min[1] + hingeB.max[1]) / 2)} either side of the center` : ''}, and mark its 3 holes.${shaperFeaturesOf(c, 'seat-back-panel').some((q) => q.kind === 'drill' && /^seat-hinge-/.test(q.to ?? '')) ? ' The panel\'s Shaper file marked them too: the hinge\'s holes must fall on those marks; if they do not, go by the hinge.' : ''}`,
-            'Pull-test one insert first, in a scrap of the same plywood with an oak pad glued on (Verify).',
             `Drill ${fin(INSERT_DRILL_IN)} holes ${Number.isFinite(insHole) ? fin(insHole) : SEE} deep from the front face (drill stop): through the panel${intoPad ? ` and ${intoPad}"` : ''} into the pad. Each is at least 1/2" from every edge.`,
             'Epoxy the inserts in, flush with the front face.',
             'Leave them for the full cure before the first load.',

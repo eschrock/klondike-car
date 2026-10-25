@@ -41,7 +41,7 @@ describe('assembly steps', () => {
     }
     // Verify points at the Verify section and its checks (no source file names in the text).
     expect(steps[0].instructions.join(' ')).toMatch(/Verify section/);
-    expect(steps[0].instructions.join(' ')).toMatch(/Tire squash/);
+    expect(steps[0].instructions.join(' ')).toMatch(/Wheel: try one first/);
   });
 
   it('install every built non-reference part in exactly one step', () => {
@@ -1079,7 +1079,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(fit).toContain(`drilled at step ${list.map((q) => q.id).indexOf('side-holes')}, before the finish`);
       expect(fit).toMatch(/two 1\/4-20 × 2" (?:stainless )?button-head bolts each, pushed in from OUTSIDE with a 3\/4" fender washer/);
       expect(fit).toMatch(/Nylock nuts on the bracket/);
-      expect(rib).toMatch(/Check its two holes first \(Verify\)/);
+      expect(rib).toMatch(/Check its two holes first: /);
       expect(fit).toContain(`${p.lashLoadLbf} lbf pull at ${p.lashPullAngleDeg}°`);
       // a 1/4-20 bolt of 2" stock needs about 1-15/16": no cutting
       expect(fit).not.toMatch(/Run a nut on each bolt, cut it|rotary tool|cutoff wheel/);

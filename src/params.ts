@@ -318,7 +318,7 @@ const defs = {
   },
   signInsertLenIn: {
     label: 'Sign threaded insert length (#10-32, in the rib)', group: 'body', unit: 'in',
-    default: 0.512, min: 0.25, max: 0.787, step: 0.001, status: 'verify', ref: 'D-85',
+    default: 0.512, min: 0.25, max: 0.787, step: 0.001, status: 'assumed', ref: 'D-85',
     note: 'The bought insert the sign knobs screw into, set in the box rib and the rear rib: Bolt Depot #23869, a flush-mount (no flange) zinc softwood insert, #10-32, Allen drive, 0.512 in (13 mm) long, $0.20 each (read 2026-10-24 via search). No flange, because it is turned in through the bore in the web; no #10-32 wood insert of 5/16 in is sold. The rib behind the web has about 0.94 in of oak (band-strip filler plus the 3/4 in rib), so the bore (web + insert + 1/16 in) leaves about 0.3 in behind it. The under-seat backing strips (1/2 in) cannot take it. Measure the real insert and set this; confirm its drill size on the bag.',
   },
   signStandoffDiscDiaIn: {
@@ -383,7 +383,7 @@ const defs = {
   },
   woodScrewLateralLbf: {
     label: '#10 stainless wood screw lateral allowable (oak, wet)', group: 'factors', unit: 'lbf',
-    default: 90, min: 40, max: 200, step: 5, status: 'verify', ref: 'D-43',
+    default: 90, min: 40, max: 200, step: 5, status: 'assumed', ref: 'D-43',
     note: 'NDS-style single-shear lateral value for a #10 (0.19") screw in white oak with wet-service and a safety factor; confirm against the fastener catalog.',
   },
   deckCaptureDepthIn: {
@@ -742,7 +742,7 @@ const defs = {
   },
   seatBackInsertLenIn: {
     label: 'Seat-back hinge insert length (#10-32)', group: 'seat', unit: 'in',
-    default: 0.512, min: 0.25, max: 0.787, step: 0.001, status: 'verify', ref: 'D-62, D-85',
+    default: 0.512, min: 0.25, max: 0.787, step: 0.001, status: 'assumed', ref: 'D-62, D-85',
     note: 'Eric 2026-10-24, build book review: the hinge inserts are the same bought insert as the sign knobs (Bolt Depot #23869, flush-mount #10-32, 0.512 in; signInsertLenIn), so they are one BOM line. The blind hole is this plus 1/16 in, rounded up to 1/32 in (19/32 in), from the front face through the panel into the oak insert pad on the back face (seatBackInsertPadThickIn); the hinge screw is the insert plus the leaf rounded DOWN to 1/8 in (1/2 in), so it cannot bottom. Keep it equal to signInsertLenIn; measure the real insert and set both.',
   },
   seatBackInsertPadThickIn: {
@@ -767,12 +767,12 @@ const defs = {
   },
   seatHingeLoadLbf: {
     label: 'Seat-back hinge allowable per hinge (screws in oak)', group: 'seat', unit: 'lbf',
-    default: 250, min: 100, max: 600, step: 25, status: 'verify', ref: 'D-57',
+    default: 250, min: 100, max: 600, step: 25, status: 'assumed', ref: 'D-57',
     note: 'A 2 in 316 butt hinge on #8 screws in white oak: the back-load check keeps the pull on each hinge under this (vendor and NDS data to confirm).',
   },
   seatInsertPulloutLbf: {
     label: 'Seat-back hinge insert pull-out allowable (each)', group: 'seat', unit: 'lbf',
-    default: 150, min: 50, max: 400, step: 10, status: 'verify', ref: 'D-62',
+    default: 150, min: 50, max: 400, step: 10, status: 'assumed', ref: 'D-62',
     note: 'D-98 (2026-10-24): the inserts are now the 0.512 in flush #10-32 (the sign insert), through the 13 mm panel into a 1/4 in oak pad on its back face; the pull-out figure below is that of the earlier 5/16 in insert, kept as the conservative value. D-62: a #10-32 x 5/16 hex-drive threaded insert (zinc under Standard, 316 under Extreme), epoxied into an 11/32 in blind hole in the 12 mm okoume seat-back panel. Published axial pull-out for a #10 insert in plywood is a few hundred pounds; 150 lbf is a cautious working value (confirm with a pull test on a scrap: hang a bucket from a screwed-in insert).',
   },
   seatPinPullLbf: {
@@ -868,16 +868,16 @@ const defs = {
   },
   wheelMass10Lb: {
     label: 'Mass per 10" wheel assembly', group: 'wheels', unit: 'lb',
-    default: 3.0, min: 2, max: 8, step: 0.25, status: 'verify', ref: 'D-11, D-60, D-71',
+    default: 3.0, min: 2, max: 8, step: 0.25, status: 'assumed', ref: 'D-11, D-60, D-71',
     note: 'D-71: 3.0 lb, the listing weight of the Harbor Freight 10 in pneumatic tire with black hub (SKU 67465); it is 0.2 lb a wheel (0.8 lb for four) over the D-60 figure of 2.8 lb (Tractor Supply 3551979). A retailer figure, not the maker\'s: weigh the wheel you order.',
   },
   wheelMass13Lb: {
     label: 'Mass per 13" wheel assembly', group: 'wheels', unit: 'lb',
-    default: 5.5, min: 3, max: 9, step: 0.25, status: 'verify', ref: 'D-11',
+    default: 5.5, min: 3, max: 9, step: 0.25, status: 'assumed', ref: 'D-11',
   },
   flatFreeExtraLb: {
     label: 'Extra mass per wheel, flat-free', group: 'wheels', unit: 'lb',
-    default: 1.25, min: 0, max: 3, step: 0.25, status: 'verify', ref: 'D-11',
+    default: 1.25, min: 0, max: 3, step: 0.25, status: 'assumed', ref: 'D-11',
   },
   axleDiameterIn: {
     label: 'Axle diameter', group: 'wheels', unit: 'in',
@@ -963,17 +963,17 @@ const defs = {
   },
   wheelRatingLb: {
     label: 'Wheel load rating, each (vendor listing)', group: 'wheels', unit: 'lb',
-    default: 300, min: 100, max: 800, step: 25, status: 'verify', ref: 'D-11, D-60, D-71',
+    default: 300, min: 100, max: 800, step: 25, status: 'assumed', ref: 'D-11, D-60, D-71',
     note: 'D-71: 300 lb per wheel, the listing rating of the Harbor Freight 10 in pneumatic tire (SKU 67465). VERIFY it on the real wheel. D-60: 300 lb per wheel, the Tractor Supply listing rating for the 2.8 lb wheel (the Wesco 151551 is listed at 350 lb). It is a static / rolling rating: the wheel-rating check compares the static goal-rider load to it and the dynamic peak to `wheelRatingPeakMult` times it; the resting-load row compares the heavier wheel\'s static load with it.',
   },
   wheelRatingPeakMult: {
     label: 'Short-duration peak allowed over the wheel rating', group: 'wheels', unit: '×',
-    default: 2, min: 1, max: 4, step: 0.25, status: 'verify', ref: 'D-11',
+    default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-11',
     note: 'A catalog rating is a continuous / static value with margin against failure; a curb-strike or drop peak may reach a multiple of it for an instant. 2× is an assumption (hub bearings and spokes / web, not the tire, are what fail); ask the vendor or test one wheel to a drop.',
   },
   wheelSideRatingFrac: {
     label: 'Wheel lateral (skid) capacity as a fraction of the rating', group: 'wheels', unit: '×',
-    default: 0.5, min: 0.1, max: 1, step: 0.05, status: 'verify', ref: 'D-11',
+    default: 0.5, min: 0.1, max: 1, step: 0.05, status: 'assumed', ref: 'D-11',
     note: 'Hub bearings in a hand-truck wheel are rated radially; a side load (cornering, side-slope skid) acts on the bearing as a moment and axial load. Half the radial rating is an assumption.',
   },
   beamNotchClearIn: {
@@ -1013,12 +1013,12 @@ const defs = {
   },
   axleYieldPsi: {
     label: 'Axle steel yield strength', group: 'wheels', unit: 'psi',
-    default: 70000, min: 30000, max: 120000, step: 1000, status: 'verify', ref: 'D-4, D-71',
+    default: 70000, min: 30000, max: 120000, step: 1000, status: 'assumed', ref: 'D-4, D-71',
     note: 'D-71: the 5/8 in solid rod. 1045 cold-drawn or turned-ground-polished shafting is about 70+ ksi (D-27; confirm vendor cert). 1018 cold-drawn would be about 54 ksi and hot-rolled A36 36 ksi: both too weak for the 200 lb goal (axle-stress about 1.0 and 1.5).',
   },
   axleTubeYieldPsi: {
     label: 'Axle tube yield strength (DOM)', group: 'wheels', unit: 'psi',
-    default: 70000, min: 30000, max: 120000, step: 1000, status: 'verify', ref: 'D-60',
+    default: 70000, min: 30000, max: 120000, step: 1000, status: 'assumed', ref: 'D-60',
     note: 'Used only with a hollow tube (axleWallIn above 0); with the default solid rod (D-71) the checklist does not ask for it. Order DOM (drawn over mandrel) or CDS tube to ASTM A513 Type 5, NOT ordinary ERW "mechanical" tube (about 45 ksi yield / 55 ksi ultimate, which takes axle-stress from 0.92 to about 1.4 at the 5/8 in size of D-71, a fail); keep the mill cert. D-60: 1026 DOM tube is listed at about 70 ksi yield / 80+ ksi tensile (1020 DOM about 60 to 70 ksi yield): CONFIRM on the vendor listing or the mill cert, and lower it if the stock you can buy is 1020 DOM at 60 ksi. Used for the bending, cross-hole and ring-bearing rows when the axle is a tube (axleWallIn > 0); the solid rod uses the 1045 value above.',
   },
 
@@ -1091,7 +1091,7 @@ const defs = {
   },
   steerBearingAllowPsi: {
     label: 'UHMW thrust washer allowable bearing pressure', group: 'factors', unit: 'psi',
-    default: 1000, min: 300, max: 2500, step: 50, status: 'verify', ref: 'D-56',
+    default: 1000, min: 300, max: 2500, step: 50, status: 'assumed', ref: 'D-56',
     note: 'UHMW-PE is good to about 1000 psi static (PV-limited when turning slowly under load); confirm with the supplier.',
   },
   tongueWidthIn: {
@@ -1150,7 +1150,7 @@ const defs = {
   },
   steerChainWllLb: {
     label: 'Steering stop chain: working load limit', group: 'factors', unit: 'lb',
-    default: 1000, min: 1000, max: 5000, step: 100, status: 'verify', ref: 'D-58, D-60',
+    default: 1000, min: 1000, max: 5000, step: 100, status: 'assumed', ref: 'D-58, D-60',
     note: '1/4 in grade 43 high-test chain is rated about 2,600 lb (grade 30 proof coil about 1,300 lb); confirm on the vendor listing. Ultimate is taken as 4 x the rating. D-60: 3/16 in chain, about 1,000 lb working load (grade 30 proof coil is less; confirm the grade and WLL on the vendor listing).',
   },
   steerEyeBoltDiaIn: {
@@ -1160,7 +1160,7 @@ const defs = {
   },
   steerEyeWllLb: {
     label: 'Steering stop eye bolts: working load limit in line', group: 'factors', unit: 'lb',
-    default: 900, min: 500, max: 6000, step: 100, status: 'verify', ref: 'D-58, D-60',
+    default: 900, min: 500, max: 6000, step: 100, status: 'assumed', ref: 'D-58, D-60',
     note: 'A 1/2 in forged shoulder eye bolt is rated about 1,500 lb pulled in line with the shank (5/8 in: 2,600) (confirm on the vendor listing); pulled at an angle in the plane of the eye its rating falls (the analysis derates it linearly to 60 percent at 45 degrees). D-60: 3/8 in forged shoulder eye bolt, about 900 lb in line (listing numbers vary: confirm on the vendor listing before ordering; the steer-stops row uses this).',
   },
   steerChainBeamYIn: {
@@ -1195,7 +1195,7 @@ const defs = {
   },
   steerKeeperMaxStretch: {
     label: 'Chain keeper cord: largest stretch allowed', group: 'factors', unit: '',
-    default: 1, min: 0.5, max: 1.5, step: 0.05, status: 'verify', ref: 'D-56',
+    default: 1, min: 0.5, max: 1.5, step: 0.05, status: 'assumed', ref: 'D-56',
     note: '1/8" shock cord (bungee) is commonly sold as stretching about 100% of its length; check the label. The steer-clear row holds the cord\'s stretch over the lock range to this.',
   },
   steerKeeperCordLbf: {
@@ -1231,7 +1231,7 @@ const defs = {
   },
   bridleRopeBreakLbf: {
     label: 'Bridle rope breaking strength (new, spliced ends)', group: 'factors', unit: 'lbf',
-    default: 3700, min: 1000, max: 12000, step: 100, status: 'verify', ref: 'D-62',
+    default: 3700, min: 1000, max: 12000, step: 100, status: 'assumed', ref: 'D-62',
     note: 'Cordage Institute minimum tensile strength of 3/8 in three-strand nylon is about 3,700 lbf (double-braid nylon is a little higher); confirm on the vendor listing. A bowline keeps about 60 percent of it (bridleKnotEfficiency).',
   },
   bridleKnotEfficiency: {
@@ -1251,12 +1251,12 @@ const defs = {
   },
   bridleSnatchStiffLbIn: {
     label: 'Bridle snatch: stiffness of the rope and the pullers', group: 'loads', unit: 'lb/in',
-    default: 25, min: 3, max: 200, step: 1, status: 'verify', ref: 'D-62, eng 3c S-1',
+    default: 25, min: 3, max: 200, step: 1, status: 'assumed', ref: 'D-62, eng 3c S-1',
     note: 'About 25 lb/in for 8 ft of 3/8 in nylon plus the pullers (nylon gives roughly 15 percent stretch at 10 percent of its breaking strength: 370 lbf over 14 in of an 8 ft run). Low-stretch polyester is about 100 lb/in (the 320 to 640 lbf the engineering review estimated for a 320 lb sled), nylon with a 3 ft shock-cord section about 10. A cheap field test: pull the rope with a luggage scale and measure the stretch.',
   },
   tongueSleeveBoreIn: {
     label: 'Bridle sleeve bore (bronze sleeve bearing ID)', group: 'steering', unit: 'in',
-    default: 0.625, min: 0.5, max: 0.875, step: 0.0625, status: 'verify', ref: 'D-62',
+    default: 0.625, min: 0.5, max: 0.875, step: 0.0625, status: 'assumed', ref: 'D-62',
     note: 'The bridle rope runs through this bore (a single strand, so it needs only a little over the rope diameter). 5/8 in ID x 1 in OD oil-embedded bronze sleeve bearings are a stocked McMaster size (confirm). Round (flare or ease) both ends of the bore so the rope does not bear on a sharp edge.',
   },
   bridleTieOverloadFactor: {
@@ -1359,12 +1359,12 @@ const defs = {
   },
   handleTNutBarrelIn: {
     label: 'Push-handle socket T-nut barrel length', group: 'brake', unit: 'in',
-    default: 0.3125, min: 0.1875, max: 0.5, step: 0.0625, status: 'verify', ref: 'D-39',
+    default: 0.3125, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-39',
     note: 'The threaded barrel of the 1/4-20 four-prong T-nut set in the rear-transom backer, flange flush with the backer\'s inside face; only the barrel is threaded, so the socket screw engages only where it overlaps it. 5/16" is typical for a 1/4-20 T-nut: measure the real one (flange face to barrel tip). The screw length is chosen from this so the tip stops at or short of the backer face (the storage box aft wall sits against it) with at least 4 threads engaged.',
   },
   handleTNutFlangeDiaIn: {
     label: 'Push-handle socket T-nut flange diameter', group: 'brake', unit: 'in',
-    default: 0.75, min: 0.5, max: 1, step: 0.0625, status: 'verify', ref: 'D-39, D-97',
+    default: 0.75, min: 0.5, max: 1, step: 0.0625, status: 'assumed', ref: 'D-39, D-97',
     note: 'The round flange of the 1/4-20 four-prong T-nut, counterbored flush in the backer block\'s inside face. 3/4" is typical: measure the real one. Each rear-transom backer block is sized to keep transomBackerMarginIn of oak around this counterbore.',
   },
   transomBackerMarginIn: {
@@ -1676,13 +1676,13 @@ const defs = {
 
   brakeChockMu: {
     label: 'Chock-to-ground friction μ (toothed oak on packed dirt / gravel)', group: 'brake', unit: '',
-    default: 0.6, min: 0.2, max: 0.9, step: 0.05, status: 'verify', ref: 'D-57',
+    default: 0.6, min: 0.2, max: 0.9, step: 0.05, status: 'assumed', ref: 'D-57',
     note: 'The chock\'s base has two stainless screw heads left proud (or a sawtooth cut) to bite. Smooth wood on dirt is about 0.5; on ice or packed snow far less.',
   },
 
   brakeChockMuFouled: {
     label: 'Chock-to-ground friction μ, wet leaves / slush (pass/fail case)', group: 'brake', unit: '',
-    default: 0.4, min: 0.1, max: 0.9, step: 0.05, status: 'verify', ref: 'D-57',
+    default: 0.4, min: 0.1, max: 0.9, step: 0.05, status: 'assumed', ref: 'D-57',
     note: 'The park-hold row uses the lower of this and the design μ.',
   },
 
@@ -1996,7 +1996,7 @@ const defs = {
   },
   oakNdsShearPsi: {
     label: 'White oak NDS design shear Fv (reference)', group: 'materials', unit: 'psi',
-    default: 205, min: 100, max: 300, step: 5, status: 'verify', ref: 'D-35',
+    default: 205, min: 100, max: 300, step: 5, status: 'assumed', ref: 'D-35',
     note: 'Lumber design value (it already carries the allowance for checks and splits), used for cleavage and row / group tear-out (NDS Appendix E and 3.4.3.3). The 850 psi clear-wood rows elsewhere are not used for these.',
   },
   ndsWetFactorShear: {
@@ -2070,32 +2070,32 @@ const defs = {
   },
   whiteOakPlyDensityPcf: {
     label: 'White oak plywood density', group: 'materials', unit: 'lb/ft³',
-    default: 45, min: 30, max: 50, step: 0.5, status: 'verify', ref: 'D-73',
-    note: 'D-73: about 40 pcf for a hardwood-veneer core; MDF crossbands are denser, about 45 pcf. The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate until a break test of an offcut replaces it (Verify).',
+    default: 45, min: 30, max: 50, step: 0.5, status: 'assumed', ref: 'D-73',
+    note: 'D-73: about 40 pcf for a hardwood-veneer core; MDF crossbands are denser, about 45 pcf. The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate with the side-web margin (Eric declined a break test, 2026-10-24).',
   },
   whiteOakPlyMoePsi: {
     label: 'White oak plywood effective E (face grain ∥ span)', group: 'materials', unit: 'psi',
-    default: 800000, min: 600000, max: 1600000, step: 10000, status: 'verify', ref: 'D-73',
-    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate until a break test of an offcut replaces it (Verify). Before: D-73 ESTIMATE, not a published value for the sheet: between the okoume (0.9 Msi) and Baltic birch (1.3 Msi) values of D-5, since a 3-ply hardwood sheet has two face veneers of oak. Ask the supplier for the construction (plies, core) and replace.',
+    default: 800000, min: 600000, max: 1600000, step: 10000, status: 'assumed', ref: 'D-73',
+    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate with the side-web margin (Eric declined a break test, 2026-10-24). Before: D-73 ESTIMATE, not a published value for the sheet: between the okoume (0.9 Msi) and Baltic birch (1.3 Msi) values of D-5, since a 3-ply hardwood sheet has two face veneers of oak. Ask the supplier for the construction (plies, core) and replace.',
   },
   whiteOakPlyMorPsi: {
     label: 'White oak plywood effective MOR (face grain ∥ span)', group: 'materials', unit: 'psi',
-    default: 4000, min: 3000, max: 8000, step: 100, status: 'verify', ref: 'D-73',
-    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate until a break test of an offcut replaces it (Verify). Before: D-73 ESTIMATE, between the okoume (5,000) and Baltic birch (7,000) values of D-5; same caveat as the E.',
+    default: 4000, min: 3000, max: 8000, step: 100, status: 'assumed', ref: 'D-73',
+    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate with the side-web margin (Eric declined a break test, 2026-10-24). Before: D-73 ESTIMATE, between the okoume (5,000) and Baltic birch (7,000) values of D-5; same caveat as the E.',
   },
   whiteOakPlyMoePerpPsi: {
     label: 'White oak plywood effective E (across the face grain)', group: 'materials', unit: 'psi',
-    default: 350000, min: 150000, max: 900000, step: 10000, status: 'verify', ref: 'D-76',
-    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate until a break test of an offcut replaces it (Verify). Before: D-76 ESTIMATE (side-stiffness study): 1/4 in hardwood plywood is usually 3 plies with thin oak faces and a thick cross-banded core, so bending ACROSS the face grain runs along the core grain: about 0.5 Msi. With equal plies it could be 0.25 Msi. The side webs\' face grain runs along x, so every vertical bending of a web (the side-web row, the side-lateral strips) is across it. Ask the supplier for the construction and replace.',
+    default: 350000, min: 150000, max: 900000, step: 10000, status: 'assumed', ref: 'D-76',
+    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate with the side-web margin (Eric declined a break test, 2026-10-24). Before: D-76 ESTIMATE (side-stiffness study): 1/4 in hardwood plywood is usually 3 plies with thin oak faces and a thick cross-banded core, so bending ACROSS the face grain runs along the core grain: about 0.5 Msi. With equal plies it could be 0.25 Msi. The side webs\' face grain runs along x, so every vertical bending of a web (the side-web row, the side-lateral strips) is across it. Ask the supplier for the construction and replace.',
   },
   whiteOakPlyMorPerpPsi: {
     label: 'White oak plywood effective MOR (across the face grain)', group: 'materials', unit: 'psi',
-    default: 2000, min: 1000, max: 5500, step: 50, status: 'verify', ref: 'D-76',
-    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate until a break test of an offcut replaces it (Verify). Before: D-76 ESTIMATE (side-stiffness study): half the along-grain value (design 1,170 psi after the wet-service and safety factors), for the thick cross-banded core. Same caveat as the E.',
+    default: 2000, min: 1000, max: 5500, step: 50, status: 'assumed', ref: 'D-76',
+    note: 'The sheet Eric bought (2026-10-24) is combi-core: thin oak faces over MDF-like crossbands around a veneer center, so this is the combi-core estimate with the side-web margin (Eric declined a break test, 2026-10-24). Before: D-76 ESTIMATE (side-stiffness study): half the along-grain value (design 1,170 psi after the wet-service and safety factors), for the thick cross-banded core. Same caveat as the E.',
   },
   balticThinThickIn: {
     label: '1/8" (3 mm) Baltic birch real thickness', group: 'materials', unit: 'in',
-    default: 0.118, min: 0.1, max: 0.14, step: 0.001, status: 'verify', ref: 'D-73',
+    default: 0.118, min: 0.1, max: 0.14, step: 0.001, status: 'assumed', ref: 'D-73',
     note: 'D-73: 3 mm (0.118 in). Its density, E and MOR are the Baltic birch values above (birchDensityPcf 42, birchMoePsi, birchMorPsi). The sheet is probably 5 x 5 ft (60 x 60 in): every part must nest on it (the side web blank is about 59.6 in).',
   },
   balticThinMoePerpPsi: {
@@ -2110,7 +2110,7 @@ const defs = {
   },
   balticSixThickIn: {
     label: '6 mm (1/4") Baltic birch real thickness', group: 'materials', unit: 'in',
-    default: 0.236, min: 0.2, max: 0.27, step: 0.001, status: 'verify', ref: 'D-80',
+    default: 0.236, min: 0.2, max: 0.27, step: 0.001, status: 'assumed', ref: 'D-80',
     note: 'D-80: 6 mm (0.236 in); 6.5 mm sheets (0.256 in) are sold too. MEASURE THE SHEET with calipers before cutting a dado. Density, along-grain E and MOR are the Baltic birch values (birchDensityPcf, birchMoePsi, birchMorPsi).',
   },
   balticSixMoePerpPsi: {
@@ -2314,7 +2314,7 @@ const defs = {
   },
   bumpWheelRateLbIn: {
     label: 'Effective wheel radial stiffness (10" pneumatic)', group: 'bump', unit: 'lb/in',
-    default: 500, min: 150, max: 1500, step: 25, status: 'verify', ref: 'D-54',
+    default: 500, min: 150, max: 1500, step: 25, status: 'assumed', ref: 'D-54',
     note: 'PRE-ORDER GATE (eng 3c review, D-62): the design passes only if the real rate is below about 560 lb/in with the load forward (about 800 for the rider cases); the first row to flip is the front beam groove wall under a hard hit, then the rear beam seat, the groove bearing and the king bearing. TEST BEFORE ORDERING the lot: tire at 30 psi, a known weight over one wheel, a ruler: a squash of 0.55 in or more at 300 lb is a pass (everything holds as built); 0.4 to 0.55 in means lengthen the outer front clamp plate; under 0.4 in, stop and re-run the analysis with the measured k. Flat-free or foam-filled wheels change this rate by a factor of several and are NOT modeled by the tire-type switch. Phase 3c-3b: a 10" x 3.5" pneumatic hand-truck tire (4.10/3.50-4, rated about 300 lb at 30 psi) squashes about 0.6" (18% of the 3.25" section) at its rating, so k is about 300 / 0.6 = 500 lb/in; it scales with inflation pressure and runs 300 (20 psi) to 900 (rim-bound). TO MEASURE: stand a known weight on the sled at one wheel (a 150 lb person on the frame over the wheel) and measure the tire squash with a ruler against the hub; k = load / squash.',
   },
   bumpMassShare: {
@@ -2336,12 +2336,12 @@ const defs = {
   // ── Phase 3b WS-D: material strengths and detail sizes for the front-end rows (analysis/front-end.ts, linkage.ts). Hard-hit rows use the ultimate values. ──
   axleUltimatePsi: {
     label: 'Axle steel ultimate strength', group: 'factors', unit: 'psi',
-    default: 85000, min: 45000, max: 140000, step: 1000, status: 'verify', ref: 'D-54, D-71',
+    default: 85000, min: 45000, max: 140000, step: 1000, status: 'assumed', ref: 'D-54, D-71',
     note: 'Companion of axleYieldPsi (1045 cold-finished ~ 91 ksi nominal; 85 ksi assumed). Hard-hit rear axle row.',
   },
   axleTubeUltimatePsi: {
     label: 'Axle tube ultimate strength (DOM)', group: 'factors', unit: 'psi',
-    default: 80000, min: 45000, max: 140000, step: 1000, status: 'verify', ref: 'D-60',
+    default: 80000, min: 45000, max: 140000, step: 1000, status: 'assumed', ref: 'D-60',
     note: 'Used only with a hollow tube (axleWallIn above 0); with the default solid rod (D-71) the checklist does not ask for it. D-60: companion of axleTubeYieldPsi (1026 DOM about 80 ksi tensile minimum): the hard-hit rows use it with the fail-safe factor. Confirm on the vendor listing.',
   },
   ss316BoltYieldPsi: {
@@ -2356,7 +2356,7 @@ const defs = {
   },
   grade8BoltYieldPsi: {
     label: 'SAE grade 8 bolt yield', group: 'factors', unit: 'psi',
-    default: 130000, min: 30000, max: 150000, step: 5000, status: 'verify', ref: 'D-43, D-54',
+    default: 130000, min: 30000, max: 150000, step: 5000, status: 'assumed', ref: 'D-43, D-54',
     note: 'Grade 8 = 130 ksi yield, 150 ksi tensile. (Was kingpinPlateBoltYieldPsi / kingpinYieldPsi.)',
   },
   grade8BoltUltimatePsi: {
