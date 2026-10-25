@@ -51,6 +51,12 @@ export const PRE_D71: Partial<Params> = {
  * sides, box, lid and signs are 0.21 in white oak plywood (they were 4 mm okoume). `PRE_D72` puts the D-71 tube and the 4 mm okoume back for the tests whose literal numbers were worked out for them
  * (the D-60 weight package, the hand calculations on the tube, the 4 mm sandwich bands). Spread it over the defaults BEFORE PRE_D71 and PRE_D66. The new defaults are tested in d72.test.ts.
  */
+/**
+ * D-101 (Eric's bend test, 2026-10-25) made the rail three 1/4 in strips (it was two of 3/8 in). The 3/8 in rough of a 1/4 in strip is the band strips' rough, so the rails and bands now share
+ * one resaw pool of 4/4. `PRE_D101` puts the two-ply rail back for the tests of two separate pools (the 1/2 in rail strips from their own board). The new defaults are tested in d101.test.ts.
+ */
+export const PRE_D101: Partial<Params> = { railPlies: 2 };
+
 export const PRE_D72: Partial<Params> = {
   thinSheetMaterial: 2, // 4 mm okoume marine (THIN_SHEET.okoumeMarine)
   panelPlyIn: 0.157, okoumeMoePerpPsi: 150000, okoumeMorPerpPsi: 1500, // D-80 made the okoume option 6 mm (0.236 in, 315,000 / 3,000 psi across the grain); these are the 4 mm values

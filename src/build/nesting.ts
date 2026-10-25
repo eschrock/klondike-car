@@ -231,7 +231,7 @@ export interface OakThickness {
   /** Cut plan of the solid pieces onto boards. */
   boards: Board[];
   /** Dedicated boards that are resawn into laminate strips (from planResaw): the boards to buy, how many strips the pool needs, the spares the boards leave and the strips each board yields. */
-  resawBoards: Array<{ lengthIn: number; widthIn: number; count: number; pool: number; strips: number; spares: number; yieldPerBoard: number }>;
+  resawBoards: Array<{ lengthIn: number; widthIn: number; count: number; pool: number; strips: number; spares: number; yieldPerBoard: number; yieldText: string }>;
   /** Pieces of thinner boards cut from the free lane space of this board's plan (see `OakPlan.folded`). */
   foldedIn?: Array<{ from: string; partNos: string[]; netBf: number }>;
   /** Layer pieces of face-laminated parts that are cut from this thickness's boards (pieces, the parts, and their rough board feet on this thickness). */
@@ -432,7 +432,7 @@ export function oakBoardFeet(parts: Part[], p: Params): OakPlan {
     }
     stripCount.set(pool.board, (stripCount.get(pool.board) ?? 0) + pool.strips);
     (resawBoards.get(pool.board) ?? resawBoards.set(pool.board, []).get(pool.board)!).push({
-      lengthIn: pool.boardLengthIn, widthIn: pool.boardWidthIn, count: pool.boards, pool: i, strips: pool.strips, spares: pool.spares, yieldPerBoard: pool.yieldPerBoard,
+      lengthIn: pool.boardLengthIn, widthIn: pool.boardWidthIn, count: pool.boards, pool: i, strips: pool.strips, spares: pool.spares, yieldPerBoard: pool.yieldPerBoard, yieldText: pool.yieldText,
     });
     resawBf.set(pool.board, (resawBf.get(pool.board) ?? 0) + pool.boardFeet);
   });
@@ -472,7 +472,7 @@ export function oakBoardFeet(parts: Part[], p: Params): OakPlan {
     const tally = new Map<number, number>();
     for (const q of boards) tally.set(q.lengthIn, (tally.get(q.lengthIn) ?? 0) + 1);
     const summary = [...tally.entries()].sort((a, c) => a[0] - c[0]).map(([l, n]) => `${n} x ${b.nominal} x ${BOARD_WIDTH_IN}" x ${lenFt(l)}`);
-    for (const r of rb) summary.push(`${r.count} x ${b.nominal} x ${r.widthIn}" wide x ${lenFt(r.lengthIn)} (resaw into laminate strips: ${r.strips} needed, ${r.yieldPerBoard} per board, ${r.spares} spare${r.spares === 1 ? '' : 's'})`);
+    for (const r of rb) summary.push(`${r.count} x ${b.nominal} x ${r.widthIn}" wide x ${lenFt(r.lengthIn)} (resaw into laminate strips: ${r.strips} needed, ${r.yieldText}, ${r.spares} spare${r.spares === 1 ? '' : 's'})`);
     const byW = new Map<number, { in: number; pieces: number; longest: number }>();
     const addW = (w: number, len: number, n: number, cut = len): void => {
       const k = Math.ceil(w - 1e-9), e = byW.get(k) ?? byW.set(k, { in: 0, pieces: 0, longest: 0 }).get(k)!;

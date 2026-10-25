@@ -102,7 +102,7 @@ describe('forms and templates', () => {
 
   it('bends the rail strips on a form whose face follows the plan turn-in, with the spring-back noted and not applied', () => {
     expect(dim('rail-form', 'turn-in')).toBeCloseTo(L.taper.turnIn, 6);
-    expect(dim('rail-form', 'strip')).toBeCloseTo(p.railThicknessIn / 2, 6);
+    expect(dim('rail-form', 'strip')).toBeCloseTo(p.railThicknessIn / p.railPlies, 6);
     expect(dim('rail-form', 'min-radius')).toBeCloseTo(L.taper.minRadiusIn, 6);
     expect(dim('rail-form', 'springback-low')).toBeGreaterThan(0);
     // The face is the rail's own outer face: the rail mesh's outermost vertex at the rail end is the hull's outer half width there.
@@ -352,7 +352,7 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
     expect(t).toMatch(/packing tape/);
     expect(t).toMatch(/SPRING-BACK: none is built in/);
     expect(t).toContain(`CLAMP: ${dim('rail-form', 'clamps') + 2} or ${dim('rail-form', 'clamps') + 3} bar or pipe clamps`);
-    expect(t).toMatch(/2 strips \(3\/8" × 3-3\/8"\)/); // the strips as cut: planed to the 3" rail depth after the glue-up
+    expect(t).toContain(`${p.railPlies} strips (${frac(p.railThicknessIn / p.railPlies)} × 3-3/8"`); // the strips as cut: planed to the 3" rail depth after the glue-up
     expect(byId('rail-form').svg).toContain('<g id="sketch">');
   });
 
@@ -431,7 +431,7 @@ describe('forms read plainly (readability round 2)', () => {
     const run = d.build.find((s) => s.step.startsWith('STRAIGHT RUN'))!;
     const step = [run.step, ...(run.sub ?? [])].join(' ');
     expect(step).not.toContain('cut the strips');
-    expect(step).toContain(`bow end about ${frac(bow)} past the form's bow end`);
+    expect(step).toContain(`bow ends about ${frac(bow)} past the form's bow end`);
     // the strip is the bow allowance, the form (along its curved face, a little longer than its straight length) and the overhang
     expect(strip.rough.l - bow - hang).toBeGreaterThan(form - 1e-6);
     expect(strip.rough.l - bow - hang).toBeLessThan(form + 0.5);
@@ -500,8 +500,8 @@ describe('materials: the shopping list for each jig', () => {
     const base = /BASE: 3\/4" plywood ([\d/ -]+)" × ([\d/ -]+)"/.exec(build)!;
     expect(list).toMatch(/3\/4" plywood: 1 base, [\d/-]+" × [\d/-]+"/);
     expect(base).toBeTruthy();
-    expect(list).toContain(`2 spare rail strips`);
-    expect(build).toContain('Glue 2 spare rail strips');
+    expect(list).toContain(`${p.railPlies} spare rail strips`); // D-101: the test rail is a full rail, all its plies
+    expect(build).toContain(`Glue ${p.railPlies} spare rail strips`);
   });
 
   it('side form: the cleats, stops, ribs, bench tops and sand match the build steps', () => {

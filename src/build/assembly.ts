@@ -740,6 +740,9 @@ function poolOf(c: StepCtx, x: Part | undefined): ResawPool | undefined {
   return row ? c.resaw().find((q) => Math.abs(q.roughT - row.rough.t) < 0.002) : undefined;
 }
 
+/** A small count in lowercase words ("three"), digits past ten. */
+const countWord = (n: number): string => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] ?? String(n);
+
 /**
  * The resaw sub-items for one strip pool, every number from the cut list's resaw plan (`planResaw`), which models the method written here: rip the strip lanes off the board
  * FIRST, then resaw each lane on edge, so the resaw height is only the strip width (Eric's bandsaw cuts 6"; the board may be 9" or 10" wide).
@@ -753,8 +756,7 @@ function resawSubs(c: StepCtx, x: Part, strips: number): Instr[] {
   const board = BOARD_THICKNESSES.find((b) => b.nominal === pool.board);
   const usable = board ? resawUsableIn(board, c.p) : undefined;
   // The lanes in words: how many of each width, what the odd width is for, and which lanes are the spares (round-2 readability).
-  const NUMW = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
-  const nw = (n: number): string => NUMW[n] ?? String(n);
+  const nw = countWord;
   const spareN = Math.max(0, pool.ripLanes - pool.lanes);
   const widths = [...pool.laneWidthsIn, ...Array(spareN).fill(pool.laneWidthsIn[0])] as number[];
   const byW = [...new Set(widths)].map((w) => ({ w, n: widths.filter((x) => x === w).length, uses: [...new Set(pool.laneStrips.filter((_, i) => pool.laneWidthsIn[i] === w).flat().map((q) => c.cut().strips.find((r) => r.ids.includes(q.id))?.name ?? ''))] }));
@@ -762,12 +764,13 @@ function resawSubs(c: StepCtx, x: Part, strips: number): Instr[] {
   const lanesText = byW.length === 1
     ? `${pool.ripLanes} lanes, all ${fin(byW[0].w)}${spareN ? `; ${spareN === 1 ? `lane ${pool.ripLanes} is the spare` : `lanes ${pool.lanes + 1}${spareN === 2 ? ' and ' : ' to '}${pool.ripLanes} are spares`}` : ''}`
     : `${pool.ripLanes} lanes: ${byW.map((g, i) => `${nw(g.n)} at ${fin(g.w)}${byW.length > 1 && i > 0 ? useText(g.uses) : ''}`).join(' and ')}${spareN === 1 ? `; lane ${pool.ripLanes} (${fin(widths[widths.length - 1])}) is the spare` : spareN > 1 ? `; lanes ${pool.lanes + 1}${spareN === 2 ? ' and ' : ' to '}${pool.ripLanes} are spares` : ''}`;
-  const perBoard = Math.ceil(pool.ripLanes / Math.max(1, pool.boards));
-  const needW = perBoard * pool.laneWidthsIn[0] + (perBoard - 1) * c.p.resawKerfIn;
+  // Which lanes come off which board: the cut list's own packing (spare lanes included), by lane number as in the figure.
+  const lanesOf = (ls: number[]): string => { const n = ls.map((i) => String(i + 1)); return n.length > 1 ? `lanes ${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : `lane ${n[0]}`; };
+  const byBoard = pool.boardLanes.map((ls, i) => `board ${i + 1}, ${lanesOf(ls)} (${ls.map((n) => fin(widths[n])).join(', ')})`);
   return [
-    I(`${rip}: ${lanesText}.`, pool.boards > 1 ? [`Each board must still be ${fin(needW)} wide after one edge is jointed straight (${nw(perBoard)} lanes and the saw kerf): check before ripping, or take a wider board.`] : []),
-    I(`Then resaw each lane on edge into ${plural(k, 'slab')}, about ${fin(pool.roughT)} each: ${pool.resawHeightText}. Never stand the whole board on edge.${pool.withinCapacity ? '' : ' TOO TALL for your bandsaw: the strip is wider than the saw can cut.'}`, usable !== undefined ? [`Joint one face of the rough board, but do not plane it to its finished thickness first: ${plural(k, 'slab')} of ${fin(pool.roughT)} and the saw kerf need about ${fin(usable)} of it.`] : []),
-    I(`That gives ${pool.stripSlots} strips for the ${strips} needed: ${pool.spares <= 0 ? 'no spare, so a strip that cracks on the form means another board' : `${plural(pool.spares, 'spare')} for the bend test`}.`),
+    I(`${rip}: ${lanesText}.`, pool.boards > 1 ? [`Lay the lanes out by board: ${byBoard.join('; ')}.`, `Each board must be at least ${fin(pool.boardNeedIn)} wide before it is jointed: its lanes and the saw kerfs, plus ${fin(c.p.resawEdgeAllowanceIn)} to joint one edge straight and leave the rough far edge. Joint that edge first, then rip.`] : []),
+    I(`Then resaw each lane on edge into ${plural(k, 'slab')}, about ${fin(pool.roughT)} each: ${pool.resawHeightText}. Never stand the whole board on edge.${pool.withinCapacity ? '' : ' TOO TALL for your bandsaw: the strip is wider than the saw can cut.'}`, usable !== undefined ? [`Joint one face of each lane before it is resawn (it rides against the fence), but do not plane it to its finished thickness first: ${plural(k, 'slab')} of ${fin(pool.roughT)} and the saw kerf need about ${fin(usable)} of it.`] : []),
+    I(`That gives ${pool.stripSlots} strips for the ${strips} needed${pool.spares <= 0 ? ': no spare, so a strip that cracks on the form means another board' : `, with ${pool.sparesText}`}.`),
   ];
 }
 
@@ -1173,7 +1176,13 @@ const TEMPLATES_1: Template[] = [
               })),
             ])]
             : []),
-          band
+          ...(band && rail && poolOf(c, band) && poolOf(c, band) === poolOf(c, rail)
+            // D-101: the 1/4 in rail strips and the band strips come off the same rough thickness, so one resaw of one set of boards gives both.
+            ? [I(`Resaw the bending strips: ${nRailStrips} for ${tl(rails.map((x) => x.id))} and ${bands.length} for the chine and gunwale bands, all from the same boards (cut list, strips table).`, [
+              ...resawSubs(c, band, nRailStrips + bands.length),
+              `Plane the band strips to ${thick(band.stock!.t)} and the rail strips to ${thick(rail.stock!.t)} (on the day, as below), with a planer sled or drum sander: the strips are thin and wide. Leave the rail strips at the lane width; the rail is planed to ${fin(rail.stock!.w)} deep after the glue-up.`,
+            ], [...bands, ...rails].map((x) => x.id))]
+            : [band
             ? I(`Resaw the band strips: ${bands.length} for the chine and gunwale bands (cut list, strips table).`, [
               ...resawSubs(c, band, bands.length),
               `Plane or drum-sand each strip to ${thick(band.stock!.t)} (on the day, as below).`,
@@ -1184,7 +1193,7 @@ const TEMPLATES_1: Template[] = [
               ...resawSubs(c, rail, nRailStrips),
               `Plane to ${thick(rail.stock!.t)} thick (on the day, as below), with a planer sled or drum sander: the strip is thin and wide. Leave it at the lane width; the rail is planed to ${fin(rail.stock!.w)} deep after the glue-up.`,
             ])
-            : I('Rail strips: none in this model.'),
+            : I('Rail strips: none in this model.')]),
           ...(blanks.length ? [I('Saw the single-board bandsaw blanks from thick stock (the glued blocks above are sawn to shape in the steps that use them).', blanks)] : []),
           I('Resaw the strips now, but plane each to its final thickness the day it is glued or bent: a thin strip cups overnight. Keep them stickered and weighted flat until then.'),
         ],
@@ -1249,6 +1258,8 @@ const TEMPLATES_1: Template[] = [
       const rail = c.parts.find((x) => x.id === 'rail-L');
       const bandPool = poolOf(c, c.by('side-L-chine'));
       const railPool = poolOf(c, rail);
+      const railPlies = rail?.plies ?? 1;
+      const nw = countWord;
       const t = bowTaper(c.p);
       const railForm = c.forms().find((d) => d.id === 'rail-form');
       const formLen = railForm?.dims.find((q) => q.key === 'form-length')?.valueIn;
@@ -1273,9 +1284,13 @@ const TEMPLATES_1: Template[] = [
             ])
             : I('Rail form: no bow turn-in at this design, so the rails are straight and need no form.', ['Glue them flat on the bench with cauls.']),
           I('Bend-test a dry strip on the finished form.', [
-            `Use a planned spare: ${railPool ? plural(railPool.spares, 'spare rail strip') : 'a spare rail strip'} and ${bandPool ? plural(bandPool.spares, 'spare band strip') : 'a spare band strip'} came out of the resaw.`,
-            'Both spares go into the test rail next, so there is no spare left over: a real strip that cracks or cups later needs another lane ripped from the 8/4 offcut or a second board.',
-            'If the dry strip cracks: the rail needs thinner strips (3 thinner plies instead of 2). Stop and re-plan the rail before going on. Do not heat or steam strips to make them bend: epoxy bonds badly to wet, steamed oak.',
+            railPool && railPool === bandPool
+              ? `Use a planned spare: ${plural(railPool.spares, 'spare strip')} at the rail width came out of the resaw (rails and bands share the boards).`
+              : `Use a planned spare: ${railPool ? plural(railPool.spares, 'spare rail strip') : 'a spare rail strip'} and ${bandPool ? plural(bandPool.spares, 'spare band strip') : 'a spare band strip'} came out of the resaw.`,
+            railPool && railPool === bandPool
+              ? `${cap(nw(railPlies))} of them, this strip included, go into the test rail next; ${railPool.spares > railPlies ? `${railPool.spares - railPlies === 1 ? 'the last one' : `the other ${railPool.spares - railPlies}`} is kept for the band bend test on the side form (later the gunwale cap strips)` : 'none is left for the band bend test, so that needs another board'}. ${railPool.boardLaneWidthsIn.some((ws) => railPool.boardWidthIn - c.p.resawEdgeAllowanceIn - (ws.reduce((a, w) => a + w + c.p.resawKerfIn, 0)) >= railPool.laneWidthsIn[0] - 1e-9) ? `A real strip that cracks or cups later comes from another lane ripped from a board's offcut.` : `A real band strip that cracks can come from an offcut, but a rail strip needs another board: the offcuts are narrower than a rail lane.`}`
+              : `${railPlies <= 2 ? 'Both spares go' : `${cap(nw(railPlies))} spares go`} into the test rail next, so there is no spare left over: a real strip that cracks or cups later needs another lane ripped from the ${railPool?.board ?? 'board'} offcut or a second board.`,
+            `If the dry strip cracks: the rail needs thinner strips (${railPlies + 1} thinner plies instead of ${railPlies}). Stop and re-plan the rail before going on. Do not heat or steam strips to make them bend: epoxy bonds badly to wet, steamed oak.`,
           ]),
           ...(springBack ? [I('Spring-back test: glue one test rail before the real ones.', [cap(springBack)])] : []),
         ],

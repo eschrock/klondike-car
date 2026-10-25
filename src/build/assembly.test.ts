@@ -3,7 +3,7 @@ import { buildModel } from '../model';
 import { worldAABB } from '../model/bounds';
 import { HULL_STEP, STEP } from '../model/build-utils';
 import { defaultParams, KNEE_MOUNT, THIN_SHEET } from '../params';
-import { PRE_D72 } from '../test-fixtures';
+import { PRE_D101, PRE_D72 } from '../test-fixtures';
 import type { Part } from '../model/types';
 import type { Params } from '../params';
 import { cutList, ribFillers } from './cutlist';
@@ -429,7 +429,7 @@ describe('build review round 1: forms and resaw numbers come from their sources 
   it('writes the resaw text from the cut list pools, with its spare strips, and buys nothing', () => {
     const pools = cutList(parts, p).resaw;
     const mill = steps.find((s) => s.id === 'mill')!.instructions.join(' ');
-    expect(pools.length).toBeGreaterThanOrEqual(2);
+    expect(pools.length).toBeGreaterThanOrEqual(1); // D-101: the rails and bands share one 4/4 pool (PRE_D101 below has two)
     for (const pool of pools) {
       // the rip text names the board thickness: "a 10"-wide 4/4 board", "2 boards of 5/4"
       expect(mill).toContain(pool.ripText.replace(/^./, (c) => c.toUpperCase()).replace(/\b(\d+) boards\b/, `$1 boards of ${pool.board}`).replace(/\bboard first\b/, `${pool.board} board first`));
@@ -561,7 +561,7 @@ describe('build review round 2: step 1 names the cut list boards, rip first (MUS
   });
 
   it('prescribes rip first and quotes the resaw height, the yield, the spares and the lane plan from cutList().resaw', () => {
-    expect(cl.resaw.length).toBeGreaterThanOrEqual(2);
+    expect(cl.resaw.length).toBeGreaterThanOrEqual(1);
     for (const pool of cl.resaw) {
       // r3 MUST-1: the lane count includes the spare lanes, so ripping as written yields the spares the bend test uses
       const rip = pool.ripText.replace(/\b(\d+) boards\b/, `$1 boards of ${pool.board}`).replace(/\bboard first\b/, `${pool.board} board first`);
@@ -575,17 +575,26 @@ describe('build review round 2: step 1 names the cut list boards, rip first (MUS
     expect(mill).toMatch(/Never stand the whole board on edge/);
   });
 
-  it('bends a real spare strip: the rail form step quotes the spares of both pools and the verify test uses them', () => {
-    const shaper = steps.find((s) => s.id === 'rail-form')!.instructions.join(' ');
-    const rail = cl.resaw.find((q) => cl.strips.some((r) => r.ids.includes('rail-L') && Math.abs(r.rough.t - q.roughT) < 0.002))!;
-    const band = cl.resaw.find((q) => cl.strips.some((r) => r.ids.includes('side-L-chine') && Math.abs(r.rough.t - q.roughT) < 0.002))!;
+  it.each([['three plies, one shared pool (D-101)', {}], ['two plies, two pools (PRE_D101)', PRE_D101]] as Array<[string, Partial<Params>]>)('bends a real spare strip: the rail form step quotes the spares and the verify test uses them: %s', (_, over) => {
+    const q = { ...p, ...over };
+    const qParts = buildModel(q);
+    const qcl = cutList(qParts, q);
+    const shaper = assemblySteps(qParts, q).find((s) => s.id === 'rail-form')!.instructions.join(' ');
+    const rail = qcl.resaw.find((r) => qcl.strips.some((s) => s.ids.includes('rail-L') && Math.abs(s.rough.t - r.roughT) < 0.002))!;
+    const band = qcl.resaw.find((r) => qcl.strips.some((s) => s.ids.includes('side-L-chine') && Math.abs(s.rough.t - r.roughT) < 0.002))!;
     expect(rail.spares).toBeGreaterThanOrEqual(1);
     expect(band.spares).toBeGreaterThanOrEqual(1);
-    expect(shaper).toContain(`${rail.spares} spare rail strip`);
-    expect(shaper).toContain(`${band.spares} spare band strip`);
-    const bend = verifyChecklist(parts, p).find((v) => v.id === 'strip-bend')!;
-    expect(bend.whatToDo).toContain(`${band.board} × ${band.boardWidthIn}" (${band.spares} spare`);
-    expect(bend.whatToDo).toContain(`${rail.board} × ${rail.boardWidthIn}" (${rail.spares} spare`);
+    const bend = verifyChecklist(qParts, q).find((v) => v.id === 'strip-bend')!;
+    if (rail === band) {
+      expect(rail.spares).toBeGreaterThanOrEqual(q.railPlies + 1); // a full test rail and a band test strip
+      expect(shaper).toContain(`${rail.spares} spare strips at the rail width`);
+      expect(bend.whatToDo).toContain(`from the same boards: ${rail.board} × ${rail.boardWidthIn}" (${rail.spares} spare`);
+    } else {
+      expect(shaper).toContain(`${rail.spares} spare rail strip`);
+      expect(shaper).toContain(`${band.spares} spare band strip`);
+      expect(bend.whatToDo).toContain(`${band.board} × ${band.boardWidthIn}" (${band.spares} spare`);
+      expect(bend.whatToDo).toContain(`${rail.board} × ${rail.boardWidthIn}" (${rail.spares} spare`);
+    }
     expect(bend.whatToDo).toMatch(/SPARE strips/);
     expect(bend.whatToDo).not.toMatch(/needs one more board/);
   });

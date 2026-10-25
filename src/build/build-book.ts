@@ -343,7 +343,7 @@ function cutlistSection(d: BuildData): string {
         ul([
           `${esc(pool.ripText[0].toUpperCase() + pool.ripText.slice(1))}: ${esc(pool.laneCountText)}.`,
           `Then resaw each lane on edge into ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'}: ${esc(pool.resawHeightText)}.`,
-          `${pool.stripSlots} strips come out for the ${pool.strips} needed: ${pool.spares} spare${pool.spares === 1 ? '' : 's'} for the bend test.`,
+          `${pool.stripSlots} strips come out for the ${pool.strips} needed: ${pool.sparesText}.`,
         ], 'small'));
     }
   }
@@ -405,7 +405,7 @@ function boardsSection(d: BuildData): string {
     for (const r of t.resawBoards) {
       const pool = o.resaw[r.pool];
       out.push(`<h4>${esc(t.board)} resaw: ${r.count} × ${r.widthIn}" wide × ${r.lengthIn / 12} ft</h4>`);
-      out.push(`<p class="small">${pool.strips} strips of ${roughFrac(pool.roughT)} rough (${esc([...new Set(pool.laneStrips.flat().map((s) => nameOf(s.id)))].join(', '))}); each board yields ${r.yieldPerBoard} strips, so ${r.spares} spare${r.spares === 1 ? '' : 's'}.</p>`);
+      out.push(`<p class="small">${pool.strips} strips of ${roughFrac(pool.roughT)} rough (${esc([...new Set(pool.laneStrips.flat().map((s) => nameOf(s.id)))].join(', '))}); the boards yield ${r.yieldText.replace(/ per board$/, '')} strips (${pool.stripSlots} in all), so ${pool.sparesText}.</p>`);
     }
   }
   return out.join('');

@@ -61,7 +61,7 @@ export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, linkage: 4.7,
  *      (1/16 in) narrower than the gap between the two webs on each side (D-63), so a rigid sheet drops between two bent webs; thickened epoxy fills that slot too.
  *   1. (4.0) Forms: one S-form (two 3/4" MDF cauls) for the plan turn-in. Cut each one-piece 4 mm web (D-68) to the flat
  *      development of the sheer, glue the sign backing strips inside them.
- *   2. (4.0) Frame (rails, joists, king beam) + deck glued as a unit, right side up on the bench; the Domino mortises in the rail tops are cut. The rails are two 3/8 strips bent on the form, glued into the frame 1/2" LONG at both ends (they are trimmed in step 3, once the true length is known).
+ *   2. (4.0) Frame (rails, joists, king beam) + deck glued as a unit, right side up on the bench; the Domino mortises in the rail tops are cut. The rails are three 1/4 strips bent on the form (D-101), glued into the frame 1/2" LONG at both ends (they are trimmed in step 3, once the true length is known).
  *   3. (4.2) Side assemblies on the bench: each web gets an oak band glued on EACH face at the chine and at the gunwale and is bent with them on the form (no grooves); vents drilled.
  *      GLUE-UP POSTURE (3c-8; a web with four bands is a two-direction bend: the sheer in the plane of the web, the S across it): lay the web FLAT on the bench with the S-ramp form
  *      under the bow end, where the S-bend is and the web is only about 5 in tall (the ramp's rise and length come from the D-66 bow taper, `L.taper`; see `src/build/forms.ts`); CLEAT THE SHEER LINE (screws or cleats into a sacrificial

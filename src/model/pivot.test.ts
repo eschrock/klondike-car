@@ -194,8 +194,8 @@ describe('the kingpin stack (D-56, D-58)', () => {
       const r = get(parts, `rail-${tag}`);
       expect(r.stock).toBeDefined();
       expect(r.rough).toBeDefined();
-      expect(r.stock!.t).toBeCloseTo(defaults.railThicknessIn / 2, 9); // S2: the cut list shows ONE strip of the two glued face to face
-      expect(r.plies).toBe(2);
+      expect(r.stock!.t).toBeCloseTo(defaults.railThicknessIn / defaults.railPlies, 9); // S2: the cut list shows ONE strip of the plies glued face to face
+      expect(r.plies).toBe(3); // D-101
       expect(r.stock!.w).toBeCloseTo(defaults.railDepthIn, 9);
       const b = worldAABB(r);
       expect(b.max[2]).toBeCloseTo(L.deckBot, 9);

@@ -408,8 +408,14 @@ export interface ResawPool {
   stripSlots: number;
   /** `stripSlots - strips`: extra strips the purchase yields (insurance for a bend that fails). The assembly steps quote this number. */
   spares: number;
+  /** The fewest spares the purchase must leave (`resawSparesNeeded`: a full test rail and a band test strip). */
+  sparesNeeded: number;
   /** Strips each bought board yields (`stripSlots / boards`, rounded down). */
   yieldPerBoard: number;
+  /** `6 per board`, or `6, 8 and 4 per board` when the boards are ripped differently (their lanes times the slabs a lane gives). */
+  yieldText: string;
+  /** `4 spares (3 for the test rail, 1 for the band bend test)`, or `2 spares for the bend test`: what the spares are for (`resawSparesNeeded`). */
+  sparesText: string;
   /** Strips of each lane (up to `stripsPerBoard`), widest lane first. */
   laneStrips: Array<Array<{ partNo: string; id: string; widthIn: number; lengthIn: number }>>;
   /**
@@ -423,6 +429,12 @@ export interface ResawPool {
   withinCapacity: boolean;
   /** Width of each lane to rip (in), widest first. */
   laneWidthsIn: number[];
+  /** The lanes each bought board is ripped into, spare lanes included, from the plan's own packing, board 1 first: 0-based lane numbers (the planned lanes, then the spare lanes). */
+  boardLanes: number[][];
+  /** The widths of `boardLanes` (in). */
+  boardLaneWidthsIn: number[][];
+  /** The narrowest a bought board may be, as bought: its widest set of lanes, the rip kerfs between them and `resawEdgeAllowanceIn` for the edges. */
+  boardNeedIn: number;
   /** Lanes to rip in all: `lanes` plus the whole lanes the spare strips need. The number step 1 of the assembly and the build book both quote. */
   ripLanes: number;
   /** `5 lanes, 3 at 1-7/8" and 2 at 1-3/8" (one is the spare)`: the lane count, their widths and the spare lanes. One text for the steps, the book and the cut list. */
@@ -859,6 +871,16 @@ export const RESAW_BOARD_WIDTHS_IN: readonly number[] = [BOARD_WIDTH_IN, 7, 8, 9
 export const RESAW_MIN_SPARES = 1;
 
 /**
+ * Spare strips a pool must leave for the tests its strips go through: a bent laminate (a rail) is proved by gluing one test member from spares, all its plies (D-101: a full
+ * glue-up for the spring-back test); a sandwich band by one dry strip bent on the side form. Never fewer than `RESAW_MIN_SPARES`.
+ */
+export function resawSparesNeeded(plans: OakPartPlan[]): number {
+  const lam = Math.max(0, ...plans.filter((q) => (q.part.plies ?? 1) > 1).map((q) => q.part.plies ?? 1));
+  const band = plans.some((q) => q.part.plies === undefined) ? 1 : 0;
+  return Math.max(RESAW_MIN_SPARES, lam + band);
+}
+
+/**
  * Spare strips (of the pool's widest width `stripW`) in a rip-first plan: whole lanes the unused width of each board can still take (`k` strips each),
  * plus the empty slots of lanes that are wide enough for a full-width strip.
  */
@@ -879,19 +901,22 @@ export function spareSlots(boardLanes: StripItem[][][], k: number, stripW: numbe
 export function planResaw(parts: Part[], p: Params, plans?: OakPartPlan[]): ResawPool[] {
   const stripPlans = (plans ? plans.filter((q) => q.strip) : parts.filter((q) => isBuilt(q) && isStripPart(q)).map((q) => planOakPart(q, p))).filter((q) => !isCapStrip(q.part));
   const byT = new Map<number, StripItem[]>();
+  const plansByT = new Map<number, OakPartPlan[]>();
   for (const pl of stripPlans) {
     const rough = pl.pieces[0].rough;
     const t = r3(rough.t);
     const arr = byT.get(t) ?? [];
     for (let i = 0; i < pl.pieces.length; i++) arr.push({ partNo: pl.partNo, id: pl.part.id, widthIn: rough.w, lengthIn: rough.l });
     byT.set(t, arr);
+    plansByT.set(t, [...(plansByT.get(t) ?? []), pl]);
   }
   const pools: ResawPool[] = [];
   for (const [roughT, items] of [...byT.entries()].sort((a, b) => a[0] - b[0])) {
     const boardLengthIn = boardLengthFor(Math.max(...items.map((i) => i.lengthIn)));
     const stripW = Math.max(...items.map((i) => i.widthIn));
+    const minSpares = resawSparesNeeded(plansByT.get(roughT) ?? []);
     const yieldByBoard: Record<string, number> = {};
-    type Pick = { b: BoardThickness; k: number; boards: number; bf: number; widthIn: number; lanes: StripItem[][]; slots: number };
+    type Pick = { b: BoardThickness; k: number; boards: number; bf: number; widthIn: number; lanes: StripItem[][]; packed: StripItem[][][]; slots: number };
     let best: Pick | null = null;
     for (const b of BOARD_THICKNESSES) {
       if (!isOakStocked(b.nominal)) continue; // resaw only from a thickness the yard stocks (prices.ts OAK_STOCKED)
@@ -900,22 +925,23 @@ export function planResaw(parts: Part[], p: Params, plans?: OakPartPlan[]): Resa
       if (k < 1) continue;
       const lanes = makeLanes(items, k);
       for (const widthIn of RESAW_BOARD_WIDTHS_IN) {
-        if (stripW > widthIn + 1e-9) continue;
+        const clearIn = widthIn - p.resawEdgeAllowanceIn; // the width the lanes can use: one edge jointed, the far rough edge left (D-101)
+        if (stripW > clearIn + 1e-9) continue;
         let boards = 1, spares = 0, packed: StripItem[][][] | null = null;
         for (; boards <= lanes.length + 6; boards++) {
-          packed = packLanes(lanes, boards, p.resawKerfIn, widthIn);
+          packed = packLanes(lanes, boards, p.resawKerfIn, clearIn);
           if (!packed) continue;
-          spares = spareSlots(packed, k, stripW, p.resawKerfIn, widthIn);
-          if (spares >= RESAW_MIN_SPARES) break;
+          spares = spareSlots(packed, k, stripW, p.resawKerfIn, clearIn);
+          if (spares >= minSpares) break;
         }
-        if (!packed) continue;
+        if (!packed || spares < minSpares) continue;
         const bf = (boards * b.nominalIn * widthIn * boardLengthIn) / 144;
         const better = !best || bf < best.bf - 1e-9 || (Math.abs(bf - best.bf) < 1e-9 && (boards < best.boards || (boards === best.boards && widthIn < best.widthIn)));
-        if (better) best = { b, k, boards, bf, widthIn, lanes, slots: items.length + spares };
+        if (better) best = { b, k, boards, bf, widthIn, lanes, packed, slots: items.length + spares };
       }
     }
     const fallbackLanes = makeLanes(items, 1);
-    const c: Pick = best ?? { b: BOARD_THICKNESSES[BOARD_THICKNESSES.length - 1], k: 1, boards: fallbackLanes.length, bf: 0, widthIn: BOARD_WIDTH_IN, lanes: fallbackLanes, slots: items.length };
+    const c: Pick = best ?? { b: BOARD_THICKNESSES[BOARD_THICKNESSES.length - 1], k: 1, boards: fallbackLanes.length, bf: 0, widthIn: BOARD_WIDTH_IN, lanes: fallbackLanes, packed: fallbackLanes.map((l) => [l]), slots: items.length };
     const resawHeightIn = Math.max(...c.lanes.map(laneWidth));
     const cap = p.bandsawResawCapacityIn;
     const withinCapacity = resawHeightIn <= cap + 1e-9;
@@ -923,11 +949,27 @@ export function planResaw(parts: Part[], p: Params, plans?: OakPartPlan[]): Resa
     const ripText = c.boards > 1 ? `rip the lanes from ${c.boards} boards, each ${fractionText(c.widthIn, 8)}" wide, first` : `rip the lanes from a ${fractionText(c.widthIn, 8)}"-wide board first`;
     const spares = c.slots - items.length;
     const lc = laneCount(c.lanes, c.k, spares);
+    // Each board's lanes as packed, then the spare lanes (full strip width) in the first boards with room left, so the per-board layout matches the lane count.
+    const widthOf = (i: number): number => (i < c.lanes.length ? laneWidth(c.lanes[i]) : stripW);
+    const usedOf = (ls: number[]): number => ls.reduce((a, i) => a + widthOf(i), 0) + Math.max(0, ls.length - 1) * p.resawKerfIn;
+    const boardLanes = c.packed.map((ls) => ls.map((l) => c.lanes.indexOf(l)).sort((a, b) => a - b));
+    for (let i = c.lanes.length; i < c.lanes.length + lc.spareLanes; i++) (boardLanes.find((ls) => usedOf([...ls, i]) <= c.widthIn - p.resawEdgeAllowanceIn + 1e-9) ?? boardLanes[boardLanes.length - 1]).push(i);
+    const boardLaneWidthsIn = boardLanes.map((ls) => ls.map(widthOf));
+    const boardNeedIn = Math.max(0, ...boardLanes.map(usedOf)) + p.resawEdgeAllowanceIn;
+    const perBoard = boardLanes.map((ls) => ls.length * c.k);
+    const yieldText = new Set(perBoard).size <= 1 ? `${perBoard[0] ?? 0} per board` : `${perBoard.slice(0, -1).join(', ')} and ${perBoard[perBoard.length - 1]} per board`;
+    const poolPlans = plansByT.get(roughT) ?? [];
+    const lamPlies = Math.max(0, ...poolPlans.map((q) => q.part.plies ?? 0));
+    const hasBand = poolPlans.some((q) => q.part.plies === undefined);
+    const sp = (n: number): string => `${n} spare${n === 1 ? '' : 's'}`;
+    const sparesText = lamPlies > 1 && hasBand && spares >= lamPlies + 1
+      ? `${sp(spares)} (${lamPlies} for the test rail, ${spares - lamPlies} for the band bend test)`
+      : `${sp(spares)} for the bend test`;
     pools.push({
       roughT, strips: items.length, board: c.b.nominal, boardLengthIn, boardWidthIn: c.widthIn, yieldByBoard, stripsPerBoard: c.k,
       lanes: c.lanes.length, boards: c.boards, boardFeet: c.bf, laneStrips: c.lanes,
-      stripSlots: c.slots, spares, yieldPerBoard: Math.floor(c.slots / c.boards),
-      resawHeightIn, bandsawCapacityIn: cap, withinCapacity, laneWidthsIn: c.lanes.map(laneWidth), ripLanes: lc.total, laneCountText: lc.text, resawHeightText, ripText,
+      stripSlots: c.slots, spares, sparesNeeded: minSpares, yieldPerBoard: Math.floor(c.slots / c.boards), yieldText, sparesText,
+      resawHeightIn, bandsawCapacityIn: cap, withinCapacity, laneWidthsIn: c.lanes.map(laneWidth), boardLanes, boardLaneWidthsIn, boardNeedIn, ripLanes: lc.total, laneCountText: lc.text, resawHeightText, ripText,
       text: `${ripText[0].toUpperCase()}${ripText.slice(1)}, then resaw each lane into ${c.k} slab${c.k === 1 ? '' : 's'} on edge (${resawHeightText})${withinCapacity ? '' : `: TOO TALL for your bandsaw, the strip is wider than its ${fractionText(cap, 8)}" capacity`}.`,
     });
   }

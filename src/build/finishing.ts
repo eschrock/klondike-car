@@ -540,7 +540,8 @@ const dominoSizeKey = (size = ''): string => /^\s*(\d+)\s*[×x]\s*(\d+)/.exec(si
 function faces(x: Part): { large: number; narrow: number } | null {
   const s = x.stock;
   if (!s) return null;
-  const d = [s.t, s.w, s.l].sort((u, v) => u - v);
+  // a laminated part's stock is ONE strip: its faces are those of the whole glued member (the rail top is all its plies wide)
+  const d = [s.t * (x.plies ?? 1), s.w, s.l].sort((u, v) => u - v);
   return { large: d[1] * d[2], narrow: d[0] * d[2] };
 }
 

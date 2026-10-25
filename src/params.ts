@@ -1781,6 +1781,11 @@ const defs = {
     label: 'Frame rail thickness', group: 'stock', unit: 'in',
     default: 0.75, min: 0.5, max: 1.25, step: 0.0625, status: 'explore',
   },
+  railPlies: {
+    label: 'Frame rail: strips glued face to face', group: 'stock', unit: '',
+    default: 3, min: 1, max: 4, step: 1, status: 'locked', ref: 'D-101',
+    note: 'D-101 (Eric, 2026-10-25 bend test): a dry 3/8 in strip took the bow radius but was stiff enough to worry about spring-back, so the rail is three strips of 1/4 in (railThicknessIn / this) instead of two of 3/8 in. Same rail, same form; one more glue line and two more strips to resaw and plane.',
+  },
   railDepthIn: {
     label: 'Frame rail depth', group: 'stock', unit: 'in',
     default: 3, min: 1.5, max: 5, step: 0.125, status: 'explore',
@@ -1928,6 +1933,11 @@ const defs = {
     label: 'Oak waste allowance (board feet)', group: 'stock', unit: '×',
     default: 0.3, min: 0, max: 1, step: 0.05, status: 'assumed',
     note: 'Phase 4 (cut list, BOM): the rough-volume board feet are multiplied by (1 + this) to cover knots, checks, sapwood, snipe and the offcuts a cut plan cannot use. 30 % is typical for hand-selected rough white oak.',
+  },
+  resawEdgeAllowanceIn: {
+    label: 'Strip boards: width lost to the edges', group: 'stock', unit: 'in',
+    default: 0.5, min: 0, max: 1, step: 0.0625, status: 'assumed', ref: 'D-101',
+    note: 'A rough strip board is jointed straight on one edge before the lanes are ripped, and its far edge is rough or waney: the resaw plan packs the lanes into the board width less this, so a "9 in" board really holds its lanes (review of D-101: 8-7/8 in of lanes on a 9 in board left 1/8 in).',
   },
   resawKerfIn: {
     label: 'Saw kerf (resaw, rip and crosscut)', group: 'stock', unit: 'in',
