@@ -79,7 +79,7 @@ describe('buildPackage', () => {
     expect(csv).not.toMatch(/Oak, by board thickness|Face-laminated layers|Resawn strips\n|Part no|D-\d+/);
     expect(csv).not.toMatch(/Rail L,2,3\/8 × 3 × 59/);
     expect(csv).not.toMatch(/\d\.\d+ × \d/);
-    expect(csv).toMatch(/"?Rail, strip 1 of 2/); // the rail is cut as its strips, not listed at its final size
+    expect(csv).toMatch(/"?Rail, strip 1 of 3/); // the rail is cut as its strips, not listed at its final size
     expect(csv).toContain('glue the 3 layers face to face');
   });
 

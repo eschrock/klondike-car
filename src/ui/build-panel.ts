@@ -528,7 +528,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
           h('strong', {}, `${pool.strips} strips, ${roughFrac(pool.roughT)} rough, from ${pool.boards} × ${pool.board} board${pool.boards === 1 ? '' : 's'}`),
           h('ul', { class: 'bp-sublist' }, h('li', {}, `${cap(pool.ripText)}: ${pool.laneCountText}.`), h('li', {}, `Then resaw each lane on edge into ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'}: ${pool.resawHeightText}.`),
             ...(pool.withinCapacity ? [] : [h('li', { class: 'fail' }, `Taller than the bandsaw can cut (${roughFrac(pool.bandsawCapacityIn)}): see the data warnings.`)])),
-          h('p', { class: 'muted small' }, `${pool.stripSlots} strips come out for the ${pool.strips} needed: ${pool.spares} spare${pool.spares === 1 ? '' : 's'} for the bend test.`)));
+          h('p', { class: 'muted small' }, `${pool.stripSlots} strips come out for the ${pool.strips} needed: ${pool.sparesText}.`)));
       }
     }
 

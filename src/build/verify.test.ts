@@ -80,8 +80,8 @@ describe('verify checklist (D-100: only the fits that change a purchase or a cut
   it('the strip bend test comes before ordering and uses the planned spares', () => {
     const bend = list.find((c) => c.id === 'strip-bend')!;
     expect(bend.when).toBe('before ordering');
-    expect(bend.whatToDo).toMatch(/2 vs 3 plies/);
-    expect(bend.whatToDo).toMatch(/FIRST board of each strip pool/);
+    expect(bend.whatToDo).toMatch(/plan 4 plies of 3\/16" instead/);
+    expect(bend.whatToDo).toMatch(/Get the strip boards before the rest of the lumber list \(rail and band strips, from the same boards/); // D-101: one shared pool (two pools: "FIRST board of each strip pool")
     expect(bend.whatToDo).toMatch(/planned SPARE strips/);
     expect(bend.whatToDo).toMatch(/\d+ spare strips?\)/);
   });

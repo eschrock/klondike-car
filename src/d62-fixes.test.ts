@@ -178,9 +178,9 @@ describe('M3 / S11 / materials', () => {
     expect(get('handle-bar').stock!.w).toBeGreaterThanOrEqual(4.4);
     expect(get('handle-bar').sourcing!.vendor).toMatch(/5\/4 × 6/);
   });
-  it('S2: the cut list shows strips for the laminated members (rails: 2 plies of 3/8, sandwich bands: one 0.234 in strip)', () => {
-    expect(get('rail-L').plies).toBe(2);
-    expect(get('rail-L').stock!.t).toBeCloseTo(0.375, 9);
+  it('S2: the cut list shows strips for the laminated members (rails: 3 plies of 1/4 since D-101, sandwich bands: one 0.234 in strip)', () => {
+    expect(get('rail-L').plies).toBe(3);
+    expect(get('rail-L').stock!.t).toBeCloseTo(0.25, 9);
     expect(get('side-L-gunwale').stock!.t).toBeCloseTo(computeLayout(defaults).sideBand, 9);
     expect(get('side-L-gunwale').kind).toBe('bentlam');
   });

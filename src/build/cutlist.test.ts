@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
-import { PRE_D72 } from '../test-fixtures';
+import { PRE_D101, PRE_D72 } from '../test-fixtures';
 import { isOakStocked } from './prices';
 import { assemblySteps } from './assembly';
 import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, boardFinishedIn, finalFrac, roughFrac, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, fabText, glueUpName, groupedName, isBuilt, ribFillers, ribFillerSource, sizeText, laminationText, makeLanes, packLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
 
 // D-72/D-73: this file's resaw and sheet numbers (0.234 in bands in 0.359 -> 3/8 in rough pools, the 4 mm sheet, the tube) are the 4 mm okoume design: PRE_D72. The white oak / rod cut list is in d72.test.ts.
-const p = { ...defaultParams(), ...PRE_D72, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472 }; // the 4 mm okoume and the 12 mm deck of PRE_D72 (2026-10-24: the defaults are now the 5 mm white oak plywood and 13 mm deck as bought)
+const p = { ...defaultParams(), ...PRE_D72, ...PRE_D101, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472 }; // two-ply rails (PRE_D101: the rail and band strips in separate pools); the 4 mm okoume and the 12 mm deck of PRE_D72 (2026-10-24: the defaults are now the 5 mm white oak plywood and 13 mm deck as bought)
 const parts = buildModel(p);
 const cl = cutList(parts, p);
 
@@ -143,11 +143,12 @@ describe('cutList', () => {
         if (k < 1 || !isOakStocked(b.nominal)) continue;
         const lanes = makeLanes(items, k);
         for (const w of RESAW_BOARD_WIDTHS_IN) {
-          if (stripW > w + 1e-9) continue;
+          if (stripW > w - p.resawEdgeAllowanceIn + 1e-9) continue;
           // the planner's own accounting: rip-first lanes packed first-fit across the boards, spares counted as whole lanes the width left can still take plus the empty slots of full-width lanes
           for (let boards = 1; boards <= lanes.length + 6; boards++) {
-            const packed = packLanes(lanes, boards, p.resawKerfIn, w);
-            if (!packed || spareSlots(packed, k, stripW, p.resawKerfIn, w) < RESAW_MIN_SPARES) continue;
+            const clear = w - p.resawEdgeAllowanceIn; // the lanes use the board less its edges (D-101)
+            const packed = packLanes(lanes, boards, p.resawKerfIn, clear);
+            if (!packed || spareSlots(packed, k, stripW, p.resawKerfIn, clear) < pool.sparesNeeded) continue;
             const bf = (boards * b.nominalIn * w * pool.boardLengthIn) / 144;
             if (bf < pool.boardFeet - 1e-9) throw new Error(`${pool.roughT}: ${b.nominal} x ${w}" needs ${bf} bf < ${pool.boardFeet}`);
             break;
@@ -409,7 +410,7 @@ describe('rough allowances (Eric 2026-10-12)', () => {
     const rail = dcl.strips.find((r) => r.partNo === 'rail')!;
     expect(rail.rough.w).toBeCloseTo(Math.ceil((rail.stock.w + 0.375) * 8 - 1e-9) / 8, 9);
     expect(rail.rough.l).toBeCloseTo(Math.ceil((rail.stock.l + 2) * 8 - 1e-9) / 8, 9);
-    expect(rail.rough.t).toBeCloseTo(0.5, 9);
+    expect(rail.rough.t).toBeCloseTo(q.railThicknessIn / q.railPlies + q.millingAllowanceIn, 9); // D-101: a 1/4 in strip, 3/8 in rough
   });
 
   it('rounds EVERY rough dimension in the cut list UP to 1/8 (cuts, rows, strips, layers, glue-ups), never below the exact size', () => {
@@ -500,9 +501,9 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
 
   it('lists the resaw strips as the strip blanks with the rip-first note, from the pool board', () => {
     const rail = dcl.cuts.filter((c) => c.partNo === 'rail');
-    expect(rail.reduce((a, c) => a + c.qty, 0)).toBe(4);
+    expect(rail.reduce((a, c) => a + c.qty, 0)).toBe(2 * q.railPlies); // D-101: 3 strips a rail
     for (const c of rail) { expect(c.piece).toBe('strip'); expect(c.board).toBe(dcl.strips.find((r) => r.partNo === 'rail')!.resawFrom); expect(c.note).toMatch(/rip the lane first/); }
-    expect(rail.map((c) => c.label)).toEqual(['Rail, strip 1 of 2', 'Rail, strip 2 of 2']);
+    expect(rail.map((c) => c.label)).toEqual(['Rail, strip 1 of 3', 'Rail, strip 2 of 3', 'Rail, strip 3 of 3']);
   });
 
   it('accounts for every oak part exactly once: ids in cuts equal the oak parts, and every piece has a rough size', () => {
@@ -546,7 +547,7 @@ describe('bandsaw capacity (Eric 2026-10-12: my bandsaw has 6" capacity)', () =>
   });
 
   it('says so in the text: the resaw height against the saw, and which board to rip the lanes from first', () => {
-    const rail = dcl.resaw.find((r) => Math.abs(r.roughT - 0.5) < 1e-6)!;
+    const rail = dcl.resaw.find((r) => Math.abs(r.roughT - dcl.strips.find((s) => s.partNo === 'rail')!.rough.t) < 1e-6)!;
     expect(rail.resawHeightText).toBe('resaw height 3-3/8" (your bandsaw: 6")');
     expect(rail.ripText).toBe(rail.boards > 1 ? `rip the lanes from ${rail.boards} boards, each ${rail.boardWidthIn}" wide, first` : `rip the lanes from a ${rail.boardWidthIn}"-wide board first`);
     expect(rail.text).toContain(rail.ripText[0].toUpperCase() + rail.ripText.slice(1));

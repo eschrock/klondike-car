@@ -223,8 +223,11 @@ const resawStrips: FigFn = (c) => {
   const cl = c.cut();
   const pools = [...cl.resaw].filter((q) => q.strips > 0 && q.laneWidthsIn.length > 0).sort((a, b) => a.roughT - b.roughT);
   if (!pools.length) return null;
-  const k = 20, rowH = 228;
-  const F = new Fig(760, 56 + pools.length * rowH + 4);
+  const k = 20;
+  // a row grows with its lane key (one line a lane at most), so the bandsaw warning stays below it
+  const rowHOf = (pool: ResawPool): number => 228 + 15 * Math.max(0, pool.ripLanes - 6);
+  const tops = pools.map((_, i) => 56 + pools.slice(0, i).reduce((a, q) => a + rowHOf(q), 0));
+  const F = new Fig(760, 56 + pools.reduce((a, q) => a + rowHOf(q), 0) + 4);
   F.heading('Resawing the bending strips: rip into lanes first, then resaw each lane on edge');
   const stripRow = (id: string) => cl.strips.find((r) => r.ids.includes(id));
   const shortName = (id: string): string => {
@@ -239,37 +242,41 @@ const resawStrips: FigFn = (c) => {
     return [...new Set(ids.map(shortName))].join(' + ');
   };
   pools.forEach((pool, pi) => {
-    const top = 56 + pi * rowH;
+    const top = tops[pi], rowH = rowHOf(pool);
     const B = boardByNominal(pool.board);
     const T = B?.nominalIn ?? pool.roughT * pool.stripsPerBoard;
     const kerf = c.p.resawKerfIn;
     const lanes = [...pool.laneWidthsIn, ...Array(Math.max(0, pool.ripLanes - pool.lanes)).fill(pool.laneWidthsIn[0])] as number[];
     const boards = Math.max(1, pool.boards);
-    const perBoard = Math.ceil(lanes.length / boards);
+    // the lanes each board is ripped into, from the plan's packing (lane numbers as in the key and the steps)
+    const boardLanes = pool.boardLanes.length === boards ? pool.boardLanes : [...Array(boards)].map((_, b) => lanes.map((__, i) => i).filter((i) => Math.floor(i / Math.ceil(lanes.length / boards)) === b));
     const names = [...new Set(pool.laneStrips.flat().map((q) => plainName(stripRow(q.id)?.name ?? '')))];
-    const what = names.every((n) => / band$/.test(n)) ? `${names.map((n) => n.replace(/ band$/, '')).join(' and ')} bands` : names.map((n) => `${n}s`).join(' and ');
+    const bandNames = names.filter((n) => / band$/.test(n)).map((n) => n.replace(/ band$/, ''));
+    const bandsText = bandNames.length ? `${bandNames.join(' and ')} bands` : '';
+    const what = [...names.filter((n) => !/ band$/.test(n)).map((n) => `${n}s`), ...(bandsText ? [bandsText] : [])].join(' and the ');
     F.sub([16, top], `${String.fromCharCode(65 + pi)}. ${pool.strips} strips for the ${what}: ${boards} ${boards === 1 ? 'board' : 'boards'} of ${pool.board}, ${f8(pool.boardWidthIn)} wide × ${f8(pool.boardLengthIn)} long`);
     // (a) the board(s), end on, with the rip lines
     const by = top + 34, x0 = 24;
     F.text([x0, by - 8], boards === 1 ? 'the board, end on: rip it into lanes' : 'the boards, end on: rip them into lanes', { size: 12, color: MUTED });
+    // a wide set of boards is drawn smaller so it ends clear of the lane on edge (b)
+    const kb = Math.min(k, (360 - x0 - (boards - 1) * 18) / (boards * pool.boardWidthIn));
     let bx = x0;
-    let n = 0;
     const laneCenters: Array<{ x: number; i: number }> = [];
     for (let b = 0; b < boards; b++) {
-      const bw = pool.boardWidthIn * k;
-      F.rect(bx, by, bw, T * k, mat('oak'));
+      const bw = pool.boardWidthIn * kb;
+      F.rect(bx, by, bw, T * kb, mat('oak'));
       let u = 0;
-      for (let j = 0; j < perBoard && n < lanes.length; j++, n++) {
+      for (const n of boardLanes[b] ?? []) {
         const w = lanes[n];
-        laneCenters.push({ x: bx + (u + w / 2) * k, i: n });
+        laneCenters.push({ x: bx + (u + w / 2) * kb, i: n });
         u += w;
-        if (u < pool.boardWidthIn - 0.25) F.line([bx + (u + kerf / 2) * k, by - 4], [bx + (u + kerf / 2) * k, by + T * k + 4], { stroke: ACCENT, width: 1.6, dash: '4 3' });
+        if (u < pool.boardWidthIn - 0.25) F.line([bx + (u + kerf / 2) * kb, by - 4], [bx + (u + kerf / 2) * kb, by + T * kb + 4], { stroke: ACCENT, width: 1.6, dash: '4 3' });
         u += kerf;
       }
-      if (u < pool.boardWidthIn - 0.05) F.hatch(bx + u * k, by, (pool.boardWidthIn - u) * k, T * k, MAT.oak.stroke, 4);
+      if (u < pool.boardWidthIn - 0.05) F.hatch(bx + u * kb, by, (pool.boardWidthIn - u) * kb, T * kb, MAT.oak.stroke, 4);
       bx += bw + 18;
     }
-    for (const lc of laneCenters) F.text([lc.x, by + T * k + 16], String(lc.i + 1), { size: 12, anchor: 'middle', weight: 'bold' });
+    for (const lc of laneCenters) F.text([lc.x, by + T * kb + 16], String(lc.i + 1), { size: 12, anchor: 'middle', weight: 'bold' });
     // lane key: consecutive lanes with the same use are one line
     const keyLines: string[] = [];
     for (let i = 0; i < lanes.length;) {
@@ -279,7 +286,7 @@ const resawStrips: FigFn = (c) => {
       keyLines.push(`${i === j ? `lane ${i + 1}` : `lanes ${i + 1}-${j + 1}`} (${f8(lanes[i])}): ${t}`);
       i = j + 1;
     }
-    F.text([x0, by + T * k + 38], keyLines, { size: 11.5, color: INK, lead: 1.3 });
+    F.text([x0, by + T * kb + 38], keyLines, { size: 11.5, color: INK, lead: 1.3 });
     if (pool.boardWidthIn > pool.bandsawCapacityIn) F.text([x0, top + rowH - 30], `Never stand the whole ${f8(pool.boardWidthIn)} board on edge: it is wider than the ${f8(pool.bandsawCapacityIn)} the bandsaw can resaw.`, { size: 11.5, color: ACCENT, italic: true });
     // (b) one lane on edge, resawn; (c) the slabs; (d) one planed strip
     const laneW = lanes[0], mid = top + 96;
@@ -575,7 +582,7 @@ const railFormSetup: FigFn = (c) => {
   const g = railForm(c);
   if (!g) return null;
   const F = new Fig(760, 624);
-  F.heading('The rail form on its base, with a dry strip pair in place');
+  F.heading(`The rail form on its base, with ${g.plies === 2 ? 'a dry strip pair' : `${g.plies} dry strips`} in place`);
   F.sub([16, 52], 'A. From above (the rear end of the strips on the left, the bow end on the right)');
   const yA = 150;
   const { at, k } = drawFormPlan(F, g, { x: 20, y: yA, w: 720 }, 'build');
@@ -706,8 +713,8 @@ const railGlueUp: FigFn = (c) => {
   const cx = 420;
   F.sub([cx, sy], 'C. In order');
   const steps = [
-    'Roll epoxy on both mating faces; butter one with thickened epoxy.',
-    `Stand the pair on edge on the base, against the form face${g.bowExtra > 0 ? `, the bow ends ${f16(g.bowExtra)} past the form's bow end` : ''}.`,
+    g.plies > 2 ? 'Roll epoxy on every mating face; butter one face of each glue line with thickened epoxy.' : 'Roll epoxy on both mating faces; butter one with thickened epoxy.',
+    `Stand the ${g.plies === 2 ? 'pair' : 'strips'} on edge on the base, against the form face${g.bowExtra > 0 ? `, the bow ends ${f16(g.bowExtra)} past the form's bow end` : ''}.`,
     'Set the counter-form on; every clamp snug but loose.',
     `On the overhang: a caul on the outer strip and ${g.springText ?? 'several'} spring clamps over caul, strips and fence.`,
     `Tighten the clamps together: the lead-in first (${lead.length > 1 ? `1-${lead.length}` : '1'}), then station by station to the bow end.`,

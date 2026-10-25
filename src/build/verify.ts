@@ -114,6 +114,10 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
   const railPool = poolOf('rail-L');
   const bandPool = poolOf('side-L-chine');
   const spareOk = !!railPool && !!bandPool && railPool.spares > 0 && bandPool.spares > 0;
+  const railPlies = parts.find((x) => x.id === 'rail-L')?.plies ?? 1;
+  const poolsText = railPool && railPool === bandPool
+    ? `rail and band strips, from the same boards: ${railPool.board} × ${railPool.boardWidthIn}" (${railPool.spares} spare ${railPool.spares === 1 ? 'strip' : 'strips'})`
+    : undefined;
   const poolText = (label: string, q: typeof railPool): string => (q ? `${label} ${q.board} × ${q.boardWidthIn}" (${q.spares} spare ${q.spares === 1 ? 'strip' : 'strips'})` : label);
 
   // Lamp clip: the hand-hold is the clip outline plus 0.02" a side (clip notes, D-64).
@@ -170,18 +174,20 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       },
     {
       id: 'strip-bend',
-      title: `Strip bend test: ${f(Math.round(bowTaper(p).minRadiusIn), 0)}" radius in 2 plies`,
+      title: `Strip bend test: ${f(Math.round(bowTaper(p).minRadiusIn), 0)}" radius in ${railPlies} plies`,
       how: [
-        it(`Get the FIRST board of each strip pool before the rest of the lumber list (${poolText('rail strips:', railPool)}; ${poolText('band strips:', bandPool)}).`, [
+        it(poolsText ? `Get the strip boards before the rest of the lumber list (${poolsText}).` : `Get the FIRST board of each strip pool before the rest of the lumber list (${poolText('rail strips:', railPool)}; ${poolText('band strips:', bandPool)}).`, [
           spareOk
             ? 'Cut the test strips from the planned SPARE strips, so the test costs no extra board (a strip that bends without cracking goes into the laminate).'
             : 'A pool has no planned spare strip: this test needs one more board.',
         ]),
-        it('Rip a lane off each board, then resaw and plane two dry test strips.', [`A rail strip (${fr(railStrip)}") and a band strip (${fr(bandStrip, 32)}").`]),
-        it(`Bend them around a block cut to the tightest plan radius of the rail form (${f(bowTaper(p).minRadiusIn, 0)}").`, ['The result decides 2 vs 3 plies, which changes the strip count and the boards to get.']),
+        poolsText
+          ? it('Rip one spare lane at the rail width, resaw it into two slabs and plane two dry test strips.', [`One to ${fr(railStrip)}" (a rail strip) and one to ${fr(bandStrip, 32)}" (a band strip).`])
+          : it('Rip a lane off each board, then resaw and plane two dry test strips.', [`A rail strip (${fr(railStrip)}") and a band strip (${fr(bandStrip, 32)}").`]),
+        it(`Bend them around a block cut to the tightest plan radius of the rail form (${f(bowTaper(p).minRadiusIn, 0)}").`, [`The rail is ${railPlies} plies of ${fr(railStrip)}". If the rail strip still feels stiff, plan ${railPlies + 1} plies of ${fr(p.railThicknessIn / (railPlies + 1))}" instead (the strip count and the boards change). A dry bend cannot show spring-back; the test rail on the rail form does.`]),
       ],
       passList: ['Both strips take the radius without a crack or raised grain.'],
-      ifFails: `Plane the strips thinner (3 plies: the strip count, the cut list and the board plan all change), add damp heat, or relax the bow taper (${lbl('bowTaperStartIn')}) and re-run the checks, all before the lumber goes on order.`,
+      ifFails: `Plane the strips thinner (${railPlies + 1} plies: the strip count, the cut list and the board plan all change) or relax the bow taper (${lbl('bowTaperStartIn')}) and re-run the checks, all before the lumber goes on order.`,
       partIds: ids(parts, /^(rail-[LR]|side-[LR]-(chine|gunwale)(-in)?)$/),
       paramKeys: [],
       when: 'before ordering',

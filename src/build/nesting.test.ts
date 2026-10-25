@@ -192,7 +192,7 @@ describe('oakBoardFeet', () => {
       expect(r.strips).toBe(pool.strips);
       expect(r.spares).toBe(pool.spares);
       expect(r.yieldPerBoard).toBe(pool.yieldPerBoard);
-      expect(t.summary.join(' ')).toContain(`${pool.strips} needed, ${pool.yieldPerBoard} per board, ${pool.spares} spare`);
+      expect(t.summary.join(' ')).toContain(`${pool.strips} needed, ${pool.yieldText}, ${pool.spares} spare`);
       expect(t.plannedBf).toBeGreaterThanOrEqual(pool.boardFeet - 1e-9);
     }
   });
