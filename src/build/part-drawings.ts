@@ -1243,8 +1243,11 @@ const scaleText = (s: number): string => {
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
 /** Scales the thickness views may take when they are drawn at their own scale. */
 const N_SCALES = [4, 3, 2, 3 / 2, 1, 3 / 4, 1 / 2, 1 / 3, 1 / 4, 1 / 6, 1 / 8, 1 / 12, 1 / 16];
-/** The printed content width of a build-book page (in): US Letter less 1/2" margins. Every sheet is at most this wide, so it prints at 1:1. */
-export const PAGE_W_IN = 7.5;
+/** The build book's side margins (in), printed double-sided for a three-ring binder: the binding edge clears the punch holes (they reach about 1/2" in), the outer edge stays narrow. */
+export const PAGE_BIND_IN = 0.85;
+export const PAGE_OUTER_IN = 0.4;
+/** The printed content width of a build-book page (in): US Letter less the two side margins. Every sheet is at most this wide, so it prints at 1:1. */
+export const PAGE_W_IN = 8.5 - PAGE_BIND_IN - PAGE_OUTER_IN;
 /** A sheet this tall (in) or less fits one page; a sheet takes a coarser scale (more rows) to stay under it only while the drawing stays readable. */
 const PAGE_H_IN = 9.5;
 /** The smallest text on a sheet (in, at 1:1): about 7.5 pt, readable at the bench. */
