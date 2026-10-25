@@ -11,8 +11,6 @@ import { computeLayout } from './model/layout';
 import { totalMass } from './model/mass';
 import { worldAABB } from './model/bounds';
 import { runChecks } from './analysis';
-import { riderSweep } from './analysis/rider-sweep';
-import { cargoCapacity } from './analysis/cargo-capacity';
 import { checkTruckFit } from './truck/fit';
 
 const defaults = defaultParams();
@@ -88,24 +86,15 @@ describe('D-66 bow taper', () => {
 });
 
 describe('D-66 the numbers that moved', () => {
-  it('cargo: the load-height rule is 10 in; the 200 lb cargo tips at 40.7 deg (D-67 limit 35: a plain pass, it was marginal at the D-66 limit of 40), the capacity is 223 lb (D-71: 274 lb with the 3/4 in axle) and the rear axle-stress row limits it (D-66 had it at 226 lb on the tip row; the front beam at 269 lb before)', () => {
+  it('cargo: the load-height rule is 10 in and the 200 lb cargo tips well past the 35 deg limit (the capacity is pinned in d72.test.ts)', () => {
     expect(defaults.cargoCgHeightIn).toBe(10);
     const tip = row('tip-straight');
     expect(tip.cases!.cargo!.value).toBeCloseTo(40.99, 1); // 2026-10-24: 40.99 (13 mm deck, 5 mm combi-core white oak sides as bought); D-84: 40.93 (the 1/2 in grab-board caps); D-76: 40.88 (the ribs, 0.96 lb, mostly low and forward); 40.8 after D-74 (the 1.3 lb lighter sled) // unchanged by D-67: the limit moved, not the sled (40.65 before D-71: the 0.36 lb heavier sled; 40.9 with the D-72/D-73 4.7 lb heavier sled)
     expect(tip.cases!.cargo!.limit).toBe(35);
     expect(tip.cases!.cargo!.value).toBeGreaterThan(35 * 1.1); // outside the 10% marginal band (38.5)
     expect(tip.statusCargo).toBe('pass'); // marginal at the 40 deg limit
-    const cap = cargoCapacity(defaults);
-    expect(cap.capacityLb!).toBeGreaterThanOrEqual(200);
-    expect(cap.capacityLb!).toBeLessThan(300); // 254 lb with the solid rod (223 lb with the D-71 tube, 274 lb at 3/4 in)
-    expect(cap.limiter!.id).toBe('brake-mount'); // D-78 removable knees (the default): the dry knee limits; glued knees: 'rear-beam-seat'. D-83: the 2 in clamp plates raise the groove bearing, so the rear beam seat limits; D-71 solid rod: bearing-groove (the tube's axle-stress limited it); the tip row no longer limits (it did at 226 lb with the 40 deg limit)
-    expect(cap.statusAtPayload).not.toBe('fail');
-    expect(cap.cargoFailsAtPayload).toEqual([]);
   });
-  it('riders: safe 50 to over 250 lb (nothing red), green 50 to 240 lb (D-67: the straight tip, 43.6 deg at 200 lb, clears its 35 deg limit with room; it was inside the 10% band of the old 40 deg limit from 190 lb, green 50-180 lb; 250 lb is yellow on the seat-back panel only)', () => {
-    const sw = riderSweep(defaults);
-    expect(sw.safe).toEqual({ loLb: 50, hiLb: 230, openLow: true, openHigh: false }); // D-84: the honest grab-board row
-    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 210, openLow: true, openHigh: false }); // (2026-10-24: D-96/97/98) 210 lb on the sheets as bought, the grab board (seat-grip) goes yellow at 220; D-83: 240 lb again with the 2 in clamp plates (more groove bearing area); D-73: 220 lb. D-71: 240 lb with the 3/4 in axle, 180 lb with the 5/8 in tube; the solid 5/8 in rod and the 4.7 lb heavier D-73 sled: 220 lb (230 lb with the 4 mm okoume)
+  it('riders: the straight and locked tip rows pass at the goal rider (the rider range is pinned in d72.test.ts)', () => {
     expect(row('tip-straight').cases!.goal!.value).toBeCloseTo(44.3, 0); // D-83: 44.3 deg (the 6 mm Baltic sides and the lighter EVA seat move the center of gravity a little); 43.6 before
     expect(row('tip-straight').statusGoal).toBe('pass'); // marginal at the 40 deg limit (util 0.80 now, 35 / 43.6)
     expect(row('tip-lock').status).toBe('pass');

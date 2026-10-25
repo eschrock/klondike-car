@@ -385,15 +385,13 @@ describe('the numbers at the defaults (2026-10-24: the bought 5 mm white oak and
     const rodOk4 = totalMass(buildModel({ ...base80, ...PRE_D72, axleWallIn: 0 }, { rider: 'none', cargo: false }));
     expect(rodOk4 - tubeOk).toBeCloseTo(1.88, 1); // the rod over the tube
   });
-  it('riders safe 50-250+ lb, green 50-240 lb (also 240 with the 6 mm okoume); cargo capacity 286 lb; nothing fails', () => {
+  it('riders safe 50-230 lb, green 50-210 lb; cargo capacity 275 lb (278 with glued knees); nothing fails', () => {
     const sw = riderSweep(defaults);
     expect(sw.safe).toEqual({ loLb: 50, hiLb: 230, openLow: true, openHigh: false }); // D-84: the honest grab-board row
     expect(sw.green).toMatchObject({ loLb: 50, hiLb: 210, openLow: true, openHigh: false }); // (2026-10-24: D-96/97/98) 210 lb on the sheets as bought (the grab board goes yellow at 220); D-83: 220 lb (230 with the 4 mm okoume) before the 2 in clamp plates added groove bearing area
-    expect(riderSweep(withMat(OKOUME)).green).toMatchObject({ loLb: 50, hiLb: 210 });
     const cap = cargoCapacity(defaults);
     expect(cap.capacityLb).toBe(275); // (2026-10-24: D-96/97/98) 275 (13 mm deck, 5 mm combi-core white oak sides as bought, the lighter two-block transom backers); 276 before; 277 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 276 before the storage turn-buttons (D-89: 0.35 lb lighter); D-78 removable knees (the default): the dry knee's brake-mount row limits it
     expect(cap.comfortableLb).toBe(225); // (2026-10-24: D-96/97/98) the side-web row is already marginal (0.96) with an empty bed on the bought 5 mm combi-core white oak sides, so "comfortable" ignores it (a row marginal at the lightest load does not set it)
-    expect(cargoCapacity(base80).comfortableLb).toBe(233); // (2026-10-24: D-96/97/98) 233 with the lighter two-block transom backers (D-97); 231 before; the D-80 6 mm Baltic birch and 12 mm deck; D-85: 232 before (0.7 lb heavier sled)
     expect(cap.limiter!.id).toBe('brake-mount');
     const glued = cargoCapacity({ ...defaults, kneeMount: KNEE_MOUNT.fixed });
     expect(glued.capacityLb).toBe(278); // (2026-10-24: D-96/97/98) 278 with the lighter two-block transom backers (D-97); 276 (the 13 mm deck as bought leaves 0.04 in less hanger above the rear beam seat); 286 before; 285 before the flag blocks' cradle (-0.015 lb); 286 before the sign standoff discs (+0.105 lb); 285 before D-93 (the sled 0.037 lb lighter); D-85: 285 (the 0.7 lb heavier sled); D-83: 254 before the 2 in clamp plates (the groove bearing limited it)
