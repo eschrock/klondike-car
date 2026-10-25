@@ -33,7 +33,8 @@ Parametric design app for Troop 455's Klondike Derby sled (a pulled sled on whee
 ## Commands
 ```
 npm run dev          # local dev server
-npm test             # vitest
+npm test             # vitest (what CI and the deploy run; a quick sample of the randomized sweeps)
+npm run test:full    # the randomized sweeps at full depth, to hunt for bugs
 npm run typecheck
 npm run build        # static site → dist/ (GitHub Pages via .github/workflows/pages.yml)
 npm run build:single # one self-contained HTML → dist-single/index.html

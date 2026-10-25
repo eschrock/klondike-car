@@ -8,6 +8,7 @@
     "build": "vite build",
     "build:single": "vite build --mode single",
     "test": "vitest run",
+    "test:full": "FULL_TESTS=1 vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -7,6 +7,9 @@
  */
 import type { Params } from './params';
 
+/** `npm run test:full`: the randomized sweeps run at full depth (to hunt for bugs); `npm test` and the deploy run a quick sample of each. */
+export const FULL_TESTS = !!(globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.FULL_TESTS;
+
 export const PRE_D60: Partial<Params> = {
   // Package A
   steerEyeBoltDiaIn: 0.5, steerEyeWllLb: 1500, steerChainDiaIn: 0.25, steerChainWllLb: 2600, chainJoistThickIn: 1.5,

@@ -255,9 +255,13 @@ export function partsOverlap(a: Part, b: Part): number {
   let gap = -Infinity;
   for (let k = 0; k < 3; k++) gap = Math.max(gap, ba.min[k] - bb.max[k], bb.min[k] - ba.max[k]);
   if (gap > 0) return -gap;
-  const A = partOBBs(a), B = partOBBs(b);
+  return worstOverlap(partOBBs(a), partOBBs(b));
+}
+
+/** The largest `obbOverlap` over every pair of boxes. Exact: a pair whose six face axes alone cannot beat the worst so far is skipped (its full value is no larger). */
+function worstOverlap(A: OBB[], B: OBB[]): number {
   let worst = -Infinity;
-  for (const x of A) for (const y of B) worst = Math.max(worst, obbOverlap(x, y));
+  for (const x of A) for (const y of B) if (faceOverlap(x, y) > worst) worst = Math.max(worst, obbOverlap(x, y));
   return worst;
 }
 
@@ -272,9 +276,7 @@ export function partsClearance(a: Part, b: Part, far = 3): number {
   let gap = -Infinity;
   for (let k = 0; k < 3; k++) gap = Math.max(gap, ba.min[k] - bb.max[k], bb.min[k] - ba.max[k]);
   if (gap > far) return gap;
-  let worst = -Infinity;
-  for (const x of partOBBs(a)) for (const y of partOBBs(b)) worst = Math.max(worst, obbOverlap(x, y));
-  return -worst;
+  return -worstOverlap(partOBBs(a), partOBBs(b));
 }
 
 /** World-space centroid of the part's bounding box (fallback CG). */
@@ -306,6 +308,19 @@ const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0
  * 15 candidate axes: > 0 means the boxes interpenetrate by that much, ≤ 0
  * means they are separated by at least |value| along some axis.
  */
+/** `obbOverlap` over the six face axes only: an upper bound on it (the full test adds the nine edge-cross axes). */
+function faceOverlap(a: OBB, b: OBB): number {
+  const d: Vec3 = [b.center[0] - a.center[0], b.center[1] - a.center[1], b.center[2] - a.center[2]];
+  let minOverlap = Infinity;
+  for (const L of [...a.axes, ...b.axes]) {
+    const ra = a.half[0] * Math.abs(dot(a.axes[0], L)) + a.half[1] * Math.abs(dot(a.axes[1], L)) + a.half[2] * Math.abs(dot(a.axes[2], L));
+    const rb = b.half[0] * Math.abs(dot(b.axes[0], L)) + b.half[1] * Math.abs(dot(b.axes[1], L)) + b.half[2] * Math.abs(dot(b.axes[2], L));
+    const overlap = ra + rb - Math.abs(dot(d, L));
+    if (overlap < minOverlap) minOverlap = overlap;
+  }
+  return minOverlap;
+}
+
 export function obbOverlap(a: OBB, b: OBB): number {
   const d: Vec3 = [b.center[0] - a.center[0], b.center[1] - a.center[1], b.center[2] - a.center[2]];
   const candidates: Vec3[] = [...a.axes, ...b.axes];

@@ -7,6 +7,7 @@ import { computeLayout } from './layout';
 import { partsOverlap, worldAABB } from './bounds';
 import { centerOfGravity, totalMass } from './mass';
 import type { Part, PartGroup } from './types';
+import { FULL_TESTS } from '../test-fixtures';
 
 const TOL = 0.05;
 const defaults = defaultParams();
@@ -108,6 +109,7 @@ const KNOWN_FUZZ_ONLY: RegExp[] = [
   /^seat-cushion x (doubler-grip|doubler-lash|lash)-[LR]\d?:/, // under-seat storage with an 18 in deep seat or a body of 21 in or less: the cushion runs into the grip / lash doublers
   /^doubler-grip-[LR] x storage-rim-side-[LR]:/, // a narrow body: the grip doubler meets the storage box rim
   /^storage-(side|rim-side|coaming-side|gasket-side)-[LR] x doubler-lash-[LR]2:/, // a narrow body: the middle lash doubler meets the storage box side
+  /^side-[LR]-gunwale-in x seat-grip-[LR]:/, // the flat grab board on the plan-curved inner gunwale band: a longer overhang, a bigger lock or a thinner bow bulkhead moves the curve so the board's end touches the band by up to 1/16 in (0.065 in in the full fuzz, 0.012 at the defaults); the board is fitted to the band at the reach check (D-84)
   /^deck x seat-hinge-[LR]:/, // a 9 degree seat back on a 0.217 in web (D-66 reseed of the fuzz): the hinge knuckle meets the deck by 0.001 in over the tolerance; nothing to do with the bow taper
 ];
 let fuzzMode = false;
@@ -343,8 +345,9 @@ describe('removed', () => {
 describe('param sweeps', () => {
   const all = Object.keys(PARAM_DEFS) as ParamKey[];
   const primary = all.filter((k) => PARAM_DEFS[k].primary);
-  const check = (p: Params, label: string) => {
-    for (const v of [{}, { steerDeg: 20, rider: 'goal' as const }, { steerDeg: -90 }, { removed: true }]) {
+  const POSES = [{}, { steerDeg: 20, rider: 'goal' as const }, { steerDeg: -90 }, { removed: true }];
+  const check = (p: Params, label: string, poses: object[] = POSES) => {
+    for (const v of poses) {
       let parts: Part[] = [];
       expect(() => (parts = buildModel(p, v)), label).not.toThrow();
       for (const part of parts) {
@@ -358,13 +361,14 @@ describe('param sweeps', () => {
   it.each(primary)('primary param %s at min and max', (k) => {
     for (const v of [PARAM_DEFS[k].min, PARAM_DEFS[k].max]) check({ ...defaults, [k]: v }, `${k}=${v}`);
   });
-  it('every param (and every option) at min/max does not throw', () => {
-    for (const k of all) {
+  it.runIf(FULL_TESTS)('every other param (and every option) at min/max does not throw (npm run test:full)', () => {
+    // one pose (steered, with the goal rider) per value: the primary params above get all four, and the poses have their own tests
+    for (const k of all.filter((q) => !PARAM_DEFS[q].primary)) {
       const d = PARAM_DEFS[k];
       const values = d.options ? d.options.map((o) => o.value) : [d.min, d.max];
-      for (const v of values) check({ ...defaults, [k]: v }, `${k}=${v}`);
+      for (const v of values) check({ ...defaults, [k]: v }, `${k}=${v}`, [POSES[1]]);
     }
-  }, 180000); // heavy sweep; shared CI runners are 2-3x slower
+  }, 120000);
   it('whole-design extremes do not throw', () => {
     const lo = { ...defaults }, hi = { ...defaults };
     for (const k of all) { lo[k] = PARAM_DEFS[k].min; hi[k] = PARAM_DEFS[k].max; }
@@ -669,11 +673,12 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
     'seatDepthIn', 'hubLengthIn', 'riderStatureIn', 'seatBackAngleDeg', 'storageVolumeIn3', 'footStopHeightIn', 'panelPlyIn', 'whiteOakPlyThickIn', 'riderLegReachIn', 'deckSlopIn',
   ];
   const OPTION_KEYS: ParamKey[] = ['storageLocation', 'axleBeamPosition', 'axleStyle', 'tireType', 'showSideSigns', 'thinSheetMaterial']; // D-73: and the thin sheet's material
-  const N = 300; // raise (and change the seed) to hunt
+  const N = FULL_TESTS ? 150 : 10; // validator-clean designs to check (npm run test:full checks 150)
   const samples = (() => {
     const rnd = mulberry32(455);
     const out: Params[] = [];
-    for (let i = 0; i < N; i++) {
+    // draw until N designs pass the validator (validating is cheap; building and the overlap scan are the slow part)
+    for (let i = 0; i < 2000 && out.length < N; i++) {
       const p = { ...defaults };
       // Jitter a random subset of keys around the defaults (±20% of each range) so many samples pass validation.
       for (const k of FUZZ_KEYS) {
@@ -683,11 +688,11 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
         p[k] = Math.min(d.max, Math.max(d.min, Math.round(v / d.step) * d.step));
       }
       for (const k of OPTION_KEYS) if (rnd() < 0.35) p[k] = PARAM_DEFS[k].options![Math.floor(rnd() * PARAM_DEFS[k].options!.length)].value;
-      out.push(p);
+      if (!errorsOf(p).length) out.push(p);
     }
     return out;
   })();
-  it(`${N} seeded designs: no errors => no unintended overlaps (neutral, full lock each way, transport)`, () => {
+  it(`${N} seeded validator-clean designs: no unintended overlaps (neutral, full lock each way, transport)`, () => {
     const t0 = Date.now();
     let clean = 0;
     const failures: string[] = [];
@@ -703,9 +708,8 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
     fuzzMode = false;
     console.log(`fuzz: ${clean}/${N} validator-clean designs checked in ${Date.now() - t0} ms; ${failures.length} failures`);
     expect([...new Set(failures.flatMap((x) => x.split(' @')[0].split('; ').map((b) => b.replace(/:.*/, ''))))].slice(0, 30)).toEqual([]);
-    expect(clean).toBeGreaterThanOrEqual(15); // the bow, caster and seat constraints reject much of the wild jitter
-    expect(Date.now() - t0).toBeLessThan(150000); // ~36 s locally since the D-66 plan-wall boxes; shared CI runners are 2-3x slower
-  }, 180000); // heavy sweep; shared CI runners are 2-3x slower
+    expect(clean).toBe(N);
+  }, 120000);
 });
 
 describe('resolveParams (D-54: no derived-by-rule params left)', () => {

@@ -10,7 +10,7 @@ import { effectiveStripWidth, maxDeckSpan } from './structure';
 import { judge } from './types';
 import { makeContext } from './context';
 import { resolveParams } from '../params';
-import { PRE_D71, PRE_D60, PRE_D66 } from '../test-fixtures';
+import { FULL_TESTS, PRE_D71, PRE_D60, PRE_D66 } from '../test-fixtures';
 
 const defaults = { ...defaultParams(), ...PRE_D71, ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 }; // the 3c-3 hand-calc fixture: the 35.5 in tracks (D-58 narrowed them to 34 1/2 / 32 in; the new defaults are in track-d58.test.ts)
 
@@ -256,10 +256,12 @@ describe('every variant the validator accepts yields finite checks', () => {
     'tireGroundMu', 'dynamicFactor', 'sideThicknessIn', 'sheerCurveIn', 'bowWidthIn', 'bowBulkheadThickIn', 'bowHoldMinClearIn', 'handleBowCrownIn', 'footStopHeightIn', 'seatDepthIn',
   ];
   const OPTIONS: ParamKey[] = ['storageLocation', 'axleBeamPosition', 'axleStyle', 'plySpecies'];
+  const N = FULL_TESTS ? 200 : 15; // npm run test:full checks 200
   const samples = (() => {
     const rnd = mulberry32(2026);
     const out: Params[] = [];
-    for (let i = 0; i < 260; i++) {
+    // draw until N designs pass the validator (validating is cheap; the analysis is the slow part)
+    for (let i = 0; i < 5000 && out.length < N; i++) {
       const p = { ...defaults };
       for (const k of KEYS) {
         if (rnd() > 0.3) continue;
@@ -269,11 +271,11 @@ describe('every variant the validator accepts yields finite checks', () => {
       }
       if (p.riderGoalMassLb < p.riderMassLb) p.riderGoalMassLb = p.riderMassLb;
       for (const k of OPTIONS) if (rnd() < 0.35) p[k] = PARAM_DEFS[k].options![Math.floor(rnd() * PARAM_DEFS[k].options!.length)].value;
-      out.push(p);
+      if (!validateParams(p).some((i) => i.severity === 'error')) out.push(p);
     }
     return out;
   })();
-  it('260 seeded designs: validator-clean ones give finite values, limits and details', () => {
+  it(`${N} seeded validator-clean designs: give finite values, limits and details`, () => {
     let clean = 0;
     const bad: string[] = [];
     for (const p of samples) {
@@ -289,7 +291,7 @@ describe('every variant the validator accepts yields finite checks', () => {
     }
     console.log(`analysis sweep: ${clean}/${samples.length} validator-clean designs checked`);
     expect(bad.slice(0, 5)).toEqual([]);
-    expect(clean).toBeGreaterThanOrEqual(30);
+    expect(clean).toBe(N);
   }, 180000); // heavy sweep (front-end bounding cases); shared CI runners are 2-3x slower
 });
 

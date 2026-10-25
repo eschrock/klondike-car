@@ -11,9 +11,7 @@ import { worldAABB } from './model/bounds';
 import { totalMass } from './model/mass';
 import { makeContext } from './analysis/context';
 import { runChecks } from './analysis';
-import { cargoCapacity } from './analysis/cargo-capacity';
 import { restMaxLb } from './analysis/rest';
-import { riderSweep } from './analysis/rider-sweep';
 import { checkTruckFit } from './truck/fit';
 import { PRE_D60, PRE_D66, PRE_D71, PRE_D72 } from './test-fixtures';
 
@@ -215,19 +213,7 @@ describe('the analysis after the package (the study predicted: safe 50-250+, gre
     expect(w.status).toBe('pass');
     expect(w.how).toMatch(/300 lb/);
   });
-  it('rider range: safe 50 to over 250 lb, green 50 to 230 lb (the study: 50-250+ / 50-230)', () => {
-    const fit = checkTruckFit(defaults, (v) => buildModel(defaults, v));
-    const r = riderSweep(defaults, { fit });
-    expect(r.safe).toEqual({ loLb: 50, hiLb: 230, openLow: true, openHigh: false }); // D-84: the honest grab-board row
-    // D-63 (3c-8): 240 lb is a knife edge (bearing-groove 0.8995 against the 0.9 yellow line, after the lighter hinge/pin pads), so green is 50-230 or 50-240; 230 was the 3c-7 value.
-    expect(r.green).toMatchObject({ loLb: 50, openLow: true, openHigh: false });
-    expect(r.green!.hiLb).toBeGreaterThanOrEqual(210); // D-84: 210 (the grab board)
-    expect(r.green!.hiLb).toBeLessThanOrEqual(240);
-  });
-  it('cargo capacity is at least 225 lb against the 200 lb target (207 before, the study 212 for A and 236 for B); resting capacity about 348 lb against 250 (the study 348-350)', () => {
-    expect(cargoCapacity(defaults).capacityLb!).toBeGreaterThanOrEqual(225);
-    expect(cargoCapacity(defaults).capacityLb!).toBeLessThan(280); // 269 with the wider outer front clamp plate (233 before D-62, front-beam limited it)
-    expect(cargoCapacity(defaults).limiter?.id).toBe('bearing-groove'); // D-83: the 2 in clamp plates lift the front beam row; the groove bearing limits (was 'front-beam')
+  it('resting capacity about 348 lb against 250 (the study 348-350); the rider range and cargo capacity are pinned for the current design in d72.test.ts', () => {
     const p = { ...defaults } as Params;
     const ctx = makeContext(p, buildModel(p, { rider: 'goal', cargo: true }));
     expect(restMaxLb(ctx)).toBeGreaterThan(340);
