@@ -7,6 +7,7 @@
  * Plain TS, no DOM. Every string that came from the model goes through `esc`.
  */
 import { SHIPPING_TAX_PHRASE } from './bom';
+import { PAGE_BIND_IN, PAGE_OUTER_IN } from './part-drawings';
 import { widthListText } from './nesting';
 import { FROM_TEXT, fabText, pieceText, stepsLabel } from './cutlist';
 import { fractionText, roughFrac } from './units';
@@ -81,7 +82,8 @@ a.part { color: inherit; text-decoration: underline dotted; }
 .total { font-weight: 700; }
 .legend span.sw { display: inline-block; width: 10pt; height: 10pt; margin-right: 5pt; vertical-align: -1pt; border: 1px solid #000; }
 .sw.outside { background: #000; } .sw.inside { background: #fff; } .sw.pocket { background: #999; } .sw.guide { background: #fff; border-color: #0068ff !important; }
-@page { size: Letter; margin: 0.45in 0.5in 0.55in; @bottom-right { content: "page " counter(page); font-size: 8pt; color: #555; } }
+@page { size: Letter; margin: 0.45in ${PAGE_OUTER_IN}in 0.55in ${PAGE_BIND_IN}in; @bottom-right { content: "page " counter(page); font-size: 8pt; color: #555; } }
+@page :left { margin-left: ${PAGE_OUTER_IN}in; margin-right: ${PAGE_BIND_IN}in; }
 @media print {
   body { max-width: none; padding: 0; }
   html { font-size: 9.25pt; line-height: 1.25; }
