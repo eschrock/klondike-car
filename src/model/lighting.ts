@@ -22,7 +22,7 @@ const unit = (x: number, y: number, z: number): Vec3 => {
 const FRONT_LIGHT_MASS_LB = 0.19;
 /** 3c visual round 2: 1.25x across and tall (was 3 x 2.2 x 1.8; the reviewer found it small against the 21 in bulkhead). Same length (no longer overall), the top at about 4.75 in over the deck, still under the 4 7/8 in bulkhead corners. */
 const FRONT_LIGHT_SIZE = [3, 2.75, 2.25] as const;
-/** D-83: Planet Bike Spok tail light, about 0.06 lb (VERIFY the weight). */
+/** D-83: Planet Bike Spok tail light, about 0.06 lb (estimate). */
 const REAR_LIGHT_MASS_LB = 0.06;
 /** The lamp clip (3c-5): print clearance per side in the slot, and how far the plug stands proud of the bulkhead's front face (the lamp's seat). */
 export const LAMP_CLIP = { clearIn: 0.02, lipIn: 0.5 } as const;

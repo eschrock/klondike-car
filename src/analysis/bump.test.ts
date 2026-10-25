@@ -272,10 +272,10 @@ describe('bump: rigid-body mass at the struck wheel (3c-3b)', () => {
     expect(bumpStrike(ctx, c, 'rear', 1).factor).toBeLessThan(3.0);
   });
 
-  it('the default wheel rate is the pneumatic hand-truck tire: 300 lb at 0.6 in squash = 500 lb/in, flagged verify with a measuring note', async () => {
+  it('the default wheel rate is the pneumatic hand-truck tire: 300 lb at 0.6 in squash = 500 lb/in, an assumption with a measuring note (D-100)', async () => {
     const { PARAM_DEFS } = await import('../params');
     expect(PARAM_DEFS.bumpWheelRateLbIn.default).toBe(500);
-    expect(PARAM_DEFS.bumpWheelRateLbIn.status).toBe('verify');
+    expect(PARAM_DEFS.bumpWheelRateLbIn.status).toBe('assumed');
     expect(PARAM_DEFS.bumpWheelRateLbIn.note).toMatch(/squash/);
   });
 });

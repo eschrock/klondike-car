@@ -154,12 +154,6 @@ describe('D-72: bolts and eye bolts at stock lengths', () => {
     // neither bolt reaches the wheel (the inner tire face is at 13.25 in, the eyes at 8 in), and the cut bolt stands 0.09 in past the nut
     expect(defaults.steerChainBeamYIn + 0.5).toBeLessThan(defaults.frontTrackIn / 2 - defaults.tireWidthIn / 2);
   });
-  it('the verify items carry the stock lengths', () => {
-    const v = verifyChecklist(parts, defaults);
-    expect(v.find((c) => c.id === 'steering-parts')!.whatToDo).toMatch(/buy the stock 4-1\/2" and CUT it to 3-1\/4"/);
-    expect(v.find((c) => c.id === 'steering-parts')!.whatToDo).toMatch(/buy the stock 2-1\/2"/);
-    expect(v.find((c) => c.id === 'bridle')!.whatToDo).toMatch(/stock length is 6-1\/2"/);
-  });
 });
 
 describe('D-73: the thin-sheet material and the weather spec', () => {
@@ -178,7 +172,7 @@ describe('D-73: the thin-sheet material and the weather spec', () => {
     expect(PARAM_DEFS.whiteOakPlyThickIn.note).toMatch(/calipers 4\.95 to 5\.00 mm/);
     expect(PARAM_DEFS.whiteOakPlyDensityPcf.default).toBe(45);
     expect(PARAM_DEFS.whiteOakPlyDensityPcf.note).toMatch(/combi-core/);
-    expect(PARAM_DEFS.whiteOakPlyMoePsi.status).toBe('verify');
+    expect(PARAM_DEFS.whiteOakPlyMoePsi.status).toBe('assumed'); // D-100: an estimate with margin, not a check
     expect(PARAM_DEFS.whiteOakPlyMoePsi.note).toMatch(/ESTIMATE/);
     expect(PARAM_DEFS.whiteOakPlyMorPsi.note).toMatch(/ESTIMATE/);
     expect(PARAM_DEFS.balticThinThickIn.default).toBe(0.118);
@@ -188,7 +182,7 @@ describe('D-73: the thin-sheet material and the weather spec', () => {
     expect(PARAM_DEFS.thinSheetMaterial.note).toMatch(/1\/4 in white oak plywood \(about 0\.21 in real, interior glue\)/);
     expect(PARAM_DEFS.thinSheetMaterial.note).toMatch(/3 mm Baltic birch \(0\.118 in, 5 x 5 ft sheet\)/);
     expect(PARAM_DEFS.balticSixThickIn.default).toBe(0.236);
-    expect(PARAM_DEFS.balticSixThickIn.status).toBe('verify');
+    expect(PARAM_DEFS.balticSixThickIn.status).toBe('assumed'); // D-100: the sheet is calipered at its assembly step
     expect(PARAM_DEFS.balticSixThickIn.note).toMatch(/MEASURE THE SHEET/);
     expect(defaults.birchDensityPcf).toBe(42);
   });
@@ -353,19 +347,15 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
     const rod = v.find((c) => c.id === 'axle-rod')!;
     expect(rod.title).toBe('Axle rod: 5/8" 1045 or cold-drawn steel (not hot-rolled A36)');
     expect(v.some((c) => c.id === 'axle-tube')).toBe(false);
-    expect(rod.paramKeys).toEqual(['axleYieldPsi', 'axleUltimatePsi']);
-    expect(PARAM_DEFS.axleYieldPsi.status).toBe('verify');
+    expect(PARAM_DEFS.axleYieldPsi.status).toBe('assumed'); // D-100: buy the grade; no cert to chase
     const tubeList = verifyChecklist(buildModel({ ...defaults, ...PRE_D72 }), { ...defaults, ...PRE_D72 });
-    expect(tubeList.find((c) => c.id === 'axle-tube')!.title).toMatch(/Axle tube: DOM A513 Type 5, 5\/8" × 0\.12" \(not ERW\)/);
+    expect(tubeList.find((c) => c.id === 'axle-tube')!.title).toMatch(/Axle tube: DOM, 5\/8" × 0\.12" \(not ERW\)/);
   });
-  it('the wheel verify item measures the hub length and confirms the 5/8 in bore and the 300 lb rating', () => {
+  it('the wheel verify item measures the hub length and confirms the 5/8 in bore', () => {
     const w = verifyChecklist(parts, defaults).find((c) => c.id === 'wheel')!;
-    expect(w.title).toMatch(/Harbor Freight/);
-    expect(w.whatToDo).toMatch(/MEASURE THE HUB LENGTH/);
-    expect(w.whatToDo).toMatch(/2-1\/4" is assumed/);
-    expect(w.pass).toMatch(/Bore = 5\/8"/);
-    expect(w.pass).toMatch(/Rating ≥ 300 lb/);
-    expect(w.pass).not.toMatch(/does not fit/);
+    expect(w.whatToDo).toMatch(/Measure the hub length/);
+    expect(w.whatToDo).toMatch(/assumes 2-1\/4"/);
+    expect(w.pass).toMatch(/Bore 5\/8"/);
   });
   it('the assembly steps say 5/8" and rod, and the groove and the proud are the params (0.595 in = 19/32, 0.03 in = 1/32)', () => {
     const steps = assemblySteps(parts, defaults);

@@ -143,25 +143,10 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(br.unpriced).toEqual([]);
   });
 
-  it('the verify list gains the refit check (flat seat, paper, plate, washers, bolts after the first outing, chock cord eye, wobble); the default list does not', () => {
+  it('the refit is checked at its own assembly step, not on the verify list (D-100): the same list either way', () => {
     const vf = verifyChecklist(buildModel(fixed), fixed), vr = verifyChecklist(buildModel(rm), rm);
-    expect(vf.some((c) => c.id === 'brake-knee-refit')).toBe(false);
-    expect(vr.length).toBe(vf.length + 1);
-    const c = vr.find((q) => q.id === 'brake-knee-refit')!;
-    const t = `${c.whatToDo} ${c.pass}`;
-    expect(t).toMatch(/flat on the rail and on the chine band/);
-    expect(t).toMatch(/slip of paper/);
-    expect(t).toMatch(/does not enter the joint line/);
-    expect(t).toMatch(/backing plate is still in its recess/);
-    expect(t).toMatch(/No washer is pressed into the oak/);
-    expect(t).toMatch(/snug, then a quarter turn \(the quarter turn past snug is the spec; with an inch-pound torque wrench it reads about 35 in-lb/);
-    expect(t).toMatch(/tight after the first outing/);
-    expect(t).toMatch(/chock cord/);
-    expect(t).not.toMatch(/clip/i);
-    expect(t).not.toMatch(/\bfirm\b|design clamp/);
-    expect(t).toMatch(/wobble/);
-    expect(c.partIds).toEqual(expect.arrayContaining(['brake-knee-L', 'brake-knee-R']));
-    expect(vr.map((q) => q.n)).toEqual(vr.map((_q, i) => i + 1));
+    expect(vr.map((q) => q.id)).toEqual(vf.map((q) => q.id));
+    expect(vr.some((c) => c.id === 'brake-knee-refit')).toBe(false);
   });
 
   it('the cut list, oak plan and part drawings are the same (the knee is the same part)', () => {

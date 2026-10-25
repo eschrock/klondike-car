@@ -465,7 +465,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     const setProgress = () => { progress.textContent = `${count()} of ${checks.length} done`; };
     setProgress();
     const out: Node[] = [
-      note('Test these before you spend money or cut wood. Each check covers parts and design numbers we are not sure of yet. Your ticks stay in this browser.', 'muted small'),
+      note('A short list of fits to try on the real parts before you buy the rest or cut. Everything else is designed with margin to spare. Your ticks stay in this browser.', 'muted small'),
       progress,
     ];
     const groups = h('div', { class: 'bp-verify-groups' });

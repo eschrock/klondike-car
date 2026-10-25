@@ -41,7 +41,7 @@ describe('D-80: the thin sheet follows the weather (6 mm)', () => {
     expect(b.morPerpPsi).toBe(3000);
     expect(thinSheet({ ...std, thinSheetMaterial: THIN_SHEET.whiteOakPly }).priceKey).toBe('white-oak-1/4');
     expect(thinSheet({ ...std, thinSheetMaterial: THIN_SHEET.balticBirch3mm }).priceKey).toBe('baltic-3mm');
-    expect(PARAM_DEFS.balticSixThickIn.status).toBe('verify');
+    expect(PARAM_DEFS.balticSixThickIn.status).toBe('assumed'); // D-100: calipered at its assembly step
   });
   it('the sandwich bands are 0.195 in and the defaults validate clean in both specs', () => {
     for (const [name, p] of FW_SPECS) {

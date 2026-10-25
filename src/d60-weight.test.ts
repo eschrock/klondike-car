@@ -56,9 +56,10 @@ describe('the changed params (every one cites D-60; the supplier-derived ones ar
   it.each(Object.keys(VALUES) as ParamKey[])('%s cites D-60 in its ref or note', (k) => {
     expect(`${PARAM_DEFS[k].ref ?? ''} ${PARAM_DEFS[k].note ?? ''}`, k).toMatch(/D-60/);
   });
-  it('supplier / listing numbers are status "verify": the wheel (mass, rating, hub, bore), the eye bolt and chain working loads, the tube strengths', () => {
-    for (const k of ['wheelMass10Lb', 'wheelRatingLb', 'hubLengthIn', 'wheelBoreIn', 'steerEyeWllLb', 'steerChainWllLb', 'axleTubeYieldPsi', 'axleTubeUltimatePsi'] as ParamKey[])
-      expect(PARAM_DEFS[k].status, k).toBe('verify');
+  it('the wheel bore and hub are status "verify" (measured on one wheel); the listing numbers are "assumed" with their source in the note (D-100)', () => {
+    for (const k of ['hubLengthIn', 'wheelBoreIn'] as ParamKey[]) expect(PARAM_DEFS[k].status, k).toBe('verify');
+    for (const k of ['wheelMass10Lb', 'wheelRatingLb', 'steerEyeWllLb', 'steerChainWllLb', 'axleTubeYieldPsi', 'axleTubeUltimatePsi'] as ParamKey[])
+      expect(PARAM_DEFS[k].status, k).toBe('assumed');
     expect(PARAM_DEFS.wheelMass10Lb.note).toMatch(/Tractor Supply/);
     expect(PARAM_DEFS.wheelRatingLb.note).toMatch(/listing/i);
     expect(PARAM_DEFS.hubLengthIn.note).toMatch(/MEASURE|CONFIRM/); // D-71: "measure the Harbor Freight hub"
