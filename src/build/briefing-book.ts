@@ -43,11 +43,11 @@ export const DONOR = 'Eric';
 /** What each BOM section holds, in plain words for the committee. One entry per BOM section id. */
 export const SECTION_BLURB: Record<BomSection['id'], string> = {
   lumber: 'White oak boards for the frame, sides, axle beams, seat, grab boards, handlebow and brake flaps. White oak is strong and stands up to wet weather, which is why the sled should last for years.',
-  plywood: 'Two 4 × 8 ft sheets: marine plywood for the deck and seat back, and thin birch plywood for the side panels and the storage box.',
+  plywood: 'Two 4 × 8 ft sheets: marine plywood for the deck and seat back, and thin white oak plywood for the side panels, the storage box and the signs.',
   metal: 'Steel rod for the axles, stainless bar and angle for the axle clamps and brake straps, and aluminum tube for the handlebow sockets. Bought as stock and cut and drilled in the shop: no welding.',
-  purchased: 'Ready-made parts: four 10" air-filled wheels, the steering pivot and check chains, seat-back hinges and pins, storage-box hinges, latches and gasket, brake pads, the pull rope and a flag holder.',
+  purchased: 'Ready-made parts: four 10" air-filled wheels, the steering pivot and check chains, seat-back hinges and pins, the storage-box lid hinges and gasket, brake pads, the pull rope and a flag holder.',
   fasteners: `Stainless screws, bolts, nuts and washers, threaded inserts for the parts that come off, the axle collars and plugs. The joinery tenons come from ${DONOR}'s shop at no cost.`,
-  consumables: `Exterior spar varnish, epoxy, marine sealant and edge banding. Wood glue, sandpaper, brushes and thinner come from ${DONOR}'s shop at no cost.`,
+  consumables: `Epoxy, a golden-brown wood dye, exterior spar urethane, marine sealant and edge banding. Wood glue, sandpaper, brushes and thinner come from ${DONOR}'s shop at no cost.`,
   touches: 'Priced as their own group: a front headlight, a rear red light and reflectors for the night start, seat and back cushions, and tie-down points for hauling gear.',
 };
 
@@ -89,7 +89,9 @@ tr.budget td { font-weight: 700; background: var(--tint); }
 @page { size: Letter; margin: 0.6in; }
 @media print {
   body { max-width: none; padding: 0; }
-  html { font-size: 10pt; }
+  html { font-size: 10pt; line-height: 1.32; }
+  section { margin-top: 12pt; } h3 { margin-top: 8pt; } .ask, .facts { margin: 8pt 0; }
+  section.keep { break-inside: avoid; }
   section.page { break-before: page; }
   a { color: inherit; text-decoration: none; }
 }
@@ -147,7 +149,7 @@ export function briefingBookHtml(d: BriefingInput): string {
 </div>`);
 
   out.push(`<div class="facts">
-<div class="fact"><b>${roundLb(p.riderMassLb)} lb</b><span>rider it is built for (tested to ${roundLb(p.riderGoalMassLb)} lb)</span></div>
+<div class="fact"><b>${roundLb(p.riderMassLb)} lb</b><span>rider it is built for (checked to ${roundLb(p.riderGoalMassLb)} lb)</span></div>
 <div class="fact"><b>${roundLb(p.cargoPayloadLb)} lb</b><span>of camp gear with the seat folded</span></div>
 <div class="fact"><b>${roundLb(emptyLb)} lb</b><span>empty; two people lift about ${roundLb(liftLb / 2)} lb each</span></div>
 <div class="fact"><b>${feetInches(size.l)} × ${feetInches(size.w)}</b><span>long by wide, on four 10" air-filled wheels</span></div>
@@ -162,7 +164,7 @@ export function briefingBookHtml(d: BriefingInput): string {
 <p>A troop-owned sled gives our scouts something of their own that is safe, easy to pull and good enough to be proud of, and it is built to come back out year after year.</p>
 <h3>Built to be reused</h3>
 <ul>
-<li><strong>Lasts for years.</strong> White oak, marine plywood, stainless hardware and an exterior varnish. Stored in a garage between events, it should need little more than a check-over and a fresh coat of varnish now and then.</li>
+<li><strong>Lasts for years.</strong> White oak, oak and marine plywood sealed in epoxy, stainless hardware and an exterior spar urethane. Stored in a garage between events, it should need little more than a check-over and a fresh coat of urethane now and then.</li>
 <li><strong>Safe for the rider.</strong> A low seat with a back, a hand-hold on each side, a foot brace, brakes the person at the back works with a foot, wheel chocks for parking, and lights and reflectors for the night start. It is built for a ${roundLb(p.riderMassLb)} lb scout and checked to ${roundLb(p.riderGoalMassLb)} lb.</li>
 <li><strong>Easy to move.</strong> It rides in a pickup bed. The handlebow, brake flaps and lights come off without tools${removableKnees ? ', the brake brackets unbolt with a ratchet and wrench' : ''}, and two adults can lift it.</li>
 </ul>
@@ -203,18 +205,18 @@ ${figure(d.images?.transport, 'The sled packed for the truck', `<strong>Packed f
 <li><strong>Not in the troop budget:</strong> the lumber and plywood (donated), ${esc(DONOR)}'s tools and the labor (volunteered). Shipping and sales tax on the rest are covered by the budget allowance.</li>
 ${canWait > 0 ? `<li><strong>Room to trim:</strong> the cushions and tie-down points (${usd(canWait, false)}) can wait if needed. The lights and reflectors should be on for the first Derby, since the race starts after dark.</li>` : ''}
 ${Number.isFinite(otherAdds) && otherAdds > 0 ? `<li><strong>A tougher option:</strong> a version for a sled stored outdoors (marine-grade stainless hardware and epoxy throughout) would add about ${usd(otherAdds, false)} to what the troop buys. We do not think the troop needs it as long as the sled lives in a garage.</li>` : ''}
-<li><strong>Running costs:</strong> small. A coat of varnish every few years and the odd tire tube or bolt.</li>
+<li><strong>Running costs:</strong> small. A coat of urethane every few years and the odd tire tube or bolt.</li>
 </ul>
 </section>`);
 
   // ── Discussion ──
-  out.push(`<section>
+  out.push(`<section class="keep">
 <h2>For the committee to discuss</h2>
 <ul>
 <li>Approve the budget of ${usd(budget, false)}</li>
 <li>Where the sled is stored between events (it needs a dry garage or shed, about ${feetInches(size.l)} × ${feetInches(size.w)} of floor).</li>
 <li>Who looks after it: a yearly check of the bolts, tires and brakes before the Derby.</li>
-<li>Whether scouts can take partt in the build (will be difficult with a tight schedule and complex build, but could have finishing days that are scout-accessible.</li>
+<li>Whether scouts can take part in the build. The tight schedule and the complex build make that hard, but some finishing days could be open to scouts.</li>
 <li>Other events where the troop would like to use it.</li>
 </ul>
 ${d.link ? `<p class="muted small">The full design, with a 3D model, safety checks and the build book: <a href="${esc(d.link)}">${esc(d.link.length > 90 ? d.link.slice(0, 87) + '…' : d.link)}</a></p>` : ''}
