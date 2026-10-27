@@ -8,8 +8,8 @@ describe('the headless solid renderer (D-103 figures)', () => {
   const polys = (svg: string): number => fills(svg).length;
 
   it('draws the three faces of a box that face the viewer, not the three that face away', () => {
-    // three faces show (the long ones are cut into two tiles each, which share a shade), plus the white card behind
-    expect(new Set(fills(draw(new Solids().box(0, 10, 0, 5, -4, 0, { color: '#c0a060' })))).size).toBe(1 + 3);
+    // three faces show (the long ones are cut into two tiles each, which share a shade)
+    expect(new Set(fills(draw(new Solids().box(0, 10, 0, 5, -4, 0, { color: '#c0a060' })))).size).toBe(3);
   });
 
   it('draws a lower rank first, so a slab on another slab covers it whatever the depth sort says', () => {
