@@ -340,8 +340,8 @@ describe('ramp ribs, rib patterns and the thick template (D-102)', () => {
   it('the steps pattern-route the ribs and the under layer, and the cleat screws fit the 2 in cleat', () => {
     const t = fd.build.flatMap((s) => [s.step, ...(s.sub ?? [])]).join(' ');
     expect(t).toMatch(/Rib patterns \(laser\)/);
-    expect(t).toMatch(/flush-trim with a pattern bit/);
-    expect(t).toMatch(/Under layer: cut a 3\/4" MDF or plywood blank/);
+    expect(t).toMatch(/flush-trim all the way round with a handheld router and a pattern bit/);
+    expect(t).toMatch(/First cut a 3\/4" MDF blank/);
     expect(t).toContain('two #8 × 2-1/2" screws into the bench');
     expect(t).toContain('two #8 × 3" down through the cap');
   });
