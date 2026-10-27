@@ -1389,8 +1389,8 @@ function ribFillerCuts(plans: OakPartPlan[], pools: ResawPool[], p: Params): Cut
 }
 
 /**
- * Where the gunwale cap strips come from: an offcut of a 4/4 board, ripped and planed to the web's thickness. The strips go in first (they gauge the cleats and are glued in with the inner
- * bands, D-103), before it is known whether a band bend will fail, so a spare band strip is never spent on them.
+ * Where the gunwale cap strips come from: an offcut of a 4/4 board, ripped and planed to the web's thickness. The strips are glued in with the outer bands, in the same cure (D-103), so a spare
+ * band strip, which is kept for a failed bend, is never spent on them.
  */
 export function capStripSource(_pools: readonly ResawPool[], _capRoughIn: number): { fromSpare: boolean; board: string; source: string; text: string } {
   return { fromSpare: false, board: '4/4', source: 'a 4/4 offcut', text: 'an offcut of a 4/4 board at least that long' };

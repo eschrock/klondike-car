@@ -542,7 +542,7 @@ describe('materials: the shopping list for each jig', () => {
     expect(build).toContain(`Glue ${p.railPlies} spare rail strips`);
   });
 
-  it('side form: the cleats, stops, ribs, bench tops and sand match the build steps', () => {
+  it('side form: the cleats, stops, ribs, bench top and sand match the build steps', () => {
     const d = byId('side-form'), build = allBuild('side-form'), list = d.materials.join('\n');
     const cleats = Number(/CLEATS on the sheer line: (\d+) blocks/.exec(build)![1]);
     expect(cleats).toBe(dim('side-form', 'cleat-count'));
