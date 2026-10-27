@@ -8,7 +8,7 @@ import { Fig } from './kit';
 
 export type V3 = [number, number, number];
 
-interface Face { p: V3[]; n: V3; color: string; opacity: number; edge: boolean }
+interface Face { p: V3[]; n: V3; color: string; opacity: number; edge: boolean; layer: number }
 
 /** How a solid is drawn. */
 export interface SolidStyle {
@@ -18,6 +18,11 @@ export interface SolidStyle {
   opacity?: number;
   /** Draw a thin outline on the small faces (default true). */
   edge?: boolean;
+  /**
+   * Drawing rank: solids of a lower rank are drawn first, and only solids of one rank are sorted by depth. Slabs that lie one on another (a bench, a template, a web, its bands) get
+   * rising ranks, because a mean-depth sort cannot tell which of two coplanar-ish layers is on top.
+   */
+  layer?: number;
 }
 
 /** A solid swept along x: at each x the section is the rectangle z in [zLo, zHi], y in [yb, yt]. */
@@ -55,7 +60,8 @@ export class Solids {
     if (dot(n, sub(mean([a, b, c, d]), ref)) < 0) n = [-n[0], -n[1], -n[2]];
     const opacity = st.opacity ?? 1;
     const longest = Math.max(Math.hypot(...sub(b, a)), Math.hypot(...sub(c, b)), Math.hypot(...sub(d, c)), Math.hypot(...sub(a, d)));
-    if (longest <= TILE_IN) { this.faces.push({ p: [a, b, c, d], n, color: st.color, opacity, edge: st.edge !== false }); return; }
+    const layer = st.layer ?? 0;
+    if (longest <= TILE_IN) { this.faces.push({ p: [a, b, c, d], n, color: st.color, opacity, edge: st.edge !== false, layer }); return; }
     const nu = Math.max(1, Math.ceil(Math.max(Math.hypot(...sub(b, a)), Math.hypot(...sub(c, d))) / TILE_IN));
     const nv = Math.max(1, Math.ceil(Math.max(Math.hypot(...sub(d, a)), Math.hypot(...sub(c, b))) / TILE_IN));
     const at = (u: number, v: number): V3 => {
@@ -64,7 +70,7 @@ export class Solids {
       return [lo[0] + (hi[0] - lo[0]) * v, lo[1] + (hi[1] - lo[1]) * v, lo[2] + (hi[2] - lo[2]) * v];
     };
     for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
-      this.faces.push({ p: [at(i / nu, j / nv), at((i + 1) / nu, j / nv), at((i + 1) / nu, (j + 1) / nv), at(i / nu, (j + 1) / nv)], n, color: st.color, opacity, edge: false });
+      this.faces.push({ p: [at(i / nu, j / nv), at((i + 1) / nu, j / nv), at((i + 1) / nu, (j + 1) / nv), at(i / nu, (j + 1) / nv)], n, color: st.color, opacity, edge: false, layer });
     }
   }
 
@@ -80,7 +86,7 @@ export class Solids {
     const centers = rings.map(mean);
     for (let i = 0; i < rings.length - 1; i++) {
       const ref = mean([centers[i], centers[i + 1]]);
-      for (let k = 0; k < 4; k++) this.quad(rings[i][k], rings[i][(k + 1) % 4], rings[i + 1][(k + 1) % 4], rings[i + 1][k], ref, st);
+      for (let k = 0; k < 4; k++) this.quad(rings[i][k], rings[i][(k + 1) % 4], rings[i + 1][(k + 1) % 4], rings[i + 1][k], ref, rings.length > 3 ? { ...st, edge: false } : st);
     }
     const first = rings[0], last = rings[rings.length - 1];
     this.quad(first[0], first[1], first[2], first[3], centers[1] ?? centers[0], st);
@@ -124,7 +130,7 @@ export class Solids {
       return { s: [cam.at[0] + cam.scale * x1, cam.at[1] - cam.scale * (dy * Math.cos(pitch) - z1 * Math.sin(pitch))], d: z1 * Math.cos(pitch) + dy * Math.sin(pitch) };
     };
     const seen = this.faces.filter((f) => dot(f.n, view) > 0.0005).map((f) => ({ f, d: f.p.reduce((s, q) => s + proj(q).d, 0) / f.p.length }));
-    seen.sort((a, b) => a.d - b.d);
+    seen.sort((a, b) => a.f.layer - b.f.layer || a.d - b.d);
     for (const { f } of seen) {
       const b = 0.58 + 0.42 * Math.max(0, dot(f.n, LIGHT));
       const fill = shade(f.color, b);

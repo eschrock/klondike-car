@@ -6,6 +6,7 @@ import { computeLayout, samples } from '../../model/layout';
 import type { Vec2 } from '../../model/types';
 import { CLEAT_TALL_IN, SANDBAG_SPACING_IN, sideFormGeometry, type SideFormGeometry } from '../forms';
 import { frac } from '../svg-util';
+import { SIDE3D_FIGURES } from './sides3d';
 import { ACCENT, boundsOf, Fig, fit, INK, mat, MUTED, type FigCtx, type FigFn, type StepFigure } from './kit';
 
 const geom = (c: FigCtx): SideFormGeometry | null => sideFormGeometry(c.parts, c.p);
@@ -386,9 +387,10 @@ const rightSide: FigFn = (c) => {
 };
 
 export const SIDE_FIGURES: Record<string, FigFn[]> = {
-  'side-forms': [sidesPurpose, formSetup, twoRamps, rightSide],
-  'sides-inner': [clampSection(1)],
-  'sides-outer': [clampSection(2), finishedSection],
+  'side-forms': [sidesPurpose, ...SIDE3D_FIGURES['side-forms'], formSetup, twoRamps, rightSide],
+  'sides-inner': [clampSection(1), ...SIDE3D_FIGURES['sides-inner']],
+  'side-form-2': SIDE3D_FIGURES['side-form-2'],
+  'sides-outer': [clampSection(2), ...SIDE3D_FIGURES['sides-outer'], finishedSection],
 };
 
 export type { StepFigure };

@@ -74,7 +74,7 @@ describe('assembly step figures', () => {
     expect(side.why).toContain(`step ${outer}`);
     expect(side.forIds).toEqual(expect.arrayContaining(['side-L-web', 'side-R-web', 'side-L-gunwale-in', 'side-R-chine']));
     expect(side.partIds).toEqual([]);
-    expect(side.figures.map((f) => f.id)).toEqual(['sides-purpose', 'side-form-setup', 'side-two-ramps', 'side-right-side']);
+    expect(side.figures.map((f) => f.id)).toEqual(['sides-purpose', 'side-form-3d-inside', 'side-rib-cut', 'side-form-setup', 'side-two-ramps', 'side-right-side']);
   });
 
   it('the side-form figures quote the form drawing: cleat count and spacing, ramp rise', () => {
@@ -84,6 +84,24 @@ describe('assembly step figures', () => {
     expect(setup).toContain(`${dim('cleat-count')} cleats`);
     expect(setup).toContain(frac(dim('cleat-spacing'), 16));
     expect(setup).toContain(frac(dim('ramp-rise'), 8));
+  });
+
+  it('the 3D figures draw the bench for each set-up, and the two cutting diagrams quote the rib numbers (D-103)', () => {
+    const form = formDrawings(parts, std).find((d) => d.id === 'side-form')!;
+    const dim = (k: string): number => form.dims.find((q) => q.key === k)!.valueIn;
+    const ids = (id: string): string[] => steps.find((s) => s.id === id)!.figures.map((f) => f.id);
+    expect(ids('sides-inner')).toEqual(expect.arrayContaining(['side-section-cure1', 'side-form-3d-cure1']));
+    expect(ids('side-form-2')).toEqual(['side-form-3d-mirror', 'side-rib-turn']);
+    expect(ids('sides-outer')).toEqual(expect.arrayContaining(['side-form-3d-cure2']));
+    for (const f of ['side-form-3d-inside', 'side-form-3d-cure1', 'side-form-3d-mirror', 'side-form-3d-cure2']) {
+      const fig = steps.flatMap((s) => s.figures).find((x) => x.id === f)!;
+      expect((fig.svg.match(/<polygon|<path/g) ?? []).length, f).toBeGreaterThan(300); // a drawn solid, not an empty frame
+    }
+    const cut = figureTexts(side.figures.find((f) => f.id === 'side-rib-cut')!.svg).join(' ');
+    expect(cut).toContain(`make ${dim('ramp-ribs')}`);
+    expect(cut).toContain('rip 1-1/4"');
+    const turn = figureTexts(steps.find((s) => s.id === 'side-form-2')!.figures.find((f) => f.id === 'side-rib-turn')!.svg).join(' ');
+    expect(turn).toContain('new block');
   });
 
   it('the cure sections quote the band sizes from the cut stock', () => {
