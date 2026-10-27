@@ -87,7 +87,7 @@ const formSetup: FigFn = (c) => {
   const c3 = top.cleat(Math.floor(g.nCleat * 0.3));
   F.label(c3, [c3[0] - 30, 62], `${g.nCleat} cleats on edge, ${frac(g.cleatStep, 16)} apart, set against the dry web`, { anchor: 'start' });
   F.label(top.stop(0), [20, 250], ['end stop (one at', 'each end of the band)'], { anchor: 'start', size: 12 });
-  F.label(top.at([u0 * 0.35, H * 0.4]), [70, 298], ['template: the web\'s outline in 1/4" plywood (2 layers),', 'screwed flat; the web lies on it, inside face up'], { anchor: 'start' });
+  F.label(top.at([u0 * 0.35, H * 0.4]), [70, 298], ['template: the web\'s outline, 1" thick (a 1/4" laser piece on a', 'routed 3/4" layer), screwed flat; the web lies on it, inside face up'], { anchor: 'start' });
   if (g.hasRamp) {
     const capMid = top.at([(u0 + uE) / 2, -0.5]);
     F.label([capMid[0], capMid[1] - 6], [730, 300], [`S-ramp: ${g.ribs} MDF ribs (dashed) under a`, 'plain hardboard cap; it lifts', `the bow end ${f8(g.rampH)}`], { anchor: 'end' });
@@ -202,7 +202,7 @@ function clampSection(cure: 1 | 2): FigFn {
     F.text([xA - 42, yBench + 15], 'bench top', { size: 11.5, color: MUTED });
     // what the web lies on: the 2-layer template (cure 1) or the mirror-ramp cap (cure 2), in two windows
     for (const [a, b] of [[0, win], [H - win, H + cap + 0.3]] as Array<[number, number]>) {
-      if (cure === 1) { F.rect(X(a), yBench - lift, (b - a) * k, lift / 2, mat('template')); F.rect(X(a), yBench - lift / 2, (b - a) * k, lift / 2, mat('template')); }
+      if (cure === 1) { F.rect(X(a), yBench - lift, (b - a) * k, lift / 4, mat('template')); F.rect(X(a), yBench - 0.75 * lift, (b - a) * k, 0.75 * lift, mat('template')); } // the 1/4" laser piece on the 3/4" routed layer (D-102)
       else F.rect(X(a) - (a === 0 ? 20 : 0), yBench - lift, (b - a) * k + (a === 0 ? 20 : 0.75 * k + 40), lift, mat('hardboard'));
     }
     // the web, in two windows, with break marks
@@ -244,7 +244,7 @@ function clampSection(cure: 1 | 2): FigFn {
     F.label([xC + cleatW / 2, yBandTop - 20], [xC + 4, 70], cure === 1 ? ['cleat, on edge', `(${f8(CLEAT_TALL_IN)} tall)`] : ['cleat, on edge, on', 'the cap over a rib'], { anchor: 'start', size: 12 });
     F.label([X(H + cap - gunH / 2), yBandTop - 30], [X(H - win) - 10, 150], [`bag of sand on a plastic sheet,`, `every ${f8(SANDBAG_SPACING_IN)} along each band`], { anchor: 'end', size: 12 });
     F.label([X(win * 0.75), (yWebTop + yWebBot) / 2], [X(win * 0.75) - 10, yBench + 62], 'web (thin plywood)', { anchor: 'start', size: 12 });
-    F.label([X(H - win) + 10, yBench - lift / 2], [X(H - win) - 10, yBench + 62], cure === 1 ? 'template, 2 layers (at the bow end: the S-ramp cap)' : 'mirror-ramp cap', { anchor: 'start', size: 12 });
+    F.label([X(H - win) + 10, yBench - lift / 2], [X(H - win) - 10, yBench + 62], cure === 1 ? ['template: 1/4" laser piece on a routed 3/4" layer', '(at the bow end: the S-ramp cap)'] : 'mirror-ramp cap', { anchor: 'start', size: 12 });
     if (cure === 1) {
       F.dim([X(0), yWebTop - 3], [X(chineLo), yWebTop - 3], frac(chineLo, 16), -10, { size: 11.5 });
       F.label([X(chineLo / 2), yWebTop - 30], [20, 196], ['deck gap: the deck edge', 'slides in here later'], { anchor: 'start', size: 12 });

@@ -1309,7 +1309,7 @@ const TEMPLATES_1: Template[] = [
     // D-94: the webs are cut here, once the forms are proved with a hardboard test web and the deck's edge is measured.
     cuts: /^side-[LR]-web$/,
     cutAfter: 'cut-deck',
-    tools: ['Shaper Origin or bandsaw', 'laser (test web)', 'drill and driver', '3/4" MDF and plywood', '1/4" hardboard', '1/8" hardboard (test web)', 'flexible steel tape', 'packing tape'],
+    tools: ['Shaper Origin or bandsaw', 'laser (test web, rib patterns)', 'router with a pattern bit', 'drill and driver', '3/4" MDF and plywood', '1/4" hardboard', '1/8" hardboard (test web)', 'flexible steel tape', 'packing tape'],
     build: (c) => {
       const web = c.by('side-L-web');
       const webRow = c.cut().sheets.flatMap((g) => g.rows).find((r) => r.ids.includes('side-L-web'));

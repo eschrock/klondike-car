@@ -5,7 +5,7 @@ import { defaultParams } from '../params';
 import { flatPattern } from './flat';
 import { frac } from './svg-util';
 import { cutListFor } from './part-drawings';
-import { LETTER_H_IN, LETTER_W_IN, PRINT_CUT_STROKE_IN, RIB_BASE_IN, TILE_MARGIN_IN, TILE_OVERLAP_IN, formDrawings, pathBounds, printStyle, tileForLetter, tilePlan } from './forms';
+import { CLEAT_TALL_IN, TEMPLATE_STOCK_IN, sideFormGeometry, LETTER_H_IN, LETTER_W_IN, PRINT_CUT_STROKE_IN, RIB_BASE_IN, TILE_MARGIN_IN, TILE_OVERLAP_IN, formDrawings, pathBounds, printStyle, tileForLetter, tilePlan } from './forms';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -296,8 +296,8 @@ describe('printing (Phase 4 round 2)', () => {
 });
 
 describe('S-ramp rib', () => {
-  it('sits on a 1/4 in base, so it never ends in a knife edge', () => {
-    expect(RIB_BASE_IN).toBeGreaterThanOrEqual(0.25);
+  it('sits on a 3/4 in base, so it never ends in a thin sliver to chip under the router (D-102)', () => {
+    expect(RIB_BASE_IN).toBeGreaterThanOrEqual(0.75);
     expect(dim('side-form', 'rib-base')).toBeCloseTo(RIB_BASE_IN, 9);
     const ramp = /<g id="ramp"><path d="([^"]*)"/.exec(byId('side-form').svg)!;
     const b = pathBounds(ramp[1])!;
@@ -307,6 +307,43 @@ describe('S-ramp rib', () => {
     const xs = pts.map((q) => q[0]), lo = Math.min(...xs);
     const startEdge = pts.filter((q) => Math.abs(q[0] - lo) < 1e-6).map((q) => q[1]);
     expect(Math.abs(Math.max(...startEdge) - Math.min(...startEdge))).toBeGreaterThanOrEqual(RIB_BASE_IN - 1e-3);
+  });
+});
+
+describe('ramp ribs, rib patterns and the thick template (D-102)', () => {
+  const fd = byId('side-form');
+  const g = sideFormGeometry(parts, p, L)!;
+  it('no rib of either ramp is lower than the base anywhere', () => {
+    for (const [, h] of g.rampProfile) expect(h).toBeGreaterThanOrEqual(RIB_BASE_IN - 1e-9);
+    for (const [, h] of g.mirrorProfile) expect(h).toBeGreaterThanOrEqual(RIB_BASE_IN - 1e-9);
+  });
+  it('the template (routed under layer plus the 1/4 in laser piece) is as thick as the rib base plus the cap: the web meets the ramp with no step', () => {
+    expect(RIB_BASE_IN + TEMPLATE_STOCK_IN).toBeCloseTo(g.webLowIn, 9);
+    expect(g.rampProfile[0][1] + TEMPLATE_STOCK_IN).toBeCloseTo(g.webLowIn, 6); // the cap's top at the S start
+    expect(g.mirrorProfile[g.mirrorProfile.length - 1][1] + TEMPLATE_STOCK_IN).toBeCloseTo(g.webLowIn, 6); // and at the bow end of the mirror ramp
+    expect(g.webHighIn - g.webLowIn).toBeCloseTo(g.rampH, 9);
+  });
+  it('the laser cuts one 1/4 in pattern per rib profile, the same outline as the rib on the drawing, and no longer cuts an under layer', () => {
+    const pat = fd.laser!.find((l) => l.id === 'side-rib-patterns')!;
+    expect(pat.thicknessIn).toBe(TEMPLATE_STOCK_IN);
+    expect(pat.items.map((it) => it.qty)).toEqual([1, 1]);
+    const boxes = pat.items.map((it) => { const ys = it.shape.outer.map((q) => q[1]), xs = it.shape.outer.map((q) => q[0]); return { len: Math.max(...xs) - Math.min(...xs), tall: Math.max(...ys) - Math.min(...ys), lowEnd: Math.min(...ys) }; });
+    expect(boxes[0].len).toBeCloseTo(g.uOf(g.xRe) - g.uOf(g.xR0), 6);
+    expect(boxes[1].len).toBeCloseTo(g.mirrorLen, 6);
+    for (const b of boxes) expect(b.tall).toBeCloseTo(RIB_BASE_IN + g.rampH, 6);
+    expect(fd.laser!.some((l) => /under-layer/.test(l.id))).toBe(false);
+  });
+  it('the cleats stand proud of the band top on the flat part by what they did before the template was thickened', () => {
+    const bandTop = g.webLowIn + (parts.find((x) => x.id === 'side-L-web')!.stock?.t ?? 0) + (parts.find((x) => x.id === 'side-L-gunwale-in')!.stock?.t ?? 0);
+    expect(CLEAT_TALL_IN - bandTop).toBeGreaterThanOrEqual(0.5);
+  });
+  it('the steps pattern-route the ribs and the under layer, and the cleat screws fit the 2 in cleat', () => {
+    const t = fd.build.flatMap((s) => [s.step, ...(s.sub ?? [])]).join(' ');
+    expect(t).toMatch(/Rib patterns \(laser\)/);
+    expect(t).toMatch(/flush-trim with a pattern bit/);
+    expect(t).toMatch(/Under layer: cut a 3\/4" MDF or plywood blank/);
+    expect(t).toContain('two #8 × 2-1/2" screws into the bench');
+    expect(t).toContain('two #8 × 3" down through the cap');
   });
 });
 
@@ -358,7 +395,7 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
 
   it('says how to build the side form: the template, the cleats at their spacing, the ramp ribs and cap, tape and clamps', () => {
     const t = all('side-form');
-    expect(t).toMatch(/TEMPLATE \(laser\): the web's flat outline/);
+    expect(t).toMatch(/TEMPLATE: the web's flat outline/);
     expect(t).toContain(`CLEATS on the sheer line: ${2 * dim('side-form', 'cleat-count')} blocks`);
     expect(t).toContain(`${dim('side-form', 'cleat-count')} for each bench top`);
     expect(t).toMatch(/Stand each on edge/);
@@ -513,7 +550,7 @@ describe('materials: the shopping list for each jig', () => {
     const edge = Number(/EDGE STOPS, (\d+) more blocks a bench/.exec(build)![1]);
     expect(list).toContain(`${2 * edge} edge stops`);
     expect(list).toContain(`${cleats + 4 + 2 * edge} blocks`);
-    expect(list).toContain(`3/4" MDF: ${dim('side-form', 'ramp-ribs') + dim('side-form', 'mirror-ribs')} ribs: ${dim('side-form', 'ramp-ribs')} for the S-ramp`);
+    expect(list).toContain(`3/4" MDF: ${dim('side-form', 'ramp-ribs') + dim('side-form', 'mirror-ribs')} ribs, trimmed to the rib patterns: ${dim('side-form', 'ramp-ribs')} for the S-ramp`);
     expect(list).toContain(`${dim('side-form', 'mirror-ribs')} for the mirror ramp`);
     expect(build).toContain(`cut ${dim('side-form', 'ramp-ribs')} ribs`);
     expect(list).toMatch(/3\/4" plywood or MDF: 2 bench tops, each [\d/-]+" × [\d/-]+"/);

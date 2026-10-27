@@ -39,8 +39,8 @@ const CAP_MARGIN_IN = 0.5;
  * (3/4 in on edge, set against a 1/8 in scrap) must stand on it along the sheer of either side's web (the right web lies on the bench the other way round).
  */
 const MIRROR_CAP_MARGIN_IN = 1.5;
-/** The sheer cleats stand on edge (in tall), so a band on a ramp cannot ride over them. */
-export const CLEAT_TALL_IN = 1.5;
+/** The sheer cleats stand on edge (in tall), so a band cannot ride over them. On the flat part the band top is about 1.4 in above the bench (the template, the web and a band), so 2 in leaves it 5/8 in to stand proud (D-102). */
+export const CLEAT_TALL_IN = 2;
 /** The ramp caps run this much past the web's bow end so the bow end stop stands on the cap. (How far the gunwale band stands past each web end is `gunwaleEndLongIn`, D-93.) */
 const CAP_PAST_BOW_IN = 2;
 /** Screws along the edges of the side-form template (in), shop practice: about one every 12 in. */
@@ -55,8 +55,11 @@ export const SANDBAG_SPACING_IN = 6;
 const SANDBAG_LB = 5;
 const S_BAGS = 4;
 const S_BAG_LB = 10;
-/** Least thickness (in) of the S-ramp rib anywhere, so it does not end in a knife edge: the rib's profile sits on this constant base (matches the 1/4 in hardboard template the web lies on). */
-export const RIB_BASE_IN = 0.25;
+/**
+ * Least height (in) of a ramp rib anywhere (D-102): the rib's profile sits on this constant base, so the tips are a stout 3/4 in tall (a thin sliver of MDF chips under the router and snaps in the hand).
+ * It is also the thickness of the template's routed under layer: the rib base plus the 1/4 in cap is where the web's underside starts.
+ */
+export const RIB_BASE_IN = 0.75;
 /** Spacing (in) of cleats and clamps along a bend: "every 4 to 5 in" (HULL_STEP, build-utils.ts). */
 export const CLEAT_SPACING_IN = 4.5;
 /** Cut this much deeper than the stock (in). */
@@ -279,7 +282,7 @@ export function sideFormGeometry(parts: Part[], p: Params, L: Layout = computeLa
   const hasRamp = L.taper.turnIn > 0.01;
   const xR0 = L.taper.x0, xR1 = L.taper.x1, xRe = L.xSideEnd;
   const rampXs = samples(xR0, xRe, 48);
-  const rampProfile: Vec2[] = rampXs.map((x) => [uOf(x), RIB_BASE_IN + L.turnIn(x)]); // on a RIB_BASE_IN base: the web's rise is the turn-in above the 1/4 in template
+  const rampProfile: Vec2[] = rampXs.map((x) => [uOf(x), RIB_BASE_IN + L.turnIn(x)]); // on a RIB_BASE_IN base: the web's rise is the turn-in above the template (the base plus the cap)
   const rampH = hasRamp ? L.turnIn(xRe) : 0;
   const webTallAtBow = Math.max(...rampXs.map((x) => sideTopAt(L, x) - L.chineBot));
   // The forms are handed: the template is the LEFT web's outline. The right web is its mirror image, glued on the same benches with the template's rear piece
@@ -330,7 +333,6 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   if (hasRamp) for (const x of [xR1, xRe]) tplLines.push([[uOf(x), 0], [uOf(x), templateH]]);
   const tplShape: LaserShape = { ...emptyShape('web-template', 'Web template', f.outer), score: tplLines, marks: tplMarks };
   const rearBands = hasRamp ? fitToBed(clipShape(tplShape, 'u', uS0, 'lo', 'web-template-rear', 'Web template, rear piece')) : [];
-  const underItems: LaserItem[] = rearBands.map((shape): LaserItem => ({ shape: { ...shape, id: shape.id.replace('web-template', 'web-template-under'), label: shape.label.replace('Web template', 'Web template, under layer'), score: [], marks: [] }, qty: 1 }));
   const tplItems: LaserItem[] = hasRamp
     ? [
         ...rearBands.map((shape): LaserItem => ({ shape, qty: 1 })),
@@ -338,7 +340,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       ]
     : fitToBed(tplShape).map((shape): LaserItem => ({ shape, qty: 1 }));
   const banded = tplItems.some((it) => /-(lower|upper)$/.test(it.shape.id));
-  const tplPieces = tplItems.reduce((n, it) => n + it.qty, 0) + underItems.length;
+  const tplPieces = tplItems.reduce((n, it) => n + it.qty, 0);
   const dims: FormDim[] = [
     lenDim('web-length', 'Web flat length (development)', f.widthIn),
     lenDim('web-height', 'Web height at the rear', f.heightIn),
@@ -351,7 +353,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     lenDim('ramp-length', 'S-ramp length (from the S start to the bow end)', uOf(xRe) - uOf(xR0)),
     lenDim('s-length', 'S (taper) length', uOf(xR1) - uOf(xR0)),
     countDim('ramp-ribs', 'S-ramp ribs (3/4" MDF)', ribs, 'rib'),
-    lenDim('rib-base', 'Rib base under the profile (least rib thickness)', RIB_BASE_IN),
+    lenDim('rib-base', 'Rib base under the profile (least rib height)', RIB_BASE_IN),
     countDim('mirror-ribs', 'Mirror-ramp ribs (3/4" MDF, full web length)', mirrorRibs, 'rib'),
     lenDim('mirror-rib-height', 'Mirror-ramp rib height at the rear (falls to the base at the bow end)', RIB_BASE_IN + rampH),
   );
@@ -364,6 +366,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const EDGE_STOPS = Math.round(f.widthIn / EDGE_STOP_SPACING_IN);
   const sandLb = 2 * bagsPerBand * SANDBAG_LB + (hasRamp ? S_BAGS * S_BAG_LB : 0);
   const rampLen = uOf(xRe) - uOf(xR0);
+  const ribTall = RIB_BASE_IN + rampH;
   const capW = sCapW;
   const bandT = bandOf('side-L-chine-in')?.stock?.t;
   const backing = `${frac(innerChineBot)}-wide strip ${bandT ? `${frac(bandT)} thick (a band offcut)` : 'as thick as a band (an offcut)'}`;
@@ -371,7 +374,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     `Lay the web FLAT on the bench on this template: ${inch(f.widthIn)} along the plan curve, ${inch(f.heightIn)} tall at the rear.`,
     `Cleat the sheer line: ${nCleat} cleats ${inch(cleatStep)} apart, on edge, set against the dry web. A straight 1-1/2" strip bent to the sheer pushes sideways about 65 lbf per band at mid-span until the epoxy cures.`,
     hasRamp
-      ? `S-ramp (first face): the bow end of the web rides up it. Rise ${inch(rampH)} (the turn-in per side); the S runs from ${inch(uOf(xR0))} to ${inch(uOf(xR1))} along the web, then level to the bow end of the bands at ${inch(uOf(xRe))}. The web ends at ${inch(f.widthIn)}; its last ${inch(f.widthIn - uOf(xRe))} runs into the bulkhead dado, level. ${ribs} ribs of ${frac(RIB_STOCK_IN)} MDF ${frac(ribPitch)} apart across the web's full ${inch(f.heightIn)} (so the cap also carries the right web, which lies the other way round), capped with a plain 1/4" hardboard rectangle; no rib is thinner than ${inch(RIB_BASE_IN)}.`
+      ? `S-ramp (first face): the bow end of the web rides up it. Rise ${inch(rampH)} (the turn-in per side); the S runs from ${inch(uOf(xR0))} to ${inch(uOf(xR1))} along the web, then level to the bow end of the bands at ${inch(uOf(xRe))}. The web ends at ${inch(f.widthIn)}; its last ${inch(f.widthIn - uOf(xRe))} runs into the bulkhead dado, level. ${ribs} ribs of ${frac(RIB_STOCK_IN)} MDF ${frac(ribPitch)} apart across the web's full ${inch(f.heightIn)} (so the cap also carries the right web, which lies the other way round), capped with a plain 1/4" hardboard rectangle; no rib is lower than ${inch(RIB_BASE_IN)} anywhere, so none ends in a thin sliver to chip or snap.`
       : 'No bow turn-in at these params: no ramp is needed.',
     ...(hasRamp ? [`Mirror ramp (second face): the first cure leaves the web with its S, so turned over its bow end hangs ${inch(rampH)} lower than its rear end and the rising ramp cannot take it. The mirror ramp is a second set of ${mirrorRibs} ribs ${frac(mirrorPitch)} apart under a plain ${inch(mCapW)}-wide cap, the full ${inch(mirrorLen)} of the bands, ${inch(RIB_BASE_IN + rampH)} tall from the rear end to the S start and falling through the S to ${inch(RIB_BASE_IN)} at the bow end (the lowest profile on this drawing). The web's underside then sits ${inch(webHighIn)} above the bench at the rear and ${inch(webLowIn)} at the bow end.`] : []),
     'Lines on the drawing: sheer (cleat line), gunwale band lower edge, web top, chine band top, inner chine band bottom, web bottom. The template and rib outlines are outside cuts for the Shaper.',
@@ -379,17 +382,23 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const build: FormBuildStep[] = [
     { step: `BENCH TOP: a flat sheet of 3/4" plywood or MDF at least ${frac(f.widthIn + 2 * BASE_END_IN)} × ${frac(f.heightIn + 2 * BASE_END_IN)} (the web is ${frac(f.widthIn)} × ${frac(f.heightIn)}). It is sacrificial: the cleats and ribs are screwed into it.${hasRamp ? ' The mirror ramp (the MIRROR RAMP item below) takes a second one the same size.' : ''}` },
     {
-      step: `TEMPLATE (laser): the web's flat outline (the outer line of this drawing) in ${frac(TEMPLATE_STOCK_IN)} plywood, cut on the laser as ${tplPieces} pieces${hasRamp ? `: the rear piece, its under layer (glued below it, so the template is ${frac(2 * TEMPLATE_STOCK_IN)} thick, level with the ramp cap's low end), and the front piece (kept only to mark the web)` : ''}. ${banded ? `The web is ${frac(f.heightIn)} tall at the rear, wider than the bed, so the file cuts it in bands that butt on the bench.` : `The web is ${frac(f.heightIn)} tall at the rear; it fits the laser bed.`}`,
+      step: `TEMPLATE: the web's flat outline (the outer line of this drawing). The laser cuts it in ${frac(TEMPLATE_STOCK_IN)} plywood as ${tplPieces} pieces${hasRamp ? `: the rear piece, which lies under the flat part of the web, and the front piece (kept only to mark the web). A ${frac(RIB_BASE_IN)} MDF or plywood layer goes under the rear piece, so the template is ${frac(webLowIn)} thick, level with the ramp cap's low end` : ''}. ${banded ? `The web is ${frac(f.heightIn)} tall at the rear, wider than the bed, so the file cuts it in bands.` : `The web is ${frac(f.heightIn)} tall at the rear; it fits the laser bed.`}`,
       sub: [
         'The laser scores the sheer (cleat line), the gunwale band lower edge, the chine band top, the inner chine band bottom, the S end, the bow end of the bands and a tick for each cleat.',
-        ...(hasRamp ? [`The file cuts it square at the "S starts" line, ${frac(uS0)} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place.`, `Glue the under layer (its own laser file) below the rear piece: the ramp cap's low end stands ${frac(webLowIn)} above the bench, so the web runs onto the ramp with no step.`] : []),
-        `${banded ? 'Butt the bands tight on the bench, matching the scored lines across the seam, and screw' : 'Screw'} the pieces down with ${hasRamp ? '#8 × 1" flat-heads about every 12", heads flush (the rear piece is 2 layers, 1/2" thick)' : '#8 × 3/4" flat-heads about every 12", heads flush'}.`,
+        ...(hasRamp ? [
+          `The file cuts it square at the "S starts" line, ${frac(uS0)} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place.`,
+          `Under layer: cut a ${frac(RIB_BASE_IN)} MDF or plywood blank ${roughFrac(uS0 + 0.5)} × ${roughFrac(f.heightIn + 0.5)}, 1/4" bigger than the rear piece all round. Glue the rear piece${banded ? 's, butted tight and matching the scored lines across the seam,' : ''} on top (brads in the waste), and when it is dry flush-trim the blank to it with a pattern bit that cuts at least ${frac(RIB_BASE_IN)}, its bearing on the laser piece. The template is now one ${frac(webLowIn)} piece, so the web runs onto the ramp with no step.`,
+        ] : []),
+        `Screw ${hasRamp ? 'it' : banded ? 'the bands, butted tight and matching the scored lines across the seam,' : 'it'} down with ${hasRamp ? '#8 × 1-1/2" flat-heads about every 12", heads flush (the rear piece is 1" thick)' : '#8 × 3/4" flat-heads about every 12", heads flush'}.`,
         'Tape: packing tape over the template wherever a band lies (the epoxy squeezes out at the band edges).',
       ],
     },
     ...(hasRamp ? [{
-      step: `S-RAMP (first face): cut ${ribs} ribs from ${frac(RIB_STOCK_IN)} MDF to the first rib profile at the bottom of this drawing: ${frac(rampLen)} long, ${frac(RIB_BASE_IN)} tall at the low (rear) end and ${frac(RIB_BASE_IN + rampH)} at the high (bow) end.`,
+      step: `S-RAMP (first face): cut ${ribs} ribs from ${frac(RIB_STOCK_IN)} MDF with the S-ramp rib pattern (the first item below), to the first rib profile at the bottom of this drawing: ${frac(rampLen)} long, ${frac(RIB_BASE_IN)} tall at the low (rear) end and ${frac(RIB_BASE_IN + rampH)} at the high (bow) end.`,
       sub: [
+        `Rib patterns (laser): two ${frac(TEMPLATE_STOCK_IN)} plywood patterns from the laser file for this drawing, the S-ramp rib (${frac(rampLen)} × ${frac(ribTall)}) and the mirror-ramp rib (${frac(mirrorLen)} × ${frac(ribTall)}), each to the rib outline at offset 0. One pattern makes every rib of its ramp.`,
+        `Bandsaw each rib blank from ${frac(RIB_STOCK_IN)} MDF about 1/8" outside the line (the S-ramp blank ${roughFrac(rampLen + 0.25)} × ${roughFrac(ribTall + 0.25)}, the mirror-ramp blank ${roughFrac(mirrorLen + 0.25)} × ${roughFrac(ribTall + 0.25)}). Stick the pattern on top with double-sided tape, flat edge along the blank's straight edge, and flush-trim with a pattern bit that cuts at least ${frac(RIB_STOCK_IN)}.`,
+        `No part of a rib is lower than ${frac(RIB_BASE_IN)}, so the thin end is a stout block, not a sliver: take it in light passes and let the bit's bearing, not your hand, steer. Make the mirror-ramp ribs the same way, with the other pattern, now or at that item.`,
         `Stand the ribs on edge on the bench, along the web's length, ${frac(ribPitch)} apart center to center across the web's full ${frac(f.heightIn)} at the rear so the cap carries the left web's bow end on one half and the right web's on the other; the low ends butt the template at the S start.`,
         'Fix each rib with two glue blocks (3/4" × 3/4" × 3"), screwed to the bench and the rib, one each side.',
         `Before the cap goes on: lay a dry web on the ribs, both ways round (the left web and the right web's outline), mark where its top edge crosses the ribs, and glue a 3/4" × 3/4" × 3" block against the side of a rib, flush with the rib tops, wherever a cleat will stand with no rib under it.`,
@@ -398,7 +407,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     }, {
       step: `MIRROR RAMP (second face): the first cure leaves the web with its S, so turned over its bow end hangs ${frac(rampH)} lower than its rear end. Build the ramp upside down: high at the rear, falling to the bench at the bow end.`,
       sub: [
-        `Cut ${mirrorRibs} ribs from ${frac(RIB_STOCK_IN)} MDF to the mirror rib profile (the lowest on this drawing): ${frac(mirrorLen)} long, ${frac(RIB_BASE_IN + rampH)} tall from the rear end to the S start, then falling through the S to ${frac(RIB_BASE_IN)} tall at the bow end.`,
+        `Cut ${mirrorRibs} ribs from ${frac(RIB_STOCK_IN)} MDF with the mirror-ramp rib pattern (from the S-RAMP item above), to the mirror rib profile (the lowest on this drawing): ${frac(mirrorLen)} long, ${frac(RIB_BASE_IN + rampH)} tall from the rear end to the S start, then falling through the S to ${frac(RIB_BASE_IN)} tall at the bow end.`,
         `Stand them on edge on the second bench top, spread evenly, about ${frac(mirrorPitch)} apart center to center, the outer ribs under the cap's edges, with two glue blocks each as for the first ramp.`,
         `Before the cap goes on: lay a dry web on the ribs, both ways round (the left web and the right web's outline), mark where its top edge crosses the ribs, and glue a 3/4" × 3/4" × 3" block against the side of a rib, flush with the rib tops, wherever a cleat will stand with no rib under it.`,
         `Cap: ${frac(TEMPLATE_STOCK_IN)} hardboard ${frac(mirrorLen + (f.widthIn - uOf(xRe)) + CAP_PAST_BOW_IN)} × ${frac(mCapW)}, a plain rectangle, running ${frac(CAP_PAST_BOW_IN)} past the web's bow end, ${frac(MIRROR_CAP_MARGIN_IN)} wider than the web each side, so a cleat can stand on it along either side's sheer. Glue and brad it to the rib tops. Tape it. The web's underside now sits ${frac(webHighIn)} above the bench at the rear and ${frac(webLowIn)} at the bow end.`,
@@ -408,7 +417,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       step: `CLEATS on the sheer line: ${2 * nCleat} blocks of 3/4" plywood or oak, 3/4" × ${frac(CLEAT_TALL_IN)} × 3" long, ${nCleat} for each bench top, about ${frac(cleatStep)} apart along the sheer (the ticks on the template, numbered 1 to ${nCleat} on this drawing).`,
       sub: [
         `Stand each on edge, ${frac(CLEAT_TALL_IN)} tall, so the band cannot ride over it, even where the web is up on a ramp. No spacers.`,
-        `Set them against a dry web, not against the scored line: lay the web on (on a ramp, hold it down with the bags of sand used for gluing), hold a 1/8" hardboard scrap against its top edge (the gunwale bands stand 1/8" above the web), and screw each cleat against the scrap: two #8 × 2" screws into the bench beside the template (a 2-1/2" would come out its underside), or, where the web is on a ramp, two #8 × 2-1/2" down through the cap into the rib or block under it, piloted 1/8" (MDF edges split).`,
+        `Set them against a dry web, not against the scored line: lay the web on (on a ramp, hold it down with the bags of sand used for gluing), hold a 1/8" hardboard scrap against its top edge (the gunwale bands stand 1/8" above the web), and screw each cleat against the scrap: two #8 × 2-1/2" screws into the bench beside the template (a 3" would come out its underside), or, where the web is on a ramp, two #8 × 3" down through the cap into the rib or block under it, piloted 1/8" (MDF edges split).`,
         ...(hasRamp ? ['On the first bench the dry web lies inside face up; on the mirror ramp, outside face up (turned over along its length).'] : []),
         `END STOPS, 4 more blocks the same size, two a bench: cut each gunwale band ${frac(p.gunwaleEndLongIn)} long at each end of the web, and screw a block against the band's lower edge just past each end of the web (at the bow end, on the cap). The sheer curves away from the cleats at its ends, so a bent band pushes its middle into the cleats and its ends swing away: the stops hold the ends.`,
         `EDGE STOPS, ${EDGE_STOPS} more blocks a bench: screw them against the web's straight bottom edge about every 12" along it. They fix the web across the form, and in the second cure the outer chine band is pushed against them, so it ends flush with the web (it is the face that sits on the rail).`,
@@ -443,20 +452,22 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const edgeStops = benches * EDGE_STOPS;
   const blocks = 2 * nCleat + 4 + edgeStops; // cleats, end stops and edge stops, all 3/4" × 1-1/2" × 3"
   const nBags = 2 * bagsPerBand + (hasRamp ? S_BAGS : 0);
-  const ribTall = RIB_BASE_IN + rampH;
   const capLen = rampLen + (f.widthIn - uOf(xRe)) + CAP_PAST_BOW_IN, mirrorCapLen = mirrorLen + (f.widthIn - uOf(xRe)) + CAP_PAST_BOW_IN;
   const materials: string[] = [
     `3/4" plywood or MDF: ${benches === 1 ? '1 bench top' : `${benches} bench tops`}, ${benches === 1 ? '' : 'each '}${roughFrac(f.widthIn + 2 * BASE_END_IN)} × ${roughFrac(f.heightIn + 2 * BASE_END_IN)}`,
-    `${TEMPLATE_PLY}: the web template, ${tplPieces} laser pieces: the web outline, ${roughFrac(f.widthIn)} × ${roughFrac(f.heightIn)}${hasRamp ? `, and a second layer under the rear piece, ${roughFrac(uS0)} × ${roughFrac(f.heightIn)}` : ''}`,
+    `${TEMPLATE_PLY}: the web template, ${tplPieces} laser pieces: the web outline, ${roughFrac(f.widthIn)} × ${roughFrac(f.heightIn)}${hasRamp ? `, cut square at the S start (a rear and a front piece)` : ''}`,
+    ...(hasRamp ? [`${frac(RIB_BASE_IN)} MDF or plywood: the template's under layer, 1 blank ${roughFrac(uS0 + 0.5)} × ${roughFrac(f.heightIn + 0.5)}, trimmed to the rear piece`] : []),
     ...(hasRamp ? [
-      `3/4" MDF: ${ribs + mirrorRibs} ribs: ${ribs} for the S-ramp, each ${roughFrac(rampLen)} × ${roughFrac(ribTall)}, and ${mirrorRibs} for the mirror ramp, each ${roughFrac(mirrorLen)} × ${roughFrac(ribTall)}`,
+      `3/4" MDF: ${ribs + mirrorRibs} ribs, trimmed to the rib patterns: ${ribs} for the S-ramp, each ${roughFrac(rampLen)} × ${roughFrac(ribTall)}, and ${mirrorRibs} for the mirror ramp, each ${roughFrac(mirrorLen)} × ${roughFrac(ribTall)} (bandsaw the blanks 1/4" bigger)`,
+      `${TEMPLATE_PLY}: 2 rib patterns, ${roughFrac(rampLen)} × ${roughFrac(ribTall)} (S-ramp) and ${roughFrac(mirrorLen)} × ${roughFrac(ribTall)} (mirror ramp)`,
+      'double-sided tape, to stick the rib patterns on the blanks',
       `${frac(TEMPLATE_STOCK_IN)} hardboard: 2 ramp caps, ${roughFrac(capLen)} × ${roughFrac(capW)} for the S-ramp and ${roughFrac(mirrorCapLen)} × ${roughFrac(mCapW)} for the mirror ramp`,
     ] : []),
     '1/8" hardboard: one scrap, to gauge the cleats against the web\'s top edge',
     `${blocks} blocks, 3/4" × ${frac(CLEAT_TALL_IN)} × 3", plywood or oak offcuts: ${2 * nCleat} cleats, 4 end stops and ${edgeStops} edge stops`,
     ...(hasRamp ? [`${2 * (ribs + mirrorRibs)} glue blocks, 3/4" × 3/4" × 3", offcuts (two a rib), and a few more where a cleat has no rib under it`] : []),
-    `#8 × ${hasRamp ? '1"' : '3/4"'} flat-head screws for the template, about ${up5(Math.ceil(2 * (f.widthIn + f.heightIn) / TEMPLATE_SCREW_SPACING_IN))}`,
-    `#8 screws for the ${blocks} blocks, 2 each: ${2 * blocks} in all, 2" long (2-1/2" where a block stands on a ramp cap); more for the glue blocks`,
+    `#8 × ${hasRamp ? '1-1/2"' : '3/4"'} flat-head screws for the template, about ${up5(Math.ceil(2 * (f.widthIn + f.heightIn) / TEMPLATE_SCREW_SPACING_IN))}`,
+    `#8 screws for the ${blocks} blocks, 2 each: ${2 * blocks} in all, 2-1/2" long (3" where a block stands on a ramp cap); more for the glue blocks`,
     ...(hasRamp ? ['brads and wood glue, for the ramp caps'] : []),
     'packing tape, a roll or two: over the template, the caps, and the cleat and stop faces',
     'plastic sheeting (a cut-open trash bag), to cover the wet bands',
@@ -485,12 +496,19 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
         notes: [
           `The web is ${inch(f.widthIn)} × ${inch(f.heightIn)}; the bed is ${inch(LASER_MAX_WIDTH_IN)} wide.${banded ? ' The template is cut in bands that butt on the bench.' : ''}${hasRamp ? ' It is cut in a rear piece and a front piece, square at the S start.' : ''}`,
           'Score lines: sheer (cleat line), gunwale band lower edge, chine band top, inner chine band bottom, S end, bow end of the bands; a tick and circle for each cleat, from the rear to the bow.',
-          'The ramp caps and the mirror-ramp cap are plain rectangles from the drawing: saw them. The ribs are 3/4 in MDF: bandsaw or Shaper.',
+          `The ramp caps and the mirror-ramp cap are plain rectangles from the drawing: saw them. ${hasRamp ? `The rear piece is glued to a ${inch(RIB_BASE_IN)} MDF or plywood blank and the blank flush-trimmed to it. ` : ''}The ribs are 3/4 in MDF, trimmed to the rib patterns file.`,
         ],
       },
       ...(hasRamp ? [{
-        id: 'side-template-under-layer', title: 'Sandwich side: web template, under layer of the rear piece', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN, items: underItems,
-        notes: ['The second layer of the rear piece, glued under the first so the web runs onto the ramp with no step. A separate job, so each run stays about 5 ft long.'],
+        id: 'side-rib-patterns', title: 'Sandwich side: ramp rib patterns', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
+        items: [
+          { shape: emptyShape('side-rib-pattern-s', 'S-ramp rib pattern', [[uOf(xR0), 0], ...rampProfile, [uOf(xRe), 0]]), qty: 1 },
+          { shape: emptyShape('side-rib-pattern-mirror', 'Mirror-ramp rib pattern', [[0, 0], [0, RIB_BASE_IN + rampH], ...mirrorProfile, [uOf(xRe), 0]]), qty: 1 },
+        ],
+        notes: [
+          `Two patterns, each the outline of a rib at offset 0: the S-ramp rib (${inch(rampLen)} long, low at the rear end) and the mirror-ramp rib (${inch(mirrorLen)} long, high at the rear end). The low end of either is ${inch(RIB_BASE_IN)} tall, so the 3/4 in MDF ribs have no thin tips.`,
+          'To use: bandsaw the blank about 1/8" outside the line, stick the pattern on with double-sided tape and flush-trim with a pattern bit.',
+        ],
       }] : []),
     ],
     subtitle: [`Web ${inch(f.widthIn)} × ${inch(f.heightIn)}; ${nCleat} cleats ${inch(cleatStep)} apart; ${hasRamp ? `S-ramp rise ${inch(rampH)}, with a mirror ramp for the second face` : 'no ramp'}.`],
