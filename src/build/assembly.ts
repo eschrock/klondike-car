@@ -1736,13 +1736,13 @@ const TEMPLATES_1: Template[] = [
           I('Let the coat cure overnight, then wash the amine blush off any sealed face that will be glued again.', ['Here that is the deck edges, which are glued into the slot beside each web and into the transom and bulkhead grooves: do it with the unit still upside down, with warm water and Scotch-Brite, dry, then 120 grit.', 'Glue faces stay bare or scuffed; keep the oak bands and rails bare.']),
           I(isDyed(c.p) ? 'In every later glue-up, wipe squeeze-out off the bare show faces before it kicks: cured epoxy blocks the dye and leaves a pale patch.' : 'In every later glue-up, wipe squeeze-out off the bare show faces before it kicks: dried epoxy shows as a glossy patch under the clear finish.'),
           std
-            ? I('Which glue and finish (weather spec): Standard (garage-kept, wet at most at a rainy derby).', [
+            ? I('Weather spec: Standard (garage-kept, wet at most at a rainy derby).', [
               'Glue: one glue per glue-up. Titebond III for the wood-to-wood glue-ups (the hangers and backers, the edge-glued panels); epoxy for everything else.',
               'Epoxy only for the bent and face laminations, the deck to the frame and its dados, the fillets and tape, and thickened bedding.',
               'Topcoat: exterior spar urethane.',
               '(Extreme weather, stored outside: epoxy for every glue joint and a marine topcoat.)',
             ])
-            : I('Which glue and finish (weather spec): Extreme (stored outside or near salt): epoxy for every glue joint and marine varnish.'),
+            : I('Weather spec: Extreme (stored outside or near salt): epoxy for every glue joint and marine varnish.'),
         ],
         checks: ['The whole deck underside coated, every bay and fillet included, and every deck edge', 'Offcut panel approved before any show face is coated', 'Coat cured overnight and blush washed off the deck edges before the unit goes in the sides', 'Deck bond fully cured before the unit was turned over'],
       };
