@@ -221,6 +221,11 @@ function clampSection(cure: 1 | 2): FigFn {
     const chineW = cure === 1 ? (stockOf('side-L-chine-in')?.w ?? g.chineTop - chineLo) : (stockOf('side-L-chine')?.w ?? g.chineTop);
     F.rect(X(chineLo), yBandTop, (g.chineTop - chineLo) * k, yWebTop - yBandTop, mat('oak', { stroke: ACCENT, width: 2 }));
     F.rect(X(H + cap - gunH), yBandTop, gunH * k, yWebTop - yBandTop, mat('oak', { stroke: ACCENT, width: 2 }));
+    // the cap strip (D-103): it stands in the gap between the web's top edge and the cleat, as tall as the web is thick, and is glued in with the inner band
+    if (c.by('side-L-gunwale-cap')) {
+      F.rect(X(H), yWebTop, cap * k, yWebBot - yWebTop, mat('oak', { stroke: ACCENT, width: cure === 1 ? 2 : 1 }));
+      F.label([X(H) + (cap * k) / 2, (yWebTop + yWebBot) / 2 + 8], [X(H + cap) + 0.75 * k + 12, yBench - 70], cure === 1 ? ['cap strip', '(glued in now)'] : ['cap strip', '(glued in cure 1)'], { anchor: 'start', size: 12 });
+    }
     // the cleat, on edge, against the band's top edge (drawn short: it is 2" tall)
     const xC = X(H + cap) + 1, cleatW = 0.75 * k;
     // the cleat stands on the bench beside the template (cure 1) or on the mirror-ramp cap, which runs past the web (cure 2)

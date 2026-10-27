@@ -38,7 +38,7 @@ import { KING_NUT_BELOW_DECK_IN, kingHeadRelief, kingNutSlot } from '../model/fr
 import { TONGUE_SHOULDER_FILLET_IN, tongueSeatHalfWidth } from '../model/pivot';
 import { boxTieGeometry, kneeScrews, lashBoltLength, sideRibStations, KNEE_SCREW_SEAT_IN, LASH_BOLT_DIA_IN, LASH_HOLE_DX_IN, LASH_BOLTS, LASH_WASHER } from '../model/side-ribs';
 import { localBounds, transformPoint, worldAABB } from '../model/bounds';
-import { BOARD_THICKNESSES, capStripSource, cutList, discStrip, isCapStrip, edgeJointUp, LAMINATION_SEAM_OFFSET_IN, resawUsableIn, ribFillers, ribFillerSource, type CutList, type GlueUp, type ResawPool } from './cutlist';
+import { BOARD_THICKNESSES, cutList, discStrip, isCapStrip, edgeJointUp, LAMINATION_SEAM_OFFSET_IN, resawUsableIn, ribFillers, ribFillerSource, type CutList, type GlueUp, type ResawPool } from './cutlist';
 import { EPOXY_SYSTEM, epoxyTimeFactor, finishingSchedule, glueJointEstimates, isDyed } from './finishing';
 import { flatPattern } from './flat';
 import { analyzeShaperPart, type ShaperFeature } from './shaper-svg';
@@ -1012,7 +1012,7 @@ function formBuild(d: FormDrawing | undefined): Instr[] {
 }
 
 /** The steps of a form drawing that are the glue-up, not the making of the form: the clamps, the cure and the spring-back test belong to the glue steps and the bend test. */
-const FORM_GLUE_RE = /^(CLAMP|GLUE-UP|SPRING-BACK)\b/;
+const FORM_GLUE_RE = /^(CLAMP|GLUE-UP|SPRING-BACK|RECONFIGURE)\b/;
 
 /**
  * Bench and jig sizes need no fit precision: a number in 32nds or 64nds with a whole part ("20-11/32"") goes to the nearest 1/16", and an "at least" size up to the next 1/8".
@@ -1251,7 +1251,7 @@ const TEMPLATES_1: Template[] = [
     kind: 'prep',
     steps: [0],
     view: 'top',
-    why: 'A shop jig, not a sled part. The two rails are the long oak beams under the deck that the whole hull is built on; their front ends curve in to follow the bow. Each rail is glued up from thin strips bent around this form in [[step:rails]]; the form is scrap after that. The highlighted parts in the 3D view are the rails.',
+    why: 'A shop jig, not a sled part. The two rails are the long oak beams under the deck that the whole hull is built on; their front ends curve in to follow the bow. Each rail is glued up from thin strips bent around this form in [[step:rail-glue]]; the form is scrap after that. The highlighted parts in the 3D view are the rails.',
     forParts: /^rail-[LR]$/,
     tools: ['Shaper Origin or bandsaw', 'router with a pattern bit', 'drill press', '3/4" MDF and plywood', 'packing tape'],
     build: (c) => {
@@ -1299,17 +1299,61 @@ const TEMPLATES_1: Template[] = [
     },
   },
   {
+    id: 'rail-glue',
+    title: 'Glue up the rails on the rail form',
+    kind: 'prep',
+    steps: [0],
+    view: 'top',
+    why: 'The two rails are the long oak beams along the bottom of the hull. The sides stand on them, the crossmembers join them, and the axle beams hang under them. Their front ends curve in with the bow, so each is glued up from thin strips bent on the rail form. This comes first because it is one of the biggest and fussiest jobs, and because the form\'s layers are cut down into the ribs of the side forms next ([[step:side-forms]]). Only the glue-up, the crosscut and the planing happen now; the notches, holes, bow step and mortises wait for [[step:rails]].',
+    forParts: /^rail-[LR]$/,
+    tools: ['rail form', 'clamps', 'epoxy pumps', 'planer', 'bandsaw'],
+    hardener: '556',
+    glueLine: `Epoxy: on the form ${HARDENERS['556'].clampHours[1]} h at 60 °F or warmer (glue card)`,
+    build: (c) => {
+      const rail = c.by('rail-L');
+      const ids = ['rail-L', 'rail-R'].filter((id) => c.by(id));
+      const clamps = c.forms().find((d) => d.id === 'rail-form')?.dims.find((q) => q.key === 'clamps')?.valueIn;
+      // The form drawing's clamping step (how many clamps, where, how to lay the strips); its "leave it clamped" line is said below, in this step's own words.
+      const clampItem = formBuild(c.forms().find((d) => d.id === 'rail-form')).find((q) => /^CLAMP:/.test(q.text));
+      if (clampItem) clampItem.sub = (clampItem.sub ?? []).map((q) => ({ ...q, text: loosen(q.text.replace(/^Leave it clamped for the full cure.*$/, '')) })).filter((q) => q.text.trim().length > 0);
+      // The S-start mark (round-3 review, B1): the form's S-start tick, squared onto the rail before it comes off; the finished ends are measured from it along the rail.
+      const railBox = rail ? worldAABB(rail) : undefined;
+      const sStart = computeLayout(c.p).taper.x0;
+      const sMark = rail?.stock && railBox && sStart > railBox.min[0] ? { back: sStart - railBox.min[0], ahead: rail.stock.l - (sStart - railBox.min[0]) } : undefined;
+      return {
+        goal: 'Laminate the two rails on the rail form and trim them to length and depth. Nothing else is cut in them yet.',
+        glue: { epoxy: true, titebond: false },
+        items: [
+          I(`Glue ${plural(rail?.plies ?? 2, 'strip')} per rail on the rail form: ${tl(ids)}.`, [
+            `Epoxy lightly thickened with ${EPOXY_SYSTEM.thickener} (glue card). The form face and the counter-form face wear the packing tape put on when the form was built: renew it if it is torn.`,
+            ...(clampItem
+              ? [I(`${clampItem.text.replace(/^CLAMP:\s*/, 'Clamps: ')}`, clampItem.sub ?? [])]
+              : [`Clamp at every station: about ${clamps !== undefined ? f(clamps, 0) : '15'} clamps per rail (rail form drawing). Only the bow end is curved.`]),
+            `Leave each rail clamped for ${HARDENERS['556'].clampHours[1]} h at 70 °F, ${Math.ceil(HARDENERS['556'].clampHours[1] * epoxyTimeFactor(60))} h at 60 °F (the top of the glue card's clamp time; longer if the shop is colder) before it comes off the form: a bent strip springs back if it is released early.`,
+            'One rail per cure, unless you build two forms. The two rails come off the form identical; one becomes the left rail by turning it over. At the cuts, lay both rails on edge on the bench, bow ends to your right, the S of each turning in toward the other: the edge that is up on each is its TOP, and the far one is the left rail. Pencil L TOP and R TOP.',
+          ]),
+          I('After the cure: mark the finished ends, cut the rail to length and plane it to depth.', [
+            ...(sMark ? [`Before you unclamp, square the form's S-start tick across the top edge of each rail and pencil S. Measured along the rail, the finished rear end is ${fin(sMark.back)} behind that mark and the finished bow end ${fin(sMark.ahead)} ahead of it. Mark both ends, then crosscut 1/2" outside each mark${rail?.stock ? ` (${fin(rail.stock.l + 1)} overall)` : ''}: the rest is trimmed at the dry fit.`] : [`Crosscut each rail to its finished length plus 1/2" at each end${rail?.stock ? ` (${fin(rail.stock.l + 1)} overall)` : ''}: it is trimmed at the dry fit.`]),
+            `Joint one edge with the rail upright (keep it vertical where the S leaves the fence), then plane to ${fin(rail?.stock?.w ?? 3)} on edge, both rails through together.`,
+          ]),
+          I('Free the rail form.', ['Once both rails are off it, the form and the counter-form are not needed again as they are: their layers are cut down into the side-form ribs next.', 'Keep both rails flat and straight until the frame (they take their notches, holes and mortises at [[step:rails]]).']),
+        ],
+        checks: ['Rails match the rail form within 1/16"', 'No gaps in the glue lines; rails flat, not twisted', 'Both rails the same length and depth'],
+      };
+    },
+  },
+  {
     id: 'side-forms',
-    title: 'Build the side forms, then cut the webs',
+    title: 'Build the side form, then cut the webs',
     kind: 'prep',
     steps: [0],
     view: 'side',
-    why: 'Shop jigs, not sled parts. Each side of the hull is a thin plywood web with oak bands glued along its top and bottom edges, on both faces. Two bends are locked in as the bands cure: the top band is bent on edge to follow the web\'s curved top edge, and the front of the whole side curves in toward the center. These forms hold the web and bands in that shape while the epoxy cures, in [[step:sides-inner]] (inside face) and [[step:sides-outer]] (outside face). They are scrap after that. The highlighted parts in the 3D view are what they make.',
+    why: 'A shop jig, not a sled part. Each side of the hull is a thin plywood web with oak bands glued along its top and bottom edges, on both faces. Two bends are locked in as the bands cure: the top band is bent on edge to follow the web\'s curved top edge, and the front of the whole side curves in toward the center. This one bench holds the web and bands in that shape while the epoxy cures: first as the S-ramp for the inside faces ([[step:sides-inner]]), then, rebuilt once ([[step:side-form-2]]), as the mirror ramp for the outside faces ([[step:sides-outer]]). The ribs under the ramp are cut from the layers of the rail form\'s counter-form, so the rails are glued up first ([[step:rail-glue]]). The highlighted parts in the 3D view are what it makes.',
     forParts: /^side-[LR]-(web|chine|chine-in|gunwale|gunwale-in)$/,
     // D-94: the webs are cut here, once the forms are proved with a hardboard test web and the deck's edge is measured.
     cuts: /^side-[LR]-web$/,
     cutAfter: 'cut-deck',
-    tools: ['Shaper Origin or bandsaw', 'laser (test web, rib patterns)', 'router with a pattern bit', 'drill and driver', '3/4" MDF and plywood', '1/4" hardboard', '1/8" hardboard (test web)', 'flexible steel tape', 'packing tape'],
+    tools: ['Shaper Origin or bandsaw', 'laser (test web)', 'router with a pattern bit', 'table saw or bandsaw', 'drill and driver', '3/4" MDF and plywood', '1/4" hardboard', '1/8" hardboard (test web)', 'flexible steel tape', 'packing tape'],
     build: (c) => {
       const web = c.by('side-L-web');
       const webRow = c.cut().sheets.flatMap((g) => g.rows).find((r) => r.ids.includes('side-L-web'));
@@ -1327,23 +1371,23 @@ const TEMPLATES_1: Template[] = [
         : rise !== undefined && rampLen !== undefined
           ? [
             I(`S-ramp (side form drawing): rise ${fin(rise)}, ${fin(rampLen)} long from the start of the S to the bow end, ${f(ribs ?? 0, 0)} MDF ribs under a 1/4" hardboard cap.`, [`Ribs of ${fin(RIB_STOCK_IN)} MDF, about 4-1/2" apart.`]),
-            I('Build the MIRROR ramp for the second web face: never the same ramp, the cured web would have to bend back.'),
+            I('The MIRROR ramp for the outside faces is the same bench rebuilt later (the reconfigure step): never the same ramp, the cured web would have to bend back.'),
           ]
           : [I('Build the side form (side form drawing): a flat template with the sheer cleats. No S-ramp: the sides are not turned in at this design.', ['The webs glue up flat.'])];
       return {
-        goal: 'Build the jigs that hold each side web bent while its oak bands are glued on: a template with cleats along its top edge, and two ramps for the bend at the bow.',
+        goal: 'Build the jig that holds each side web bent while its oak bands are glued on: a template with cleats along its top edge, and the ramp for the bend at the bow.',
         items: [
           ...(web ? [I('Cut a test web first: one left web in 1/8" hardboard, on the laser (the side web\'s laser file, one copy).', [
             'It stands in for the real web while the forms are built: wherever the form steps below say "a dry web", use the test web (turned over, it is the right web). It bends near enough like the web to set the ramps and the cleats.',
-            'The real webs wait until the forms are proved and the deck\'s edge is measured (below), so a form that is wrong costs hardboard, not a sheet of the web plywood.',
+            'The real webs wait until the form is proved and the deck\'s edge is measured (below), so a form that is wrong costs hardboard, not a sheet of the web plywood.',
           ])] : []),
           ...pieces,
           ...(web ? [
             I('Before you cut the webs: prove the forms with the test web, and measure the deck\'s edge and the web sheet.', [
-              'Bend the test web dry on the S-ramp, then on the mirror ramp (turned over, outside face up), weighted with the bags: it must lie down on each with no step at the start of the S, its top edge 1/8" off every cleat. Fix a ramp or a cleat now.',
+              'Bend the test web dry on the S-ramp, weighted with the bags: it must lie down with no step at the start of the S, its top edge 1/8" off every cleat. Fix the ramp or a cleat now. (The mirror ramp is proved with the same test web when the bench is rebuilt.)',
               deckLen !== undefined ? `Measure the deck's edge along its curve with a flexible steel tape, from its rear corner to its bow corner, on both sides: ${fin(deckLen)} (the web's bottom edge is the same length, since it sits on the rail beside the deck edge), within 1/16". If it is off, stop: the deck and the web file disagree; find out which (measure the deck against its file) before the sheet is cut.` : false,
               `The web sheet (${thinSheet(c.p).name}): count the plies at an edge and measure it with calipers at 4 places: the design is ${fin64(sheetT)}. Under ${fin64(sheetT - 1 / 32)} or over ${fin64(sheetT + 1 / 32)}, return the sheet; otherwise enter what you measure in the design (Advanced, parameters panel: ${thinLabel(c.p).toLowerCase()}) before the webs are cut.`,
-              'Keep the test web: it is the dry web for re-setting the cleats for the right side and between the cures.',
+              'Keep the test web: it is the dry web for re-setting the cleats for the right web, for the mirror ramp, and between the cures.',
             ]),
             I(`Cut the two webs, ${tl(['side-L-web', 'side-R-web'])}, from the thin sheet, placed as the nesting drawing shows.`, [
               webRow ? `Nest the ${roughFrac(webRow.stock.l)} blank on the sheet per the nesting drawing, then cut the net from the Shaper file: ${finalFrac(webRow.final.l)} long, so the difference is the trim.` : 'Nest the blank per the nesting drawing, then cut the flat development net from the Shaper file.',
@@ -1352,13 +1396,178 @@ const TEMPLATES_1: Template[] = [
             ]),
           ] : []),
           I(web ? 'Dry-run the real webs on the form, then bend-test a spare band strip on it, before any glue goes on.' : 'Dry-run a web on the form, then bend-test a spare band strip on it, before any glue goes on.', [
-            'Lay a dry web on the template, then on each ramp, with its top edge 1/8" off the cleats.',
+            'Lay a dry web on the template and the ramp, with its top edge 1/8" off the cleats.',
             `It must lie on the ramp with no step at the start of the S, and every cleat must stand solid: ${web ? 're-set any cleat the real web does not meet at 1/8"' : 'fix the ramp or the cleat now'}.`,
             'Then lay a spare band strip on the dry web against the cleats and the end stops, over the S, weight it with the bags as for gluing, and leave it an hour.',
             'The gunwale band bends two ways at once there (on edge to the sheer, and across its thickness to the S). If the strip cracks or checks, stop and re-plan the gunwale bands before any glue.',
           ]),
         ],
-        checks: ['Template flat on the bench, taped, its screws flush', 'Cleats solid, standing on edge, taped, tight to the 1/8" scrap against a dry web', 'A dry web lies on each ramp with no step at the S', ...(web ? ['Deck edge measured against the web length before the sheet was cut', 'Webs cut net from the file; the blank nests on the sheet'] : [])],
+        checks: ['Template flat on the bench, taped, its screws flush', 'Cleats solid, standing on edge, taped, tight to the 1/8" gap against a dry web', 'A dry web lies on the ramp with no step at the S', ...(web ? ['Deck edge measured against the web length before the sheet was cut', 'Webs cut net from the file; the blank nests on the sheet'] : [])],
+      };
+    },
+  },
+  {
+    id: 'sides-inner',
+    title: 'Side sandwiches, cure 1: web, cap strip and inner bands',
+    kind: 'prep',
+    steps: [0],
+    view: 'side',
+    forParts: /^(side-[LR]-(web|chine-in|gunwale-in)|sign-backer-[LR]\d)$/,
+    why: 'The first of the two glue-ups that make each side, done for the left web and then the right web. The inner bands lock the side\'s two bends (its curved top and the curve-in at the bow) into the thin web, and the cap strip fills the slot along its top edge; the outer bands, after the bench is rebuilt, finish the sandwich. The sides are glued up now, ahead of the rest of the build, and set aside until the frame is ready for them.',
+    tools: ['S-ramp', 'cleats and screws', 'bags of sand and a plastic sheet', 'epoxy pumps', 'flashlight', 'drill'],
+    hardener: '556',
+    build: (c) => {
+      const backers = c.parts.filter((x) => /^sign-backer/.test(x.id));
+      const capL = c.by('side-L-gunwale-cap');
+      const capT = capL?.stock?.t ?? c.p.sideWebCapIn;
+      const webL = c.by('side-L-web');
+      const web0 = webL ? worldAABB(webL).min[0] : 0;
+      const bL = backers.filter((x) => /-L\d$/.test(x.id)).map((x) => worldAABB(x)).sort((a, b) => a.min[0] - b.min[0]);
+      const ins = feat(c, 'sign-backer-L1', 'hole', /insert/);
+      const cleat = c.forms().find((d) => d.id === 'side-form')?.dims.find((q) => q.key === 'cleat-spacing')?.valueIn;
+      // The side form drawing's glue-up (how many clamps, where): the form step builds the form, this step uses it.
+      const glueUp = formBuild(c.forms().find((d) => d.id === 'side-form')).find((q) => /^GLUE-UP/.test(q.text));
+      const sub = (re: RegExp): string | undefined => glueUp?.sub?.map((q) => q.text).find((q) => re.test(q));
+      const bagsBand = sub(/^A sheet of plastic/), bagsS = sub(/^Lay \d+ bags/), bags = sub(/^Bags:/);
+      const hold = sub(/^No spring-back/);
+      const bandSize = (id: string): string => { const st = c.by(id)?.stock; return st ? `${thick(st.t)} × ${fin(st.w)}` : ''; };
+      return {
+        goal: backers.length ? 'Glue the inner bands and the sign backers to each web while the web is bent over the S-ramp.' : 'Glue the inner bands to each web while the web lies bent over the S-ramp.',
+        items: [
+          I('Before any glue: check the cleats and the packing tape.', [
+            cleat ? `The cleats stand on edge about ${near16(cleat)} apart the whole length, set against the dry web (side form drawing).` : 'The cleats run the whole length, set against the dry web (side form drawing).',
+            'Screw them solid: an edge-bent band pushes about 65 lbf sideways until the epoxy cures.',
+            'Rip each band to its width (cut list) and plane it to thickness today.',
+            'If a band is too short and you must scarf it (8:1): the middle third of the band only; never in the first 4" behind the transom, nor where a grab board, a rib head or a sign will go; stagger it 12" from the joint in the band on the same face.',
+          ]),
+          I(`Dry-fit the web: lay it on the template INSIDE face up, its bottom edge on the template\'s bottom edge and its top edge ${capL ? 'against a cap strip standing in the gap, a strip' : 'the 1/8"'} off the cleats${capL ? '' : ' (hold the hardboard scrap between them at a few cleats)'}.`, [
+            'The web fits the template outline only one way up: that face is its inside. Pencil INSIDE L on it (INSIDE R on the right web, when its turn comes).',
+            'The S-ramp lifts the bow end toward the inside: that is the turn-in.',
+          ], ['side-L-web', 'side-R-web']),
+          ...(capL ? [I('Lay a cap strip in the gap along the web\'s top edge, dry, for its whole length.', [
+            `Stand it on its narrow face between the web's edge and the cleats: it fills the ${fin(capT)} gap and is as tall as the web is thick, so it is the gauge for the gunwale band's ${fin(capT)} overhang.`,
+            'It bends by hand to the sheer and the S. Tape it or dab it with epoxy so it cannot walk when the bags go on.',
+          ], ['side-L-gunwale-cap', 'side-R-gunwale-cap'])] : []),
+          I('Epoxy the inner gunwale band and the inner chine band to the inside face of the web, full face.', [
+            `The inner chine band is ${bandSize('side-L-chine-in')} and the inner gunwale band ${bandSize('side-L-gunwale-in')}.`,
+            'Thickened epoxy. The bands glue flat to the web; nothing is routed.',
+            'The gunwale band goes tight against the cleats.',
+            ...(capL ? [`Bed the cap strip now: a bead of thickened epoxy along the web's top edge and on the strip's top face, before the gunwale band goes on. The band overhangs the edge by ${fin(capT)}, so it glues down onto the strip too.`] : []),
+            `The chine band stops ${fin(computeLayout(c.p).ply + c.p.deckSlopIn)} short of the web's bottom edge, leaving the deck slot: the deck thickness plus about ${fin(c.p.deckSlopIn)}. Lay a spacer stick that wide (a deck offcut on edge plus a shim, taped) on the web against the edge stops, butt the chine band against it, and pull the stick before the epoxy gels.`,
+          ], ['side-L-chine-in', 'side-L-gunwale-in', 'side-R-chine-in', 'side-R-gunwale-in']),
+          I('Weight it down: no clamp can get a jaw under the web.', [
+            bagsBand ? loosen(bagsBand) : 'A sheet of plastic over the wet bands, then a bag of sand about every 6" along each band.',
+            bagsS ? loosen(bagsS) : false,
+            bags ? loosen(bags) : false,
+            hold ? loosen(hold.replace(/ \(24 h\)/, '')) : false,
+          ]),
+          ...(backers.length
+            ? [I(`Glue the sign backers inside each web: ${plural(backers.length / 2, 'strip')} per side, grain vertical.`, [
+              bL.length ? `Forward of the web's rear end: ${bL.map((q) => `${fin(q.min[0] - web0)} to ${fin(q.max[0] - web0)}`).join(', and ')}.` : SEE_ITEM,
+              'Top edge just under the inner gunwale band.',
+              ins ? `Two #10-32 inserts each, epoxied: ${whereOf(ins)}.` : 'Two #10-32 inserts each.',
+            ], backers.map((x) => x.id))]
+            : []),
+          I('The four cures run in this sequence: the left web, then the right web, on this bench; then the bench is rebuilt as the mirror ramp.', [
+            'Day 1: the left web, inside face, on the S-ramp.',
+            'Day 2: unscrew the template\'s rear piece and turn it over for the right web (side form drawing: THE SECOND WEB), re-set the cleats and stops, and glue the right web\'s inside face.',
+            'Day 3: rebuild the bench as the mirror ramp (next step; about an hour), then glue the left web\'s outside face.',
+            'Day 4: re-set the cleats and stops against the right web, and glue its outside face.',
+          ]),
+        ],
+        checks: ['Sheer line follows the web pattern', 'The web lies hard on the S-ramp from the S start to the bow end (flashlight from the side)', 'Bands fully bonded, no lift at the bow bend (tap test)', ...(capL ? ['Cap strip bonded along its whole length, flush with the web\'s faces and the band\'s edge'] : [])],
+      };
+    },
+  },
+  {
+    id: 'side-form-2',
+    title: 'Rebuild the side form as the mirror ramp',
+    kind: 'prep',
+    steps: [0],
+    view: 'side',
+    why: 'After the inside faces are cured the web keeps its S, so turned over (outside face up) its bow end hangs lower than its rear end, and the S-ramp cannot take it. The same bench is rebuilt as the mirror ramp: the same ribs turned end for end, with a new block at each end, and a wider cap. It is about an hour, not a second bench.',
+    forParts: /^side-[LR]-(chine|gunwale|gunwale-cap)$/,
+    tools: ['drill and driver', 'screwdriver', '3/4" MDF', '1/4" hardboard', 'straightedge', 'packing tape'],
+    build: (c) => {
+      const sideForm = c.forms().find((d) => d.id === 'side-form');
+      const rec = formBuild(sideForm).find((q) => /^RECONFIGURE/.test(q.text));
+      const items = rec ? mapInstr(rec.sub ?? [], (t) => loosen(t)) : [];
+      return {
+        goal: 'Turn the S-ramp bench into the mirror ramp, ready for the outside faces.',
+        items: items.length ? items : [I('No bow turn-in at this design: there is no mirror ramp. The outside face goes on the same template.')],
+        checks: ['The ribs stand level: a straightedge on their tops touches all along the flat part', 'The test web, turned over, lies on the cap with no step at the start of the S', 'Cleats solid against a dry web, outside face up'],
+      };
+    },
+  },
+  {
+    id: 'sides-outer',
+    title: 'Side sandwiches, cure 2: outer bands and drain holes',
+    retitle: (p) => (isStandard(p) ? undefined : 'Side sandwiches, cure 2: outer bands and scuppers'),
+    kind: 'prep',
+    steps: [0],
+    view: 'side',
+    forParts: /^(side-[LR]-(chine|gunwale|gunwale-cap)|scupper-.*)$/,
+    why: 'The second glue-up closes each side into its finished band, web, band sandwich: it stands on the rail and carries the load. The drain holes let water off the deck at the foot of each side. This is the last of the four cures; the finished sides are then set aside until the frame is ready for them.',
+    tools: ['mirror ramp (the rebuilt bench)', 'cleats and screws', 'bags of sand and a plastic sheet', 'epoxy pumps', 'drill'],
+    hardener: '556',
+    build: (c) => {
+      const web = c.by('side-L-web');
+      const scup = c.parts.filter((x) => /^scupper/.test(x.id));
+      const web0 = web ? worldAABB(web).min[0] : 0;
+      const scupX = [...new Set(scup.filter((x) => /-L$/.test(x.id)).map((x) => +(stationOf(x, web0) ?? 0).toFixed(2)))].sort((a, b) => a - b);
+      const drains = drainHoles(c.parts, c.p);
+      // The centers as the band drawing gives them, from the same datum (the inner face of the rear transom), so the step and the drawings read alike.
+      const faceFeat = featsAll(c, 'side-L-chine', 'hole', (q) => /inner face of the rear transom/.test((q.positions ?? []).join(' ')))[0];
+      const fromFace = /^(.+?) from the inner face of the rear transom/.exec(faceFeat?.positions?.[0] ?? '')?.[1];
+      const dia = fin(c.p.scupperDiaIn);
+      const bandSize = (id: string): string => { const st = c.by(id)?.stock; return st ? `${thick(st.t)} × ${fin(st.w)}` : ''; };
+      // The web's Shaper file already cuts the drain holes through the web: they guide the bit through the bands, so no second hole is drilled in the web.
+      const webDrainCut = !scup.length && drains?.side ? fileCutHole(c, 'side-L-web', (q) => q.joint === 'hole' && diaNear(q, drains.diaIn)) : undefined;
+      return {
+        goal: `Glue the outer bands and ${scup.length ? 'fit the scuppers in' : 'drill the drain holes in'} each side.`,
+        glue: { epoxy: true, titebond: false },
+        items: [
+          ...(webDrainCut ? [I(`Before the web goes on the mirror ramp: drill the inner band through the web's own drain holes (${dia}, made with the web).`, [
+            'The inner chine band now covers each hole on the inside. Lay the side outside face up, a scrap block under the inner band at each hole.',
+            `Drill straight down through the web's hole and the inner band with a ${dia} brad-point bit: the web's hole is the guide, so the band hole lines up with it.`,
+            'The outer band is drilled through the same hole after this cure (below).',
+          ], ['side-L-web', 'side-R-web'])] : []),
+          I('Turn the web over along its length onto the MIRROR ramp for this second face, rear end still at the rear, outside face up.', [
+            'Never the S-ramp: the cured web would have to bend back.',
+            'Its top edge is now on the other side of the bench: set the cleats against the cap strip already glued to it (the 1/8" gap is built in); its straight bottom edge goes against the edge stops.',
+          ], ['side-L-web', 'side-R-web']),
+          I(`Lay the backing strip on the cap under the web's bottom edge: ${fin(c.p.deckSlopIn + (computeLayout(c.p).ply))} wide and as thick as a band (an offcut).`, [
+            'The inner chine band stops short of the bottom edge, so without it the outer chine band would have nothing under it.',
+          ]),
+          I('Epoxy the outer chine band and the outer gunwale band to the outside face.', [
+            `The outer chine band is ${bandSize('side-L-chine')} and the outer gunwale band ${bandSize('side-L-gunwale')}.`,
+            'Push the outer chine band against the edge stops, so it runs flush with the web\'s bottom edge: it is the face that sits on the rail.',
+            `The gunwale band bends on edge to the sheer and across its thickness to the S, both at once; leave it ${fin(c.p.gunwaleEndLongIn)} past each web end and set the end stops against it.`,
+            isDyed(c.p) ? 'These are the faces everyone sees: wipe the squeeze-out off the web and the bands before it kicks, or the dye will not take there.' : false,
+          ], ['side-L-chine', 'side-L-gunwale', 'side-R-chine', 'side-R-gunwale']),
+          I('Weight the bands with the same bags as cure 1, along the bands only: the web keeps its S now.'),
+          scup.length
+            ? I(`Drill the scuppers: ${plural(scup.length, 'hole')}, ${dia}, through inner band, web and outer band.`, [
+              scupX.length ? `${list(scupX)} forward of the web's rear end, the lower edge just above the deck level.` : 'Rear and bow, the lower edge just above the deck level.',
+              'Line each hole with epoxy and bed the stainless nipples.',
+            ], scup.map((x) => x.id))
+            : drains?.side
+              ? webDrainCut
+                ? I(`Drill the drain holes on through the outer band once the cure is hard: ${drains.side.xs.length} in each side, ${dia}, from the inside, through the holes already in the web and the inner band.`, [
+                  `They sit ${fromFace ?? list(drains.side.xs)} forward of the transom line (a square line ${fin(drains.side.faceInIn)} in from the rear end of the web), ${fin(drains.side.upIn)} up from the web's bottom edge: the web's file put them there, so nothing is measured here.`,
+                  'Clamp a backer block on the outside of the outer band at each hole, then drill from the inside with the bit through the existing hole, square to the side: no new hole in the web.',
+                  'Brush epoxy into each bore (a small brush or a pipe cleaner), so no cut oak or plywood edge is left bare. Run the bit through again after the epoxy cures if it narrowed the hole.',
+                ], ['side-L-web', 'side-R-web'])
+                : I(`Drill the drain holes once the cure is hard: ${drains.side.xs.length} in each side, ${dia}, straight through the inner band, the web and the outer band.`, [
+                `Mark the transom line on each side first: a square line ${fin(drains.side.faceInIn)} in from the rear end of the web. The web's last ${fin(drains.side.faceInIn)} sits in the transom's groove, so this line is the transom's inner face; at the dry fit the bands are trimmed back to it.`,
+                `Centers ${fromFace ?? list(drains.side.xs)} forward of that line, measured along the bottom edge (the same numbers as on the band and web drawings), ${fin(drains.side.upIn)} up from the web's bottom edge (the edge that rests on the rail). The lower edge of each hole then sits 1/16" above the deck; it just nicks the lower edge of the inner chine band, which is expected (the epoxy below seals it).`,
+                'Drill square to the side in one pass through all three layers, with a backer board behind the exit so the outer band does not tear.',
+                'Brush epoxy into each bore (a small brush or a pipe cleaner), so no cut oak or plywood edge is left bare. Run the bit through again after the epoxy cures if it narrowed the hole.',
+              ], ['side-L-web', 'side-R-web'])
+              : I('No drain holes in this model.'),
+          I('Leave the bands long: they are cut to length at the dry fit, with the small trim of the webs.'),
+        ],
+        checks: ['Four bands per side bonded; the bands end the same distance from the web ends, at the bow and at the rear', 'Both sides mirror images within 1/16"', 'The cap strip is flush with the band edges and both web faces: no plywood edge shows along the top', ...(scup.length ? [] : [`The ${dia} drain holes clear and sealed, square to the side`])],
       };
     },
   },
@@ -1407,23 +1616,16 @@ const TEMPLATES_1: Template[] = [
   // ---------------- 3: frame ----------------
   {
     id: 'rails',
-    title: 'Bend-laminate the rails',
+    title: 'Cut and drill the rails',
     kind: 'build',
     steps: [STEP.frame],
     match: /^rail-[LR]$/,
     view: 'top',
-    why: 'The two rails are the long oak beams along the bottom of the hull. The sides stand on them, the crossmembers join them, and the axle beams hang under them. Their front ends curve in with the bow, so each is glued up from thin strips bent on the rail form.',
-    tools: ['rail form', 'clamps', 'epoxy pumps', 'planer', 'bandsaw', 'chisel', 'Domino'],
-    hardener: '556',
-    glueLine: `Epoxy: on the form ${HARDENERS['556'].clampHours[1]} h at 60 °F or warmer (glue card)`,
+    why: 'The rails were glued up at the start ([[step:rail-glue]]). Now each gets the cuts that tie it into the frame: the notch for the rear axle beam, the screw holes for the sides, the bow step and the mortises for the crossmembers.',
+    tools: ['bandsaw', 'chisel', 'Domino', 'drill press'],
     build: (c) => {
-      const rail = c.mine[0];
       const ids = c.mine.map((x) => x.id);
       const tie = chineTie(c.parts);
-      const clamps = c.forms().find((d) => d.id === 'rail-form')?.dims.find((q) => q.key === 'clamps')?.valueIn;
-      // The form drawing's clamping step (how many clamps, where, how to lay the strips); its "leave it clamped" line is said below, in this step's own words.
-      const clampItem = formBuild(c.forms().find((d) => d.id === 'rail-form')).find((q) => /^CLAMP:/.test(q.text));
-      if (clampItem) clampItem.sub = (clampItem.sub ?? []).map((q) => ({ ...q, text: loosen(q.text.replace(/^Leave it clamped for the full cure.*$/, '')) })).filter((q) => q.text.trim().length > 0);
       const notch = feat(c, 'rail-L', ['outline', 'notch'], /^Notch/);
       const step = feat(c, 'rail-L', 'outline', (q) => /^Step/.test(q.text) && q.angleDeg !== undefined);
       const tieHoles = featsAll(c, 'rail-L', 'hole', (q) => (q.to ?? []).some((t) => /chine/.test(t)));
@@ -1433,10 +1635,6 @@ const TEMPLATES_1: Template[] = [
       const side = featuresOf(c, 'rail-L').filter((q) => q.kind === 'mortise' && q.face === 'inboard face');
       const sideCenters = [...new Set(side.flatMap((q) => centersOf(q, 'REAR end')))].sort((a, b) => a - b);
       const sideDepth = fromTop(side[0]);
-      // The S-start mark (round-3 review, B1): the form's S-start tick, squared onto the rail before it comes off; the finished ends are measured from it along the rail.
-      const railBox = rail ? worldAABB(rail) : undefined;
-      const sStart = computeLayout(c.p).taper.x0;
-      const sMark = rail?.stock && railBox && sStart > railBox.min[0] ? { back: sStart - railBox.min[0], ahead: rail.stock.l - (sStart - railBox.min[0]) } : undefined;
       // The bow step: the bottom edge points (station from the rear end, depth from the top edge) and the ramp angle.
       const pts = step ? (step.positions ?? []).flatMap((t) => [...t.matchAll(new RegExp(`(${FR})" from the rear end, (${FR})" from the top edge`, 'g'))].map((m) => [parseFrac(m[1]), parseFrac(m[2])]) ) : [];
       const ang = step?.angleDeg !== undefined ? String(step.angleDeg) : undefined;
@@ -1444,22 +1642,9 @@ const TEMPLATES_1: Template[] = [
         ? `${fin(pts[0][1])} deep up to ${fin(pts[0][0])} from the rear end, then a ${ang}° ramp up to ${fin(pts[1][1])} deep at ${fin(pts[1][0])}, level from there to the bow end`
         : undefined;
       return {
-        goal: 'Laminate the two rails on the rail form, then cut their notches, bow step and mortises.',
-        glue: { epoxy: true, titebond: false },
+        goal: 'Cut the rails\' notches, screw holes, bow step and mortises.',
         items: [
-          I(`Glue ${plural(rail?.plies ?? 2, 'strip')} per rail on the rail form: ${tl(ids)}.`, [
-            `Epoxy lightly thickened with ${EPOXY_SYSTEM.thickener} (glue card). The form face and the counter-form face wear the packing tape put on when the form was built: renew it if it is torn.`,
-            ...(clampItem
-              ? [I(`${clampItem.text.replace(/^CLAMP:\s*/, 'Clamps: ')}`, clampItem.sub ?? [])]
-              : [`Clamp at every station: about ${clamps !== undefined ? f(clamps, 0) : '15'} clamps per rail (rail form drawing). Only the bow end is curved.`]),
-            `Leave each rail clamped for ${HARDENERS['556'].clampHours[1]} h at 70 °F, ${Math.ceil(HARDENERS['556'].clampHours[1] * epoxyTimeFactor(60))} h at 60 °F (the top of the glue card's clamp time; longer if the shop is colder) before it comes off the form: a bent strip springs back if it is released early.`,
-            'One rail per cure, unless you build two forms. The two rails come off the form identical; one becomes the left rail by turning it over. At the cuts, lay both rails on edge on the bench, bow ends to your right, the S of each turning in toward the other: the edge that is up on each is its TOP, and the far one is the left rail. Pencil L TOP and R TOP.',
-          ]),
-          I('After the cure: mark the finished ends, cut the rail to length and plane it to depth.', [
-            ...(sMark ? [`Before you unclamp, square the form's S-start tick across the top edge of each rail and pencil S. Measured along the rail, the finished rear end is ${fin(sMark.back)} behind that mark and the finished bow end ${fin(sMark.ahead)} ahead of it. Mark both ends, then crosscut 1/2" outside each mark${rail?.stock ? ` (${fin(rail.stock.l + 1)} overall)` : ''}: the rest is trimmed at the dry fit.`] : [`Crosscut each rail to its finished length plus 1/2" at each end${rail?.stock ? ` (${fin(rail.stock.l + 1)} overall)` : ''}: it is trimmed at the dry fit.`]),
-            `Joint one edge with the rail upright (keep it vertical where the S leaves the fence), then plane to ${fin(rail?.stock?.w ?? 3)} on edge, both rails through together.`,
-            'Measure every position below from the FINISHED rear end, 1/2" in from the sawn end, along the rail\'s edge with a tape that follows the curve, not straight across: the numbers ahead of the S are lengths along the rail.',
-          ]),
+          I('Measure every position below from the FINISHED rear end, 1/2" in from the sawn end, along the rail\'s edge with a tape that follows the curve, not straight across: the numbers ahead of the S are lengths along the rail.', ['The rails were glued up, crosscut and planed earlier ([[step:rail-glue]]); only the cuts below are left.']),
           I('Cut the rear axle beam notch in the bottom edge of each rail.', [notchText(notch) ? `${notchText(notch)}.` : `Notch for the rear beam: ${SEE}.`, 'Bandsaw and chisel; the two notches must line up across the frame.'], ids),
           I(`Drill the screw holes BEFORE the bow step is cut${tieBore ? ` (the forward counterbores reach past where the ramp starts)` : ''}: ${tie.perRail ? `${tie.perRail} holes` : 'the holes'} a rail, straight through from the bottom edge to the top edge${tieDrill ? `, ${tieDrill} clearance` : ''}. They take the ${tie.screw} screws that tie the side to the rail.`, [
             ...(holeList(tieHoles).length
@@ -1479,7 +1664,7 @@ const TEMPLATES_1: Template[] = [
             : I('Mortise the inboard faces for the crossmembers as the drawing shows.', [], ids),
           I('Do NOT cut the end mortises yet: they are cut after the trim, at [[step:rail-ends]].'),
         ],
-        checks: ['Rails match the rail form within 1/16"', 'No gaps in the glue lines; rails flat, not twisted', 'Notches line up across the two rails (straightedge)'],
+        checks: ['Notches line up across the two rails (straightedge)', 'Holes and mortises measured from the finished rear end, along the rail'],
       };
     },
   },
@@ -1731,157 +1916,12 @@ const TEMPLATES_2: Template[] = [
 
   // ---------------- 4.2: sides ----------------
   {
-    id: 'sides-inner',
-    title: 'Side sandwiches, cure 1: web and inner bands',
-    kind: 'build',
-    steps: [HULL_STEP.sides],
-    match: /^(side-[LR]-(web|chine-in|gunwale-in)|sign-backer-[LR]\d)$/,
-    view: 'side',
-    why: 'The first of the two glue-ups that make each side. The inner bands lock the side\'s two bends (its curved top and the curve-in at the bow) into the thin web; the outer bands, next step, finish the sandwich.',
-    tools: ['S-ramp', 'cleats and screws', 'bags of sand and a plastic sheet', 'epoxy pumps', 'flashlight', 'drill'],
-    hardener: '556',
-    build: (c) => {
-      const backers = c.mine.filter((x) => /^sign-backer/.test(x.id));
-      const webL = c.by('side-L-web');
-      const web0 = webL ? worldAABB(webL).min[0] : 0;
-      const bL = backers.filter((x) => /-L\d$/.test(x.id)).map((x) => worldAABB(x)).sort((a, b) => a.min[0] - b.min[0]);
-      const ins = feat(c, 'sign-backer-L1', 'hole', /insert/);
-      const cleat = c.forms().find((d) => d.id === 'side-form')?.dims.find((q) => q.key === 'cleat-spacing')?.valueIn;
-      // The side form drawing's glue-up (how many clamps, where): the form step builds the form, this step uses it.
-      const glueUp = formBuild(c.forms().find((d) => d.id === 'side-form')).find((q) => /^GLUE-UP/.test(q.text));
-      const sub = (re: RegExp): string | undefined => glueUp?.sub?.map((q) => q.text).find((q) => re.test(q));
-      const bagsBand = sub(/^A sheet of plastic/), bagsS = sub(/^Lay \d+ bags/), bags = sub(/^Bags:/);
-      const hold = sub(/^No spring-back/);
-      const bandSize = (id: string): string => { const st = c.by(id)?.stock; return st ? `${thick(st.t)} × ${fin(st.w)}` : ''; };
-      return {
-        goal: backers.length ? 'Glue the inner bands and the sign backers to each web while the web is bent over the S-ramp.' : 'Glue the inner bands to each web while the web lies bent over the S-ramp.',
-        items: [
-          I('Before any glue: check the cleats and the packing tape.', [
-            cleat ? `The cleats stand on edge about ${near16(cleat)} apart the whole length, set against the dry web (side form drawing).` : 'The cleats run the whole length, set against the dry web (side form drawing).',
-            'Screw them solid: an edge-bent band pushes about 65 lbf sideways until the epoxy cures.',
-            'Rip each band to its width (cut list) and plane it to thickness today.',
-            'If a band is too short and you must scarf it (8:1): the middle third of the band only; never in the first 4" behind the transom, nor where a grab board, a rib head or a sign will go; stagger it 12" from the joint in the band on the same face.',
-          ]),
-          I('Dry-fit the web: lay it on the template INSIDE face up, its bottom edge on the template\'s bottom edge and its top edge 1/8" off the cleats (hold the hardboard scrap between them at a few cleats).', [
-            'The web fits the template outline only one way up: that face is its inside. Pencil INSIDE L on it (INSIDE R on the right web, when its turn comes).',
-            'The S-ramp lifts the bow end toward the inside: that is the turn-in.',
-          ], ['side-L-web', 'side-R-web']),
-          I('Epoxy the inner gunwale band and the inner chine band to the inside face of the web, full face.', [
-            `The inner chine band is ${bandSize('side-L-chine-in')} and the inner gunwale band ${bandSize('side-L-gunwale-in')}.`,
-            'Thickened epoxy. The bands glue flat to the web; nothing is routed.',
-            'The gunwale band goes tight against the cleats.',
-            `The chine band stops ${fin(computeLayout(c.p).ply + c.p.deckSlopIn)} short of the web's bottom edge, leaving the deck slot: the deck thickness plus about ${fin(c.p.deckSlopIn)}. Lay a spacer stick that wide (a deck offcut on edge plus a shim, taped) on the web against the edge stops, butt the chine band against it, and pull the stick before the epoxy gels.`,
-          ], ['side-L-chine-in', 'side-L-gunwale-in', 'side-R-chine-in', 'side-R-gunwale-in']),
-          I('Weight it down: no clamp can get a jaw under the web.', [
-            bagsBand ? loosen(bagsBand) : 'A sheet of plastic over the wet bands, then a bag of sand about every 6" along each band.',
-            bagsS ? loosen(bagsS) : false,
-            bags ? loosen(bags) : false,
-            hold ? loosen(hold.replace(/ \(24 h\)/, '')) : false,
-          ]),
-          ...(backers.length
-            ? [I(`Glue the sign backers inside each web: ${plural(backers.length / 2, 'strip')} per side, grain vertical.`, [
-              bL.length ? `Forward of the web's rear end: ${bL.map((q) => `${fin(q.min[0] - web0)} to ${fin(q.max[0] - web0)}`).join(', and ')}.` : SEE_ITEM,
-              'Top edge just under the inner gunwale band.',
-              ins ? `Two #10-32 inserts each, epoxied: ${whereOf(ins)}.` : 'Two #10-32 inserts each.',
-            ], backers.map((x) => x.id))]
-            : []),
-          I('Left side first; the forms are set for it (the right side is its mirror image).', [
-            'Day 1: the left web, this face, on the S-ramp.',
-            'Day 2: first glue the left web\'s second face on the mirror ramp (next step); then unscrew and turn the S-ramp bench\'s template for the right side (side form drawing: RIGHT SIDE) and glue the right web\'s first face.',
-            'Day 3: re-set the mirror ramp\'s cleats and glue the right web\'s second face.',
-          ]),
-        ],
-        checks: ['Sheer line follows the web pattern', 'The web lies hard on the S-ramp from the S start to the bow end (flashlight from the side)', 'Bands fully bonded, no lift at the bow bend (tap test)'],
-      };
-    },
-  },
-  {
-    id: 'sides-outer',
-    title: 'Side sandwiches, cure 2: outer bands and drain holes',
-    retitle: (p) => (isStandard(p) ? undefined : 'Side sandwiches, cure 2: outer bands and scuppers'),
-    kind: 'build',
-    steps: [HULL_STEP.sides],
-    match: /^(side-[LR]-(chine|gunwale|gunwale-cap)|scupper-.*)$/,
-    view: 'side',
-    why: 'The second glue-up closes each side into its finished band, web, band sandwich: it stands on the rail and carries the load. The drain holes let water off the deck at the foot of each side.',
-    tools: ['mirror ramp', 'cleats and screws', 'bags of sand and a plastic sheet', 'epoxy pumps', 'drill'],
-    hardener: '556',
-    build: (c) => {
-      const web = c.by('side-L-web');
-      const scup = c.mine.filter((x) => /^scupper/.test(x.id));
-      const web0 = web ? worldAABB(web).min[0] : 0;
-      const scupX = [...new Set(scup.filter((x) => /-L$/.test(x.id)).map((x) => +(stationOf(x, web0) ?? 0).toFixed(2)))].sort((a, b) => a - b);
-      const drains = drainHoles(c.parts, c.p);
-      // The centers as the band drawing gives them, from the same datum (the inner face of the rear transom), so the step and the drawings read alike.
-      const faceFeat = featsAll(c, 'side-L-chine', 'hole', (q) => /inner face of the rear transom/.test((q.positions ?? []).join(' ')))[0];
-      const fromFace = /^(.+?) from the inner face of the rear transom/.exec(faceFeat?.positions?.[0] ?? '')?.[1];
-      const dia = fin(c.p.scupperDiaIn);
-      const bandSize = (id: string): string => { const st = c.by(id)?.stock; return st ? `${thick(st.t)} × ${fin(st.w)}` : ''; };
-      // The web's Shaper file already cuts the drain holes through the web: they guide the bit through the bands, so no second hole is drilled in the web.
-      const webDrainCut = !scup.length && drains?.side ? fileCutHole(c, 'side-L-web', (q) => q.joint === 'hole' && diaNear(q, drains.diaIn)) : undefined;
-      // The gunwale cap strip (2026-10-24): fills the slot over the web between the two gunwale bands once they have cured.
-      const capL = c.by('side-L-gunwale-cap');
-      const capCut = capL ? c.cut().cuts.find((q) => q.ids.includes(capL.id)) : undefined;
-      const capSrc = capCut ? capStripSource(c.cut().resaw, capCut.rough.l) : undefined;
-      return {
-        goal: `Glue the outer bands${capCut ? ', cap the top edge of the web' : ''} and ${scup.length ? 'fit the scuppers in' : 'drill the drain holes in'} each side.`,
-        glue: { epoxy: true, titebond: false },
-        items: [
-          ...(webDrainCut ? [I(`Before the web goes on the mirror ramp: drill the inner band through the web's own drain holes (${dia}, made with the web).`, [
-            'The inner chine band now covers each hole on the inside. Lay the side outside face up, a scrap block under the inner band at each hole.',
-            `Drill straight down through the web's hole and the inner band with a ${dia} brad-point bit: the web's hole is the guide, so the band hole lines up with it.`,
-            'The outer band is drilled through the same hole after this cure (below).',
-          ], ['side-L-web', 'side-R-web'])] : []),
-          I('Turn the web over along its length onto the MIRROR ramp for this second face, rear end still at the rear, outside face up.', [
-            'Never the S-ramp: the cured web would have to bend back.',
-            'Its top edge is now on the other side of the bench, 1/8" off this bench\'s cleats; its straight bottom edge against the edge stops.',
-          ], ['side-L-web', 'side-R-web']),
-          I(`Lay the backing strip on the cap under the web's bottom edge: ${fin(c.p.deckSlopIn + (computeLayout(c.p).ply))} wide and as thick as a band (an offcut).`, [
-            'The inner chine band stops short of the bottom edge, so without it the outer chine band would have nothing under it.',
-          ]),
-          I('Epoxy the outer chine band and the outer gunwale band to the outside face.', [
-            `The outer chine band is ${bandSize('side-L-chine')} and the outer gunwale band ${bandSize('side-L-gunwale')}.`,
-            'Push the outer chine band against the edge stops, so it runs flush with the web\'s bottom edge: it is the face that sits on the rail.',
-            `The gunwale band bends on edge to the sheer and across its thickness to the S, both at once; leave it ${fin(c.p.gunwaleEndLongIn)} past each web end and set the end stops against it.`,
-            isDyed(c.p) ? 'These are the faces everyone sees: wipe the squeeze-out off the web and the bands before it kicks, or the dye will not take there.' : false,
-          ], ['side-L-chine', 'side-L-gunwale', 'side-R-chine', 'side-R-gunwale']),
-          I('Weight the bands with the same bags as cure 1, along the bands only: the web keeps its S now.'),
-          ...(capCut && capL ? [I(`Once this cure is hard, fit a cap strip in the slot along the top: the web stops ${fin(computeLayout(c.p).webCap)} under the top of the gunwale bands, leaving a slot as wide as the web.`, [
-            `Make the two cap strips (cut list): plane ${capSrc!.fromSpare ? 'a spare band strip (no longer needed now that every band is on)' : 'an offcut of a 4/4 board'} to the slot width, a dry slip fit, then rip ${fin(capCut.rough.t)} sticks from it, one per side, as long as the gunwale bands.`,
-            'Dry-fit each one the full length: it bends by hand to the sheer and the S, and stands a little proud of the band tops.',
-            'Bed it in thickened epoxy (a bead along the slot), press it down onto the web\'s top edge, and tape it every 6" or weight it with the bags.',
-            'Once the epoxy is hard, plane and sand it flush with the band tops, so no plywood edge shows. Leave its ends long with the bands.',
-          ], ['side-L-gunwale-cap', 'side-R-gunwale-cap'])] : []),
-          scup.length
-            ? I(`Drill the scuppers: ${plural(scup.length, 'hole')}, ${dia}, through inner band, web and outer band.`, [
-              scupX.length ? `${list(scupX)} forward of the web's rear end, the lower edge just above the deck level.` : 'Rear and bow, the lower edge just above the deck level.',
-              'Line each hole with epoxy and bed the stainless nipples.',
-            ], scup.map((x) => x.id))
-            : drains?.side
-              ? webDrainCut
-                ? I(`Drill the drain holes on through the outer band once the cure is hard: ${drains.side.xs.length} in each side, ${dia}, from the inside, through the holes already in the web and the inner band.`, [
-                  `They sit ${fromFace ?? list(drains.side.xs)} forward of the transom line (a square line ${fin(drains.side.faceInIn)} in from the rear end of the web), ${fin(drains.side.upIn)} up from the web's bottom edge: the web's file put them there, so nothing is measured here.`,
-                  'Clamp a backer block on the outside of the outer band at each hole, then drill from the inside with the bit through the existing hole, square to the side: no new hole in the web.',
-                  'Brush epoxy into each bore (a small brush or a pipe cleaner), so no cut oak or plywood edge is left bare. Run the bit through again after the epoxy cures if it narrowed the hole.',
-                ], ['side-L-web', 'side-R-web'])
-                : I(`Drill the drain holes once the cure is hard: ${drains.side.xs.length} in each side, ${dia}, straight through the inner band, the web and the outer band.`, [
-                `Mark the transom line on each side first: a square line ${fin(drains.side.faceInIn)} in from the rear end of the web. The web's last ${fin(drains.side.faceInIn)} sits in the transom's groove, so this line is the transom's inner face; at the dry fit the bands are trimmed back to it.`,
-                `Centers ${fromFace ?? list(drains.side.xs)} forward of that line, measured along the bottom edge (the same numbers as on the band and web drawings), ${fin(drains.side.upIn)} up from the web's bottom edge (the edge that rests on the rail). The lower edge of each hole then sits 1/16" above the deck; it just nicks the lower edge of the inner chine band, which is expected (the epoxy below seals it).`,
-                'Drill square to the side in one pass through all three layers, with a backer board behind the exit so the outer band does not tear.',
-                'Brush epoxy into each bore (a small brush or a pipe cleaner), so no cut oak or plywood edge is left bare. Run the bit through again after the epoxy cures if it narrowed the hole.',
-              ], ['side-L-web', 'side-R-web'])
-              : I('No drain holes in this model.'),
-          I('Leave the bands long: they are cut to length at the dry fit, with the small trim of the webs.'),
-        ],
-        checks: ['Four bands per side bonded; the bands end the same distance from the web ends, at the bow and at the rear', 'Both sides mirror images within 1/16"', ...(capCut ? ['Cap strips planed flush with the band tops: no plywood edge shows along the top'] : []), ...(scup.length ? [] : [`The ${dia} drain holes clear and sealed, square to the side`])],
-      };
-    },
-  },
-  {
     id: 'dry-fit',
     title: 'Dry-fit the frame in the sides',
     kind: 'process',
     steps: [HULL_STEP.sides],
+    // The sides were glued up at the start (the side-form steps); here they are installed in the model, the frame goes in them.
+    match: /^(side-[LR]-(web|chine|chine-in|gunwale|gunwale-in|gunwale-cap)|sign-backer-[LR]\d|scupper-.*)$/,
     view: 'top',
     why: 'Everything is fitted dry once, upside down, before any glue: the frame and deck unit goes into the two sides, and the band ends are cut back to the webs. The next step trims the rails and drills the pilots with the unit sitting here.',
     tools: ['tape', 'story stick', 'MDF station cradles', 'flush-cut (Japanese) saw', 'hand plane'],
@@ -1909,7 +1949,7 @@ const TEMPLATES_2: Template[] = [
           I('Turn the frame + deck unit over and lower it in DRY, straight down between the cradle posts.', [
             'Each rail rests on the bottom edge of its side (on top now): the edge of the outer band and the web.',
             'The deck edge goes in beside the web, under the inner chine band (as on the finished sled; the band lies below it now).',
-            `Slide the unit fore or aft until both deck ends line up with the web ends, and the finished-end marks on the rails (made at [[step:rails]]) line up with the rear band ends (${fin(into)} in from the web ends). If the two disagree by more than 1/16", stop and find out why.`,
+            `Slide the unit fore or aft until both deck ends line up with the web ends, and the finished-end marks on the rails (made at [[step:rail-glue]]) line up with the rear band ends (${fin(into)} in from the web ends). If the two disagree by more than 1/16", stop and find out why.`,
             `Check the deck slot: ${fin(c.p.deckSideClearIn)} a side to each web. Pare the deck edge if it binds; thickened epoxy fills the slot later.`,
             'A pared length has lost its seal coat: brush one coat of unthickened epoxy on it the same day and let it cure before the glue-up, then wash the blush off and scuff it (as in [[step:seal]]).',
           ]),

@@ -69,7 +69,7 @@ describe('assembly step figures', () => {
 
   it('the side-forms step says what the forms are for, where they are used, and highlights the sides', () => {
     const inner = steps.find((s) => s.id === 'sides-inner')!.n, outer = steps.find((s) => s.id === 'sides-outer')!.n;
-    expect(side.why).toMatch(/Shop jigs, not sled parts/);
+    expect(side.why).toMatch(/A shop jig, not a sled part/);
     expect(side.why).toContain(`step ${inner}`);
     expect(side.why).toContain(`step ${outer}`);
     expect(side.forIds).toEqual(expect.arrayContaining(['side-L-web', 'side-R-web', 'side-L-gunwale-in', 'side-R-chine']));

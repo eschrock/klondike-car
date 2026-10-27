@@ -840,7 +840,8 @@ const finishedRail: FigFn = (c) => {
 export const PREP_FIGURES: Record<string, FigFn[]> = {
   mill: [resawStrips, laminatedBlock, kneeLamination],
   'rail-form': [railsOnFrame, railFormSetup],
-  rails: [railGlueUp, finishedRail],
+  'rail-glue': [railGlueUp],
+  rails: [finishedRail],
 };
 
 /**

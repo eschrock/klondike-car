@@ -5,7 +5,7 @@ import { defaultParams } from '../params';
 import { flatPattern } from './flat';
 import { frac } from './svg-util';
 import { cutListFor } from './part-drawings';
-import { CLEAT_TALL_IN, TEMPLATE_STOCK_IN, sideFormGeometry, LETTER_H_IN, LETTER_W_IN, PRINT_CUT_STROKE_IN, RIB_BASE_IN, TILE_MARGIN_IN, TILE_OVERLAP_IN, formDrawings, pathBounds, printStyle, tileForLetter, tilePlan } from './forms';
+import { CLEAT_TALL_IN, COUNTER_WALL_IN, RAIL_FORM_LEAD_IN, TEMPLATE_STOCK_IN, sideFormGeometry, LETTER_H_IN, LETTER_W_IN, PRINT_CUT_STROKE_IN, RIB_BASE_IN, TILE_MARGIN_IN, TILE_OVERLAP_IN, formDrawings, pathBounds, printStyle, tileForLetter, tilePlan } from './forms';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -149,7 +149,7 @@ describe('forms and templates', () => {
     const caps = steps.filter((t) => /^Cap: /.test(t));
     expect(caps).toHaveLength(2);
     expect(caps[0]).toContain(`× ${frac(web.heightIn + 1)}, a plain rectangle centered on the ribs, running 2" past the web's bow end`);
-    expect(caps[1]).toContain(`× ${frac(web.heightIn + 3)}, a plain rectangle, running 2" past the web's bow end, 1-1/2" wider than the web each side`);
+    expect(caps[1]).toContain(`× ${frac(web.heightIn + 3)}, a plain rectangle, from the rear end to 2" past the web's bow end, 1-1/2" wider than the web each side`);
     expect(steps.join(' ')).not.toMatch(/web's outline plus|second template/);
   });
 
@@ -323,24 +323,25 @@ describe('ramp ribs, rib patterns and the thick template (D-102)', () => {
     expect(g.mirrorProfile[g.mirrorProfile.length - 1][1] + TEMPLATE_STOCK_IN).toBeCloseTo(g.webLowIn, 6); // and at the bow end of the mirror ramp
     expect(g.webHighIn - g.webLowIn).toBeCloseTo(g.rampH, 9);
   });
-  it('the laser cuts one 1/4 in pattern per rib profile, the same outline as the rib on the drawing, and no longer cuts an under layer', () => {
-    const pat = fd.laser!.find((l) => l.id === 'side-rib-patterns')!;
-    expect(pat.thicknessIn).toBe(TEMPLATE_STOCK_IN);
-    expect(pat.items.map((it) => it.qty)).toEqual([1, 1]);
-    const boxes = pat.items.map((it) => { const ys = it.shape.outer.map((q) => q[1]), xs = it.shape.outer.map((q) => q[0]); return { len: Math.max(...xs) - Math.min(...xs), tall: Math.max(...ys) - Math.min(...ys), lowEnd: Math.min(...ys) }; });
-    expect(boxes[0].len).toBeCloseTo(g.uOf(g.xRe) - g.uOf(g.xR0), 6);
-    expect(boxes[1].len).toBeCloseTo(g.mirrorLen, 6);
-    for (const b of boxes) expect(b.tall).toBeCloseTo(RIB_BASE_IN + g.rampH, 6);
-    expect(fd.laser!.some((l) => /under-layer/.test(l.id))).toBe(false);
+  it('the laser cuts neither rib patterns nor an under layer: the ribs come from the rail form\'s counter-form, the under layer is routed', () => {
+    expect(fd.laser!.map((l) => l.id)).toEqual(['side-template']);
+  });
+  it('a counter-form layer, turned over and cut down, is the S-ramp rib: 3/4 in at the S start, the full rib height at the bow end, the S within 1/16 in of the web\'s', () => {
+    const t = fd.build.flatMap((s) => [s.step, ...(s.sub ?? [])]).join(' ');
+    // the rear end of a layer is the wall thick, its bow end the wall plus the turn-in; ripping the difference to the rib base leaves the rib base and the rib height
+    expect(COUNTER_WALL_IN - RIB_BASE_IN).toBeGreaterThan(0);
+    expect(t).toContain(`Rip ${frac(COUNTER_WALL_IN - RIB_BASE_IN)} off the straight back edge`);
+    expect(t).toContain(`Square-cut ${frac(L.taper.x0 - Math.max(L.xSideStart, L.taper.x0 - RAIL_FORM_LEAD_IN))} off the rear end`);
+    // the S on the layer is the plan S (x), on the web the developed S (u): they differ by well under 1/2 in
+    expect(Math.abs((g.uOf(g.xR1) - g.uOf(g.xR0)) - (L.taper.x1 - L.taper.x0))).toBeLessThan(0.5);
   });
   it('the cleats stand proud of the band top on the flat part by what they did before the template was thickened', () => {
     const bandTop = g.webLowIn + (parts.find((x) => x.id === 'side-L-web')!.stock?.t ?? 0) + (parts.find((x) => x.id === 'side-L-gunwale-in')!.stock?.t ?? 0);
     expect(CLEAT_TALL_IN - bandTop).toBeGreaterThanOrEqual(0.5);
   });
-  it('the steps pattern-route the ribs and the under layer, and the cleat screws fit the 2 in cleat', () => {
+  it('the steps route the template\'s under layer, and the cleat screws fit the 2 in cleat', () => {
     const t = fd.build.flatMap((s) => [s.step, ...(s.sub ?? [])]).join(' ');
-    expect(t).toMatch(/Rib patterns \(laser\)/);
-    expect(t).toMatch(/flush-trim all the way round with a handheld router and a pattern bit/);
+    expect(t).toMatch(/flush-trim it to the laser piece, all four edges, with a handheld router and a pattern bit/);
     expect(t).toMatch(/First cut a 3\/4" MDF blank/);
     expect(t).toContain('two #8 × 2-1/2" screws into the bench');
     expect(t).toContain('two #8 × 3" down through the cap');
@@ -396,18 +397,17 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
   it('says how to build the side form: the template, the cleats at their spacing, the ramp ribs and cap, tape and clamps', () => {
     const t = all('side-form');
     expect(t).toMatch(/TEMPLATE: the web's flat outline/);
-    expect(t).toContain(`CLEATS on the sheer line: ${2 * dim('side-form', 'cleat-count')} blocks`);
-    expect(t).toContain(`${dim('side-form', 'cleat-count')} for each bench top`);
+    expect(t).toContain(`CLEATS on the sheer line: ${dim('side-form', 'cleat-count')} blocks`);
     expect(t).toMatch(/Stand each on edge/);
     expect(t).toMatch(/Set them against a dry web/);
-    expect(t).toContain(`S-RAMP (first face): cut ${dim('side-form', 'ramp-ribs')} ribs from 3/4" MDF`);
-    expect(t).toContain(`MIRROR RAMP (second face)`);
+    expect(t).toContain(`S-RAMP (inside faces, first): make ${dim('side-form', 'ramp-ribs')} ribs from the counter-form of the rail form`);
+    expect(t).toContain(`RECONFIGURE (once both inside faces are cured)`);
     expect(t).toMatch(/Cap: 1\/4" hardboard/);
     expect(t).toMatch(/packing tape/);
     expect(t).not.toMatch(/spring clamps|C-clamps|spacer \(plywood scraps/);
     expect(t).toMatch(/held down with bags of sand/);
     // the forms are handed: the right side is made on the same benches with the template's rear piece turned over and the cleats re-set
-    expect(t).toMatch(/RIGHT SIDE \(later, when the sides are glued\): the forms are set for the left side/);
+    expect(t).toMatch(/THE SECOND WEB \(the right web, on each set-up\): the forms are set for the left side/);
     expect(t).toMatch(/turn it over along its length/);
   });
 
@@ -476,13 +476,14 @@ describe('forms read plainly (readability round 2)', () => {
     expect(step).toContain(`plywood strip, about ${frac(Math.ceil(hang))} long`);
   });
 
-  it('defines the mirror ramp: a second set of ribs for the flipped web, with its own profile on the drawing, and never "the same ramp"', () => {
+  it('defines the mirror ramp: the one bench rebuilt for the flipped web, with its own profile on the drawing, and never "the same ramp"', () => {
     const d = byId('side-form');
     const all = textsOf(d).join('\n');
-    const mirror = d.build.find((s) => s.step.startsWith('MIRROR RAMP'))!;
+    const mirror = d.build.find((s) => s.step.startsWith('RECONFIGURE'))!;
     expect(mirror).toBeTruthy();
-    expect(mirror.step).toMatch(/lower than its rear end/);
-    expect((mirror.sub ?? []).join(' ')).toMatch(/tall from the rear end to the S start, then falling/);
+    expect(mirror.step).toMatch(/MIRROR ramp for the outside faces/);
+    expect((mirror.sub ?? []).join(' ')).toMatch(/Turn each rib end for end/);
+    expect(d.notes.join(' ')).toMatch(/tall from the rear end to the S start and falls through the S/);
     expect(d.svg).toContain('id="mirrorramp"');
     expect(d.dims.some((x) => x.key === 'mirror-ribs' && x.kind === 'count')).toBe(true);
     // the glue-up step flips onto the mirror ramp, and nothing says the second face goes on the same ramp
@@ -494,7 +495,7 @@ describe('forms read plainly (readability round 2)', () => {
     const all = textsOf(byId('side-form')).join('\n');
     // the S-ramp spacing: in the S-ramp note, the S-RAMP step and the sketch; the mirror spacing: in its note and its step
     const d = byId('side-form');
-    const sStep = d.build.find((s) => s.step.startsWith('S-RAMP'))!, mStep = d.build.find((s) => s.step.startsWith('MIRROR RAMP'))!;
+    const sStep = d.build.find((s) => s.step.startsWith('S-RAMP'))!, mStep = d.build.find((s) => s.step.startsWith('RECONFIGURE'))!;
     const sp = (t: string): string[] => [...t.matchAll(/(\d[\d/-]*)" apart/g)].map((m) => m[1]);
     const sNote = d.notes.find((t) => t.startsWith('S-ramp'))!, mNote = d.notes.find((t) => t.startsWith('Mirror ramp'))!;
     const sSet = new Set([...sp(sNote), ...sp((sStep.sub ?? []).join(' ')), ...[...all.matchAll(/ribs, 3\/4" MDF, (\d[\d/-]*)" apart/g)].map((m) => m[1])]);
@@ -544,16 +545,16 @@ describe('materials: the shopping list for each jig', () => {
   it('side form: the cleats, stops, ribs, bench tops and sand match the build steps', () => {
     const d = byId('side-form'), build = allBuild('side-form'), list = d.materials.join('\n');
     const cleats = Number(/CLEATS on the sheer line: (\d+) blocks/.exec(build)![1]);
-    expect(cleats).toBe(2 * dim('side-form', 'cleat-count'));
+    expect(cleats).toBe(dim('side-form', 'cleat-count'));
     expect(list).toContain(`${cleats} cleats`);
     expect(list).toContain('4 end stops');
-    const edge = Number(/EDGE STOPS, (\d+) more blocks a bench/.exec(build)![1]);
-    expect(list).toContain(`${2 * edge} edge stops`);
-    expect(list).toContain(`${cleats + 4 + 2 * edge} blocks`);
-    expect(list).toContain(`3/4" MDF: ${dim('side-form', 'ramp-ribs') + dim('side-form', 'mirror-ribs')} ribs, trimmed to the rib patterns: ${dim('side-form', 'ramp-ribs')} for the S-ramp`);
-    expect(list).toContain(`${dim('side-form', 'mirror-ribs')} for the mirror ramp`);
-    expect(build).toContain(`cut ${dim('side-form', 'ramp-ribs')} ribs`);
-    expect(list).toMatch(/3\/4" plywood or MDF: 2 bench tops, each [\d/-]+" × [\d/-]+"/);
+    const edge = Number(/EDGE STOPS, (\d+) more blocks/.exec(build)![1]);
+    expect(list).toContain(`${edge} edge stops`);
+    expect(list).toContain(`${cleats + 4 + edge} blocks`);
+    expect(list).toContain(`The ribs: the 5 layers of the rail form's counter-form`);
+    expect(list).toContain(`${dim('side-form', 'mirror-ribs')} rear blocks`);
+    expect(build).toContain(`make ${dim('side-form', 'ramp-ribs')} ribs`);
+    expect(list).toMatch(/3\/4" plywood or MDF: 1 bench top, [\d/-]+" × [\d/-]+"/);
     expect(list).toContain('2 ramp caps');
     const bags = Number(/\((\d+) bags\)/.exec(build)![1]) + Number(/Lay (\d+) bags/.exec(build)![1]);
     const sand = Number(/about (\d+) lb in all/.exec(build)![1]);

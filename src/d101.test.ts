@@ -98,7 +98,7 @@ describe('D-101: the rail is three 1/4 in strips', () => {
     expect(bend.title).toMatch(/in 3 plies$/);
     expect(bend.whatToDo).toMatch(/rail and band strips, from the same boards: 4\/4/);
     expect(bend.whatToDo).toMatch(/The rail is 3 plies of 1\/4"/);
-    expect(text('rails')).toMatch(/Glue 3 strips per rail on the rail form/);
+    expect(text('rail-glue')).toMatch(/Glue 3 strips per rail on the rail form/);
   });
 
   it('counts the deck-to-rail glue contact over the whole rail top, all its plies (not one strip)', () => {
