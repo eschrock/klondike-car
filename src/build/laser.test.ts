@@ -109,12 +109,10 @@ describe('forms are cut in pieces that fit the bed', () => {
     const fd = formDrawings(parts, p).find((d) => d.id === 'side-form')!;
     const web = flatPattern(parts.find((x) => x.id === 'side-L-web')!)!;
     const main = fd.laser!.find((l) => l.id === 'side-template')!;
-    const under = fd.laser!.find((l) => l.id === 'side-template-under-layer')!;
     const area = (ls: typeof main) => ls.items.reduce((a, it) => a + it.qty * shapeArea(it.shape), 0);
     expect(area(main)).toBeCloseTo(Math.abs(polyArea(web.outer)), 3);
-    expect(area(under)).toBeCloseTo(Math.abs(polyArea(web.outer)) - main.items.filter((it) => /front/.test(it.shape.id)).reduce((a, it) => a + shapeArea(it.shape), 0), 3);
-    // the under layer carries no marks (it is hidden under the first)
-    for (const it of under.items) expect(it.shape.score.length + it.shape.marks.length).toBe(0);
+    // the rear piece's under layer is 3/4" MDF routed to it (D-102), not a second laser layer
+    expect(fd.laser!.some((l) => /under-layer/.test(l.id))).toBe(false);
   });
 });
 

@@ -1389,15 +1389,11 @@ function ribFillerCuts(plans: OakPartPlan[], pools: ResawPool[], p: Params): Cut
 }
 
 /**
- * Where the gunwale cap strips come from: a spare band strip of the band pool (the spares are there for a failed bend, and the caps go in after every band is on), when the pool
- * has one at least as long as a cap; otherwise an offcut of a 4/4 board, ripped and planed the same way.
+ * Where the gunwale cap strips come from: an offcut of a 4/4 board, ripped and planed to the web's thickness. The strips are glued in with the outer bands, in the same cure (D-103), so a spare
+ * band strip, which is kept for a failed bend, is never spent on them.
  */
-export function capStripSource(pools: readonly ResawPool[], capRoughIn: number): { fromSpare: boolean; board: string; source: string; text: string } {
-  const pool = pools.find((q) => q.laneStrips.flat().some((x) => /^side-(gunwale|chine)/.test(x.partNo)));
-  const fromSpare = !!pool && pool.spares >= 1 && pool.boardLengthIn >= capRoughIn - 1e-9;
-  const source = fromSpare ? 'a spare band strip' : 'a 4/4 offcut';
-  const text = fromSpare ? 'a spare band strip (it is not needed once all the bands are on)' : 'an offcut of a 4/4 board at least that long';
-  return { fromSpare, board: fromSpare ? pool!.board : '4/4', source, text };
+export function capStripSource(_pools: readonly ResawPool[], _capRoughIn: number): { fromSpare: boolean; board: string; source: string; text: string } {
+  return { fromSpare: false, board: '4/4', source: 'a 4/4 offcut', text: 'an offcut of a 4/4 board at least that long' };
 }
 
 function capStripCuts(plans: OakPartPlan[], pools: ResawPool[]): Cut[] {

@@ -239,7 +239,7 @@ function startSection(d: BuildData): string {
 <li>If a measured number differs from the design (the plywood thickness most of all: the dado widths and the Shaper and laser files follow it), change it in the app and download a fresh build package before you cut anything. The revision at the foot of every page tells two printouts apart.</li>
 <li>The board plan in section ${secNo('boards')} is an example layout for boards of the sizes it lists. Your boards will differ: lay the cuts in section ${secNo('cutlist')} out on the boards you have, longest and widest first.</li>
 <li>Hardware not yet bought: do its "Before ordering" checks in section ${secNo('verify')} before you order it.</li>
-<li>The jigs and templates need stock the bill of materials does not list (MDF, plywood bench tops, hardboard, offcuts for cleats, 1/4" Baltic birch for the laser patterns, play sand): each jig's list is in section ${secNo('forms')}.</li>
+<li>The jigs and templates need stock the bill of materials does not list (MDF, a plywood bench top, hardboard, offcuts for cleats, 1/4" Baltic birch for the laser patterns, play sand): each jig's list is in section ${secNo('forms')}.</li>
 </ol>`);
   out.push('<h3>2. What else to print, and what to load</h3>');
   out.push(`<ul>

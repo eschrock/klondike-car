@@ -25,15 +25,15 @@ const steps = assemblySteps(parts, p);
 const VIEWS = ['iso', 'top', 'side', 'front', 'under'];
 
 describe('assembly steps', () => {
-  it('begin with the preparation steps, which install nothing: the deck first (the reference, D-94), then each form on its own', () => {
+  it('begin with the preparation steps, which install nothing: the deck first (the reference, D-94), then the rails on their form, then the one side form and the four cures of the sides', () => {
     expect(steps.slice(0, 5).map((s) => s.title)).toEqual([
       'Verify before ordering',
       'Mill the oak and resaw the strips',
       'Cut the deck and the seat back first',
       'Build the rail form',
-      'Build the side forms, then cut the webs',
+      'Glue up the rails on the rail form',
     ]);
-    expect(steps.slice(0, 6).map((s) => s.id)).toEqual(['verify', 'mill', 'cut-deck', 'rail-form', 'side-forms', 'seal']);
+    expect(steps.slice(0, 9).map((s) => s.id)).toEqual(['verify', 'mill', 'cut-deck', 'rail-form', 'rail-glue', 'side-forms', 'sides-inner', 'side-form-2', 'sides-outer']);
     expect(steps.map((s) => s.n)).toEqual(steps.map((_, i) => i));
     for (const s of steps.filter((x) => x.kind === 'prep')) {
       expect(s.partIds, s.id).toEqual([]);
@@ -89,10 +89,16 @@ describe('assembly steps', () => {
 
   it('close the hull in the order of the HULL_STEP comment', () => {
     const idx = (id: string): number => steps.findIndex((s) => s.id === id);
+    // D-103: the rails are glued first (rail-glue), the rail form's counter-form layers become the side form's ribs, and the sides are glued up before the rest of the build
+    expect(idx('rail-form')).toBeLessThan(idx('rail-glue'));
+    expect(idx('rail-glue')).toBeLessThan(idx('side-forms'));
+    expect(idx('side-forms')).toBeLessThan(idx('sides-inner'));
+    expect(idx('sides-inner')).toBeLessThan(idx('side-form-2')); // the one bench is rebuilt between the inside and the outside faces
+    expect(idx('side-form-2')).toBeLessThan(idx('sides-outer'));
+    expect(idx('sides-outer')).toBeLessThan(idx('rails'));
     expect(idx('rails')).toBeLessThan(idx('frame'));
-    expect(idx('frame')).toBeLessThan(idx('sides-inner'));
-    expect(idx('sides-inner')).toBeLessThan(idx('sides-outer')); // two cures per side
-    expect(idx('sides-outer')).toBeLessThan(idx('dry-fit'));
+    expect(idx('frame')).toBeLessThan(idx('seal')); // D-104: the deck underside is sealed once the deck is bonded to the frame, while the unit still turns over
+    expect(idx('seal')).toBeLessThan(idx('dry-fit'));
     expect(idx('dry-fit')).toBeLessThan(idx('lower'));
     expect(idx('lower')).toBeLessThan(idx('transom')); // close ONE end first
     expect(idx('transom')).toBeLessThan(idx('bulkhead'));
@@ -107,8 +113,9 @@ describe('assembly steps', () => {
   });
 
   it('give every step with a glue joint a clampCure with pot life and cure times', () => {
+    // The rails and the sides are installed at 'rails' and 'dry-fit', but glued up at the start (the rail-glue and sides-* steps, which have the cure).
     for (const s of steps) {
-      const glued = s.partIds.some((id) => hasGlueJoint(parts.find((x) => x.id === id) as Part));
+      const glued = s.partIds.some((id) => hasGlueJoint(parts.find((x) => x.id === id) as Part)) && !['rails', 'dry-fit'].includes(s.id);
       if (glued || s.cure) {
         expect(s.clampCure, s.id).toBeTruthy();
         expect(s.clampCure, s.id).toMatch(/\d+ h|\d+-\d+ min|cure/); // one short line; the pot life and cold-shop times are on the glue card
@@ -275,6 +282,26 @@ describe('build review round 1: finish after hardware (MUST-1)', () => {
   });
 });
 
+describe('the deck underside is sealed after the deck is bonded, before the sides (D-104)', () => {
+  const text = (id: string): string => steps.find((s) => s.id === id)!.instructions.join(' ');
+  it('turns the unit over, coats the bays, fillets and edges, and leaves nothing to scuff back', () => {
+    const seal = text('seal');
+    expect(seal).toMatch(/Turn the frame and deck unit over onto the bench, deck top face down/);
+    expect(seal).toMatch(/every bay/);
+    expect(seal).toMatch(/along the joints where the frame meets the deck/);
+    expect(seal).toMatch(/full clamp time/);
+    expect(seal).toMatch(/blanket or cardboard/);
+    expect(seal).not.toMatch(/\bjoists?\b/i);
+  });
+  it('the frame step glues the backers and the deck on bare wood: no wash and scuff of a seal coat, and a pointer to the seal step', () => {
+    const frame = text('frame');
+    expect(frame).not.toMatch(/Wash the blush off the deck underside/);
+    expect(frame).not.toMatch(/The deck underside was sealed/);
+    expect(frame).toMatch(/Day 3: turn the cured unit over and seal the deck underside \(step \d+\)/);
+    expect(frame).toMatch(/The deck underside is still bare/);
+  });
+});
+
 describe('build review round 1: stain vs seal (MUST-2)', () => {
   it('seals only the deck underside, the ply edges and hidden faces at assembly; the show faces are dyed, then sealed (D-99)', () => {
     const seal = steps.find((s) => s.id === 'seal')!.instructions.join(' ');
@@ -391,14 +418,14 @@ describe('build review round 1: forms and resaw numbers come from their sources 
 
   it('quotes the S-ramp and the rail form from forms.ts, and presents the forms\' own steps for making them (the glue-up belongs to the glue steps)', () => {
     // the side forms are the form drawing's own build list, one item per piece of the jig
-    expect(sideForms).toContain(`hangs ${finalFrac(dim('side-form', 'ramp-rise'))} lower`);
-    expect(sideForms).toContain(`${finalFrac(dim('side-form', 'ramp-length'))} long`);
-    expect(sideForms).toContain(`cut ${dim('side-form', 'ramp-ribs')} ribs from 3/4" MDF`);
+    expect(steps.find((s) => s.id === 'side-form-2')!.why).toMatch(/bow end hangs lower than its rear end/);
+    expect(sideForms).toMatch(/\d[\d-/]*" long, 3\/4" tall at the low \(rear\) end/);
+    expect(sideForms).toContain(`make ${dim('side-form', 'ramp-ribs')} ribs from the counter-form of the rail form`);
     expect(railForm).toContain(`${finalFrac(dim('rail-form', 'form-length'))} long`);
     for (const [stepId, id, word] of [['rail-form', 'rail-form', 'rail form'], ['side-forms', 'side-form', 'S-ramp']] as const) {
       const step = steps.find((s) => s.id === stepId)!;
       const build = (forms.find((d) => d.id === id) as unknown as { build?: Array<{ step: string }> }).build ?? [];
-      const making = build.filter((b) => !/^(CLAMP|GLUE-UP|SPRING-BACK)/.test(b.step));
+      const making = build.filter((b) => !/^(CLAMP|GLUE-UP|SPRING-BACK|RECONFIGURE)/.test(b.step));
       if (stepId === 'side-forms') {
         // D-94: the hardboard test web, one item per piece of the jig, the check before the webs are cut (and their cut), then the dry run with the band bend test
         expect(step.items.length, id).toBe(making.length + 4);
@@ -857,7 +884,7 @@ describe('readability round 2 (steps)', () => {
 
   it('Standard: a step with no Titebond joint says nothing about Titebond, and the card names the Titebond steps', () => {
     const std = sets[0][1];
-    expect(std.find((s) => s.id === 'rails')!.clampCure).not.toMatch(/Titebond/);
+    expect(std.find((s) => s.id === 'rail-glue')!.clampCure).not.toMatch(/Titebond/);
     expect(std.find((s) => s.id === 'sides-inner')!.clampCure).not.toMatch(/Titebond/);
     expect(std.find((s) => s.id === 'hangers')!.clampCure).toMatch(/Titebond III/);
     expect(std.find((s) => s.id === 'frame')!.clampCure).toMatch(/Titebond III[^\n]*epoxy/);
@@ -967,10 +994,10 @@ describe('build readability round 3: one recipe for the knee, one set of numbers
     const forms = formDrawings(parts, p);
     const formText = forms.flatMap((d) => [...d.notes, ...d.build.flatMap((b) => [b.step, ...(b.sub ?? [])])]).join('\n');
     expect(formText).not.toMatch(/\(step 5\)/);
-    expect(formText).toContain('(the MIRROR RAMP item below)');
+    expect(formText).toContain('(RECONFIGURE, below)');
     const side = forms.find((d) => d.id === 'side-form')!;
-    expect(side.build[3].step).toMatch(/^MIRROR RAMP/); // item 4 of the side form really is the mirror ramp (the cleats follow both ramps)
-    expect(side.build[4].step).toMatch(/^CLEATS/);
+    expect(side.build.some((b) => /^RECONFIGURE/.test(b.step))).toBe(true); // the one bench is rebuilt as the mirror ramp (the cleats follow both set-ups)
+    expect(side.build.findIndex((b) => /^CLEATS/.test(b.step))).toBeGreaterThan(side.build.findIndex((b) => /^S-RAMP/.test(b.step)));
     expect(all).not.toMatch(/mirror ramp \(step 5\)/i);
   });
 
@@ -1418,7 +1445,7 @@ describe('final review fixes (steps): sizes from the model, one sequence per hol
       expect(get('side-forms').kind).toBe('prep');
       expect(forms).toMatch(/packing tape/);
       expect(forms).not.toMatch(/paste wax|wax paper/i);
-      const rails = txt('rails');
+      const rails = txt('rail-glue');
       expect(rails).toMatch(/packing tape/);
       expect(rails).toMatch(/Clamps: 10 or 11 bar or pipe clamps of 12" capacity or more: one at each of the 8 scored ticks/);
       // a bent lamination stays on the form for the top of the glue card's clamp time (24 h at 60 °F or warmer), not the flat glue-up clamp time
@@ -1431,7 +1458,7 @@ describe('final review fixes (steps): sizes from the model, one sequence per hol
       expect(txt('seat-blocks')).not.toMatch(/wax paper/);
       // bench and jig numbers are loose: no 32nds in the form text with a whole number ("20-11/32")
       expect(txt('side-forms')).not.toMatch(/\d+-\d+\/(32|64)"/);
-      expect(txt('side-forms')).toMatch(/at least 65-1\/2" × 20-3\/8"/);
+      expect(txt('side-forms')).toMatch(/at least 65-1\/2" × 2\d-\d\/\d"/);
     });
 
     it(`${name}: no "joist" in any step (they are crossmembers), and the backers glue to the rail only, the deck bonding at the deck glue-up`, () => {

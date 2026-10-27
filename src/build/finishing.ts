@@ -867,7 +867,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     title: 'Dye the show faces (Golden Brown)',
     items: [
       it(`Dye every SHOW face before its first coat of ${firstCoat === 'epoxy' ? 'epoxy' : 'epoxy or urethane'}, one coat.`, [
-        'Some faces are dyed during assembly, just before an early seal: the transom and bulkhead edges, the outside of the hull (the underside finish), the lid panel and its fixed strip, the seat-back banding and the brake flaps. This step dyes the rest.',
+        'Some faces are dyed during assembly, just before they are sealed during assembly: the transom and bulkhead edges, the outside of the hull (the underside finish), the lid panel and its fixed strip, the seat-back banding and the brake flaps. This step dyes the rest.',
         'Show faces: the deck top, the sides inside and out above the deck, the bands and caps, ribs, grab boards, transom and bulkhead, the box outside and coaming, the lid, the seat parts, the tongue, handle, flag blocks and brake parts.',
         'No dye on hidden faces (the frame, the deck underside, backers and blocks, the inside of the box) or on plywood edges (most are glued or capped; the epoxy darkens the rest).',
       ]),
