@@ -288,7 +288,8 @@ describe('the deck underside is sealed after the deck is bonded, before the side
     const seal = text('seal');
     expect(seal).toMatch(/Turn the frame and deck unit over onto the bench, deck top face down/);
     expect(seal).toMatch(/every bay/);
-    expect(seal).toMatch(/up the fillets against the rails, crossmembers and king beam/);
+    expect(seal).toMatch(/along the joints where the frame meets the deck/);
+    expect(seal).toMatch(/full clamp time/);
     expect(seal).toMatch(/blanket or cardboard/);
     expect(seal).not.toMatch(/\bjoists?\b/i);
   });
@@ -296,7 +297,7 @@ describe('the deck underside is sealed after the deck is bonded, before the side
     const frame = text('frame');
     expect(frame).not.toMatch(/Wash the blush off the deck underside/);
     expect(frame).not.toMatch(/The deck underside was sealed/);
-    expect(frame).toMatch(/the deck underside is sealed \(step \d+\)/);
+    expect(frame).toMatch(/Day 3: turn the cured unit over and seal the deck underside \(step \d+\)/);
     expect(frame).toMatch(/The deck underside is still bare/);
   });
 });
