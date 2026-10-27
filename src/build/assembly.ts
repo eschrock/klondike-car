@@ -1569,48 +1569,6 @@ const TEMPLATES_1: Template[] = [
       };
     },
   },
-  {
-    id: 'seal',
-    title: 'Seal the deck underside and the open plywood edges',
-    kind: 'prep',
-    steps: [0],
-    view: 'iso',
-    tools: ['foam roller', 'brush', 'epoxy pumps', 'scotch-brite'],
-    hardener: '556',
-    coat: true,
-    build: (c) => {
-      const std = isStandard(c.p);
-      return {
-        goal: std ? 'Epoxy the few surfaces water can reach and nobody can reach later; the show faces stay bare.' : 'Epoxy-seal the hidden faces and edges before assembly; the show faces stay bare.',
-        items: [
-          std
-            ? I('Weather spec: Standard (garage-kept, wet at most at a rainy derby).', [
-              'Glue: one glue per glue-up. Titebond III for the wood-to-wood glue-ups (the hangers and backers, the edge-glued panels); epoxy for everything else.',
-              'Epoxy only for the bent and face laminations, the deck to the frame and its dados, the fillets and tape, and thickened bedding.',
-              'Topcoat: exterior spar urethane.',
-              '(Extreme weather, stored outside: epoxy for every glue joint and a marine topcoat.)',
-            ])
-            : I('Weather spec: Extreme (stored outside or near salt): epoxy for every glue joint and marine varnish.'),
-          I('Run the finishing offcut tests first (finishing schedule, step F1).', [isDyed(c.p) ? 'They set the two dye mixes (the okoume takes a diluted one) by the color under the epoxy; no show face is dyed or coated until a panel passes.' : std ? 'They show how the clear urethane looks on each wood; no show face is coated until a panel passes.' : 'They show how each wood looks under the epoxy; no show face is sealed until a panel passes.']),
-          std
-            ? I('Epoxy ONE coat, unthickened (mix as on the glue card), on:', [
-              'the deck underside and deck edges (water pools there);',
-              `any ${thinSheet(c.p).name} edge not captured in a dado or banded with oak.`,
-              isDyed(c.p) ? 'No dye here: the deck underside is hidden and plywood edges take no dye. Leave the other plywood faces bare: the show faces are dyed, then coated, at the finish.' : 'Leave the other plywood faces bare: they take the clear urethane at the finish (no stain).',
-              'The oak end grain is coated later: the transom and bulkhead edges at [[step:ends]], the rest in the finish.',
-            ])
-            : I('Epoxy-seal (one coat, unthickened, mixed as on the glue card) ONLY the deck underside and edges, every ply edge, and faces nobody will see.', [
-              'The show faces stay bare: both web faces, the deck top, the box, the lid, the seat back.',
-              isDyed(c.p) ? `They are dyed, THEN sealed, after assembly (Finishing, steps ${stepNo(c, 'stain')}-${stepNo(c, 'epoxy')}). Water-based dye under epoxy is the safe route.` : `They are sealed after assembly (Finishing, step ${stepNo(c, 'epoxy')}).`,
-            ]),
-          I('Wash the amine blush off any sealed face that will be glued again.', ['Warm water and Scotch-Brite, dry, then 120 grit.', 'Glue faces stay bare or scuffed; keep the oak bands and rails bare.']),
-          I(isDyed(c.p) ? 'In every later glue-up, wipe squeeze-out off the bare show faces before it kicks: cured epoxy blocks the dye and leaves a pale patch.' : 'In every later glue-up, wipe squeeze-out off the bare show faces before it kicks: dried epoxy shows as a glossy patch under the clear finish.'),
-        ],
-        checks: ['No bare ply edge left on any sheet part', 'Offcut panel approved before any show face is coated'],
-      };
-    },
-  },
-
   // ---------------- 3: frame ----------------
   {
     id: 'rails',
@@ -1739,6 +1697,55 @@ const TEMPLATES_1: Template[] = [
     tools: ['Domino', 'drill press', 'clamps', 'sandbags or vacuum bag', 'epoxy pumps', 'square'],
     hardener: '556',
     build: (c) => frameStep(c, 'frame'),
+  },
+  {
+    // D-104: sealed once the deck is bonded to the frame, while the unit still turns over on the bench: the open bays are reachable, and every glue joint was made on bare wood.
+    id: 'seal',
+    title: 'Seal the deck underside and edges',
+    kind: 'process',
+    steps: [HULL_STEP.deck],
+    view: 'iso',
+    why: 'The deck underside is a hidden face, but water gets to it (the bays between the crossmembers catch every drip), and nobody can reach it once the unit is in the sides. The frame is open from below, so now is the time: the deck is bonded and cured, every joint was glued on bare wood, and the unit still turns over on the bench.',
+    tools: ['foam roller', 'brush', 'epoxy pumps', 'scotch-brite', 'blanket or cardboard'],
+    hardener: '556',
+    coat: true,
+    build: (c) => {
+      const std = isStandard(c.p);
+      return {
+        goal: std ? 'Epoxy the deck underside and its edges, now the frame is on it and before the sides go on; the show faces stay bare.' : 'Epoxy-seal the deck underside and edges and the hidden faces before the sides go on; the show faces stay bare.',
+        items: [
+          std
+            ? I('Weather spec: Standard (garage-kept, wet at most at a rainy derby).', [
+              'Glue: one glue per glue-up. Titebond III for the wood-to-wood glue-ups (the hangers and backers, the edge-glued panels); epoxy for everything else.',
+              'Epoxy only for the bent and face laminations, the deck to the frame and its dados, the fillets and tape, and thickened bedding.',
+              'Topcoat: exterior spar urethane.',
+              '(Extreme weather, stored outside: epoxy for every glue joint and a marine topcoat.)',
+            ])
+            : I('Weather spec: Extreme (stored outside or near salt): epoxy for every glue joint and marine varnish.'),
+          I('Run the finishing offcut tests first (finishing schedule, step F1).', [isDyed(c.p) ? 'They set the two dye mixes (the okoume takes a diluted one) by the color under the epoxy; no show face is dyed or coated until a panel passes.' : std ? 'They show how the clear urethane looks on each wood; no show face is coated until a panel passes.' : 'They show how each wood looks under the epoxy; no show face is sealed until a panel passes.']),
+          I('Turn the frame and deck unit over onto the bench, deck top face down.', [
+            'The deck top is a show face: lay the unit on a clean blanket or cardboard, never on bare bench grit.',
+            'The whole underside now faces up: every bay between the rails and the crossmembers, and the deck edges all round.',
+            'The deck must be bonded and cured first ([[step:frame]], Day 2): the coat goes over cured joints.',
+          ]),
+          std
+            ? I('Epoxy ONE coat, unthickened (mix as on the glue card), on:', [
+              'the deck underside in every bay, and up the fillets against the rails, crossmembers and king beam and over the seat-hinge backers (water pools there);',
+              `the deck edges all round: the side edges end up in the slot beside each web and the end edges in the grooves of the transom and bulkhead, where a bare ${thinSheet(c.p).name} edge would soak up water.`,
+              isDyed(c.p) ? 'No dye here: the deck underside is hidden and plywood edges take no dye. Leave the deck top bare: the show faces are dyed, then coated, at the finish.' : 'Leave the deck top bare: the show faces take the clear urethane at the finish (no stain).',
+              'The oak (rails, crossmembers, king beam) stays bare for now: its end grain is coated later, the transom and bulkhead edges at [[step:ends]], the rest in the finish.',
+            ])
+            : I('Epoxy-seal (one coat, unthickened, mixed as on the glue card) ONLY the deck underside and edges, every ply edge, and faces nobody will see.', [
+              'That is the deck underside in every bay and up the fillets against the rails, crossmembers and king beam, the deck edges all round, and the two end edges of each finished side (the web ends that go into the transom and bulkhead grooves).',
+              'The show faces stay bare: both web faces, the deck top, the box, the lid, the seat back.',
+              isDyed(c.p) ? `They are dyed, THEN sealed, after assembly (Finishing, steps ${stepNo(c, 'stain')}-${stepNo(c, 'epoxy')}). Water-based dye under epoxy is the safe route.` : `They are sealed after assembly (Finishing, step ${stepNo(c, 'epoxy')}).`,
+            ]),
+          I('Wash the amine blush off any sealed face that will be glued again.', ['Here that is the deck edges, which are glued into the slot beside each web and into the transom and bulkhead grooves: warm water and Scotch-Brite, dry, then 120 grit.', 'Glue faces stay bare or scuffed; keep the oak bands and rails bare.']),
+          I(isDyed(c.p) ? 'In every later glue-up, wipe squeeze-out off the bare show faces before it kicks: cured epoxy blocks the dye and leaves a pale patch.' : 'In every later glue-up, wipe squeeze-out off the bare show faces before it kicks: dried epoxy shows as a glossy patch under the clear finish.'),
+        ],
+        checks: ['The whole deck underside coated, every bay and fillet included, and every deck edge', 'Offcut panel approved before any show face is coated', 'Coat cured and blush washed off the deck edges before the unit goes in the sides'],
+      };
+    },
   },
 ];
 
@@ -1890,7 +1897,7 @@ function frameStep(c0: StepCtx, which: 'parts' | 'frame'): Built {
             'If a station is off: a rail that sprang back in the bow pushes the deck edge out of line there. Re-scribe that crossmember (a shorter one pulls the rails in; a new, longer one lets them out) and check again. Never trim the deck.',
             hbBehind ? `When it is right: tick the deck edge and the rail top together at 3 places a side, so the deck goes back to the same place at the glue-up. Tick the rear face of {{${hbBehind.x.id}}} on both deck edges, lift the deck off, turn it over, and join the ticks across its underside with a square.` : 'When it is right: tick the deck edge and the rail top together at 3 places a side, so the deck goes back to the same place at the glue-up.',
           ], ['deck']),
-          ...(hinge.length ? [I(`After this dry fit, the day before the deck goes on: glue the seat-hinge backers to the deck underside with thickened epoxy: ${tl(hinge)}.`, [hingeAt, `The deck underside was sealed with epoxy${isStandard(c.p) ? ', and Titebond III does not hold on cured epoxy' : ''}: wash the blush off the seal coat and scuff it with 120 where each backer goes.`, 'The seat-back hinge screws and the latch pin (it holds the seat back folded flat, [[step:seat-back]]) then land in solid oak.'])] : []),
+          ...(hinge.length ? [I(`After this dry fit, the day before the deck goes on: glue the seat-hinge backers to the deck underside with thickened epoxy: ${tl(hinge)}.`, [hingeAt, 'The deck underside is still bare: it is sealed after the deck is bonded ([[step:seal]]), over the backers too.', 'The seat-back hinge screws and the latch pin (it holds the seat back folded flat, [[step:seat-back]]) then land in solid oak.'])] : []),
           I('Day 1, the frame: Domino the crossmembers and the king beam to the rails in thickened epoxy (one glue for one glue-up), then clamp it square and let it cure.', [
             `Rehearse it dry first with every clamp set out. The pot life is ${EPOXY_SYSTEM.potMin[0]}-${EPOXY_SYSTEM.potMin[1]} min at 70 °F: mix two small batches rather than one big one.`,
             'Epoxy in the mortises, on the Dominos and on the end grain. The bow crossmember has no Domino (its plain-board drawing): it is a butt joint in thickened epoxy.',
@@ -1898,12 +1905,12 @@ function frameStep(c0: StepCtx, which: 'parts' | 'frame'): Built {
             'Check the diagonals from the finished-end marks before the epoxy gels: equal within 1/16". Rack the frame with a clamp across the long diagonal to correct it.',
             'Check the frame flat on the bench (no rocking) and lay the deck on its ticks once more, dry: its edge an even distance in from both rails.',
           ], crossIds),
-          I(`Day 2, the deck: bond the {{deck}} (its underside sealed in [[step:seal]]) on top of the cured frame with thickened epoxy.`, [
-            'Wash the blush off the deck underside and scuff it with 120 where it meets the frame.',
+          I(`Day 2, the deck: bond the {{deck}} on top of the cured frame with thickened epoxy.`, [
             `Thickened epoxy (${EPOXY_SYSTEM.thickener}, glue card) on every top face: rails, crossmembers, king beam and the rear axle hangers (flush with the rail tops)${brakeBackers.length ? ', and the top edge of each brake knee backer' : ''}.`,
             'Set the deck down on its ticks from the dry fit, its rear edge on both rails\' marks.',
             `Weight the deck down; it bonds full length to the rail and crossmember tops${brakeBackers.length ? ' and to the backers' : ''}.`,
             'The rails stay long (they are trimmed at [[step:rail-ends]]). The deck is already cut to shape: it narrows toward the bow with the sides.',
+            'Once it has cured, the unit is turned over and the deck underside is sealed ([[step:seal]]).',
           ]),
         ],
         checks: ['Frame square: diagonals equal within 1/16"', 'Deck on the dry frame: its rear edge on the rails\' marks and its edge an even distance in from both rails\' outer faces, within 1/32", before any glue', 'Deck flat under a straightedge (no twist or rocking)', 'Squeeze-out cleaned off the deck edge before it hardens (the edge must slide into the sides at the dry fit)'],

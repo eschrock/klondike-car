@@ -33,7 +33,7 @@ describe('assembly steps', () => {
       'Build the rail form',
       'Glue up the rails on the rail form',
     ]);
-    expect(steps.slice(0, 10).map((s) => s.id)).toEqual(['verify', 'mill', 'cut-deck', 'rail-form', 'rail-glue', 'side-forms', 'sides-inner', 'side-form-2', 'sides-outer', 'seal']);
+    expect(steps.slice(0, 9).map((s) => s.id)).toEqual(['verify', 'mill', 'cut-deck', 'rail-form', 'rail-glue', 'side-forms', 'sides-inner', 'side-form-2', 'sides-outer']);
     expect(steps.map((s) => s.n)).toEqual(steps.map((_, i) => i));
     for (const s of steps.filter((x) => x.kind === 'prep')) {
       expect(s.partIds, s.id).toEqual([]);
@@ -97,7 +97,8 @@ describe('assembly steps', () => {
     expect(idx('side-form-2')).toBeLessThan(idx('sides-outer'));
     expect(idx('sides-outer')).toBeLessThan(idx('rails'));
     expect(idx('rails')).toBeLessThan(idx('frame'));
-    expect(idx('frame')).toBeLessThan(idx('dry-fit'));
+    expect(idx('frame')).toBeLessThan(idx('seal')); // D-104: the deck underside is sealed once the deck is bonded to the frame, while the unit still turns over
+    expect(idx('seal')).toBeLessThan(idx('dry-fit'));
     expect(idx('dry-fit')).toBeLessThan(idx('lower'));
     expect(idx('lower')).toBeLessThan(idx('transom')); // close ONE end first
     expect(idx('transom')).toBeLessThan(idx('bulkhead'));
@@ -278,6 +279,25 @@ describe('build review round 1: finish after hardware (MUST-1)', () => {
     expect(t).toMatch(/T-nut/);
     expect(t).toMatch(/behind the storage box/);
     expect(idx('transom')).toBeLessThan(idx('storage-box'));
+  });
+});
+
+describe('the deck underside is sealed after the deck is bonded, before the sides (D-104)', () => {
+  const text = (id: string): string => steps.find((s) => s.id === id)!.instructions.join(' ');
+  it('turns the unit over, coats the bays, fillets and edges, and leaves nothing to scuff back', () => {
+    const seal = text('seal');
+    expect(seal).toMatch(/Turn the frame and deck unit over onto the bench, deck top face down/);
+    expect(seal).toMatch(/every bay/);
+    expect(seal).toMatch(/up the fillets against the rails, crossmembers and king beam/);
+    expect(seal).toMatch(/blanket or cardboard/);
+    expect(seal).not.toMatch(/\bjoists?\b/i);
+  });
+  it('the frame step glues the backers and the deck on bare wood: no wash and scuff of a seal coat, and a pointer to the seal step', () => {
+    const frame = text('frame');
+    expect(frame).not.toMatch(/Wash the blush off the deck underside/);
+    expect(frame).not.toMatch(/The deck underside was sealed/);
+    expect(frame).toMatch(/the deck underside is sealed \(step \d+\)/);
+    expect(frame).toMatch(/The deck underside is still bare/);
   });
 });
 
