@@ -184,6 +184,8 @@ const isStripPart = (x: Part): boolean => isOak(x) && (x.plies !== undefined || 
  * The gunwale cap strips (2026-10-24: the slot over the web, between the two gunwale bands): bent with the bands but ripped from a spare band strip once all the bands are on
  * (`capStripSource`), so they are no strip of the resaw pool and buy no board. Their cut row is `capStripCuts`.
  */
+/** The gunwale bands: sawn to the sheer from a wide flat blank of band stock (D-105), not bought as a narrow strip. */
+const SAWN_BLANKS = /^side-gunwale-(in|out)$/;
 export const isCapStrip = (x: Pick<Part, 'id' | 'partNo'>): boolean => (x.partNo ?? x.id) === 'side-gunwale-cap';
 
 const r3 = (v: number): number => Math.round(v * 1000) / 1000;
@@ -669,7 +671,8 @@ export function planOakPart(x: Part, p: Params, warnings: string[] = []): OakPar
   if (isStripPart(x)) {
     const plies = x.plies ?? 1;
     // The model may ask for a longer strip than the allowance gives (the gunwale band stands past the web ends for the form's end stops): `Part.rough` is then the longer length.
-    const { rough, roughExact } = mk({ t: tExact, w: stock.w + p.laminateWidthAllowanceIn, l: Math.max(stock.l + p.laminateLengthAllowanceIn, x.rough?.l ?? 0) }, null);
+    const sawn = x.blank ?? stock; // a gunwale band is sawn from a wider, longer blank than its finished size (D-105)
+    const { rough, roughExact } = mk({ t: tExact, w: sawn.w + p.laminateWidthAllowanceIn, l: Math.max(sawn.l + p.laminateLengthAllowanceIn, x.rough?.l ?? 0) }, null);
     const pieces: PlannedPiece[] = [...Array(plies)].map((_, i) => ({ piece: 'strip' as const, index: i + 1, of: plies, board: 'resawn', rough, roughExact }));
     return { part: x, partNo, stock, strip: true, board: 'resawn', edgeN: 1, pieces, block: rough, blockExact: roughExact, warnings: w };
   }
@@ -914,6 +917,8 @@ export function planResaw(parts: Part[], p: Params, plans?: OakPartPlan[]): Resa
   for (const [roughT, items] of [...byT.entries()].sort((a, b) => a[0] - b[0])) {
     const boardLengthIn = boardLengthFor(Math.max(...items.map((i) => i.lengthIn)));
     const stripW = Math.max(...items.map((i) => i.widthIn));
+    // A spare is a bend-test strip for a rail or a chine band, so it is only as wide as those: the sawn gunwale blanks (D-105) are bent only across their thickness, like any strip.
+    const spareW = Math.max(0, ...items.filter((i) => !SAWN_BLANKS.test(i.partNo)).map((i) => i.widthIn)) || stripW;
     const minSpares = resawSparesNeeded(plansByT.get(roughT) ?? []);
     const yieldByBoard: Record<string, number> = {};
     type Pick = { b: BoardThickness; k: number; boards: number; bf: number; widthIn: number; lanes: StripItem[][]; packed: StripItem[][][]; slots: number };
@@ -931,12 +936,12 @@ export function planResaw(parts: Part[], p: Params, plans?: OakPartPlan[]): Resa
         for (; boards <= lanes.length + 6; boards++) {
           packed = packLanes(lanes, boards, p.resawKerfIn, clearIn);
           if (!packed) continue;
-          spares = spareSlots(packed, k, stripW, p.resawKerfIn, clearIn);
+          spares = spareSlots(packed, k, spareW, p.resawKerfIn, clearIn);
           if (spares >= minSpares) break;
         }
         if (!packed || spares < minSpares) continue;
         const bf = (boards * b.nominalIn * widthIn * boardLengthIn) / 144;
-        const better = !best || bf < best.bf - 1e-9 || (Math.abs(bf - best.bf) < 1e-9 && (boards < best.boards || (boards === best.boards && widthIn < best.widthIn)));
+        const better = !best || bf < best.bf - 1e-9 || (Math.abs(bf - best.bf) < 1e-9 && (b.nominalIn < best.b.nominalIn - 1e-9 || (Math.abs(b.nominalIn - best.b.nominalIn) < 1e-9 && (boards < best.boards || (boards === best.boards && widthIn < best.widthIn)))));
         if (better) best = { b, k, boards, bf, widthIn, lanes, packed, slots: items.length + spares };
       }
     }
@@ -950,7 +955,7 @@ export function planResaw(parts: Part[], p: Params, plans?: OakPartPlan[]): Resa
     const spares = c.slots - items.length;
     const lc = laneCount(c.lanes, c.k, spares);
     // Each board's lanes as packed, then the spare lanes (full strip width) in the first boards with room left, so the per-board layout matches the lane count.
-    const widthOf = (i: number): number => (i < c.lanes.length ? laneWidth(c.lanes[i]) : stripW);
+    const widthOf = (i: number): number => (i < c.lanes.length ? laneWidth(c.lanes[i]) : spareW);
     const usedOf = (ls: number[]): number => ls.reduce((a, i) => a + widthOf(i), 0) + Math.max(0, ls.length - 1) * p.resawKerfIn;
     const boardLanes = c.packed.map((ls) => ls.map((l) => c.lanes.indexOf(l)).sort((a, b) => a - b));
     for (let i = c.lanes.length; i < c.lanes.length + lc.spareLanes; i++) (boardLanes.find((ls) => usedOf([...ls, i]) <= c.widthIn - p.resawEdgeAllowanceIn + 1e-9) ?? boardLanes[boardLanes.length - 1]).push(i);
@@ -1362,11 +1367,21 @@ export function ribFillers(parts: ReadonlyArray<Pick<Part, 'id'>>, p: Params): R
 export function ribFillerSource(pools: readonly ResawPool[], fillers: readonly RibFiller[], p: Params): { fromOffcut: boolean; offcutIn: number; text: string; source: string; aside?: string } {
   const pool = pools.find((q) => q.laneStrips.flat().some((x) => /^side-(gunwale|chine)/.test(x.partNo)));
   const strips = pool ? pool.laneStrips.flat().filter((x) => /^side-(gunwale|chine)/.test(x.partNo)) : [];
-  const offcutIn = pool && strips.length ? pool.boardLengthIn - Math.max(...strips.map((x) => x.lengthIn)) - p.resawKerfIn : 0;
-  const longest = Math.max(0, ...fillers.map((f) => roughUp8(f.lengthIn + 1 / 8)));
-  const fromOffcut = strips.length >= fillers.reduce((a, f) => a + f.count, 0) && longest <= offcutIn + 1e-9;
+  // Each strip (a chine strip, or a gunwale blank, D-105) leaves a tail on its board: the fillers are packed into the tails, longest first.
+  const tails = pool ? strips.map((x) => pool.boardLengthIn - x.lengthIn - p.resawKerfIn).sort((a, b) => b - a) : [];
+  const offcutIn = tails.length ? tails[0] : 0;
+  const pieces = fillers.flatMap((f) => Array.from({ length: f.count }, () => roughUp8(f.lengthIn + 1 / 8))).sort((a, b) => b - a);
+  const room = [...tails];
+  let fits = tails.length > 0;
+  for (const len of pieces) {
+    const i = room.findIndex((r) => r >= len - 1e-9);
+    if (i < 0) { fits = false; break; }
+    room[i] -= len;
+  }
+  const fromOffcut = fits;
+  const shortest = tails.length ? tails[tails.length - 1] : 0;
   const source = fromOffcut ? 'the tail of a band strip' : 'a spare band strip';
-  const aside = fromOffcut ? `each strip comes off its board about ${fractionText(Math.floor(offcutIn * 8) / 8, 8)}" longer than it needs: leave the tail on until the strip is planed, since a short offcut cannot go through the planer, then cut it off` : undefined;
+  const aside = fromOffcut ? `each strip comes off its board ${fractionText(Math.floor(shortest * 8) / 8, 8)}" to ${fractionText(Math.floor(offcutIn * 8) / 8, 8)}" longer than it needs: leave the tail on until the strip is planed, since a short offcut cannot go through the planer, then cut it off` : undefined;
   return { fromOffcut, offcutIn, source, ...(aside ? { aside } : {}), text: aside ? `${source} (${aside})` : source };
 }
 

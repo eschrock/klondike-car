@@ -161,10 +161,12 @@ interface ExtSpec {
   extraLb?: number;
   /** A plan-curved vertical wall (D-57): `outline` is then in (x, z) with thickness `depth`, centered at y = planYc(x) in the model frame (the transform must be the identity). */
   planYc?: (x: number) => number;
-  /** Cosmetic: the grain follows the top edge (the sheer band is edge-bent to the sheer, so its grain follows it). */
+  /** Cosmetic: the grain follows the top edge (the sheer band is sawn to the sheer, D-105, so its grain runs out of the cut edge by a few degrees at most). */
   grainFollowsTop?: boolean;
   /** Cut-list size when the outline's bounding box is not the stock (a strip bent to a curve: D-62, build 3c S2), and the member's kind. */
   stock?: Dims;
+  /** The flat blank it is sawn from, when bigger than the stock (the gunwale bands, D-105). */
+  blank?: Dims;
   kind?: Part['kind'];
   notes?: string;
 }
@@ -220,7 +222,8 @@ export function extPart(ctx: Ctx, s: ExtSpec): Part {
   }
   if (stock) {
     out.stock = stock;
-    if (s.mat === 'oak') out.rough = roughOf(p, stock, out.kind === 'bentlam'); // the sandwich bands are bent laminates: the laminate allowances
+    if (s.blank) out.blank = s.blank;
+    if (s.mat === 'oak') out.rough = roughOf(p, s.blank ?? stock, out.kind === 'bentlam'); // the sandwich bands are bent laminates: the laminate allowances
   }
   if (s.grain) out.grain = s.grain;
   if (s.edges) out.edges = s.edges;
@@ -312,10 +315,8 @@ export function bulkheadOutline(ctx: Pick<Ctx, 'p' | 'L'>): { outline: Vec2[]; h
  *   gunwale : the band is bent in plan (the S) AND on edge (the sheer), so it is measured in the developed web plane (u = plan arc, v = z). `topIn` is its top edge;
  *             `centerIn` is its centerline, the length of the straight strip (an edge-bent strip keeps its centerline length; the top edge is the inside of the
  *             concave sheer and ends up shorter by half the width times the turn of the sheer);
- *   `gunwaleRoughIn`: the strip's rough length, at least the centerline plus the laminate allowance, and long enough to stand `gunwaleEndLongIn` past each
- *             web end (the web runs the deck-capture depth past each band end in x, a little more along the sloped sheer at the rear).
  */
-export function sideBandLengths(L: Layout, p: { laminateLengthAllowanceIn: number; deckCaptureDepthIn: number; gunwaleEndLongIn: number }): { chineIn: number; topIn: number; centerIn: number; gunwaleRoughIn: number } {
+export function sideBandLengths(L: Layout, _p?: unknown): { chineIn: number; topIn: number; centerIn: number } {
   const x0 = L.xSideStart, x1 = L.xSideEnd, n = 2000;
   const xs = Array.from({ length: n + 1 }, (_, i) => x0 + ((x1 - x0) * i) / n);
   // The plan S is straight at both ends, so every band (inner or outer, offset in y from the web) has the same plan length.
@@ -327,11 +328,69 @@ export function sideBandLengths(L: Layout, p: { laminateLengthAllowanceIn: numbe
   const off = (i: number): Vec2 => { const j0 = Math.max(0, i - 1), j1 = Math.min(n, i + 1); const du = u[j1] - u[j0], dv = v[j1] - v[j0], m = Math.hypot(du, dv) || 1; return [u[i] + (half * dv) / m, v[i] - (half * du) / m]; };
   let prev = off(0);
   for (let i = 1; i <= n; i++) { topIn += Math.hypot(u[i] - u[i - 1], v[i] - v[i - 1]); const q = off(i); centerIn += Math.hypot(q[0] - prev[0], q[1] - prev[1]); prev = q; }
-  const cosAt = (i: number, j: number): number => Math.abs(u[j] - u[i]) / (Math.hypot(u[j] - u[i], v[j] - v[i]) || 1);
-  const dd = p.deckCaptureDepthIn;
-  const webPast = dd / Math.max(0.5, cosAt(0, 1)) + dd / Math.max(0.5, cosAt(n - 1, n));
-  const gunwaleRoughIn = Math.max(centerIn + p.laminateLengthAllowanceIn, centerIn + webPast + 2 * p.gunwaleEndLongIn);
-  return { chineIn: u[n], topIn, centerIn, gunwaleRoughIn };
+  return { chineIn: u[n], topIn, centerIn };
+}
+
+/**
+ * The sawing blank of a gunwale band (D-105). The band is not bent on edge to the sheer: it is sawn to the sheer from a flat blank of band stock (a template gives the curve), and only
+ * its thickness is bent, to the plan S, on the side form. The curve is drawn in the DEVELOPED web plane (u = plan arc, v = z: the bench plane of the side form), so the plan S is already
+ * allowed for, carried `gunwaleEndLongIn` plus the web's reach past each band end beyond the sides' ends, straight along the end tangent. The blank is laid with its long edge on the
+ * chord of that curve (the least grain run-out, about the same either end), so `top` and `bottom` are in the blank's own frame: u along the chord from the rear end, v across, the
+ * origin at the corner of the blank. `bottom` is the top curve one band height lower in the side's vertical, as the band is.
+ */
+export interface SheerBlank {
+  /** Blank stock (in): thickness, width across the chord and length along it, the window's bounding box grown by `sheerBlankMarginIn` on every side. */
+  stock: Dims;
+  /** The window (the band's outline) as two polylines in blank coordinates, rear to bow; the band's end cuts join their ends. */
+  top: Vec2[];
+  bottom: Vec2[];
+  /** Tilt of the chord from the side's horizontal (degrees, the bow end lower), and the largest angle the sheer makes with the chord (the grain run-out at the band's cut edges). */
+  chordDeg: number;
+  runOutDeg: number;
+  /** Length of the top edge of the window (in), the sheer as it lies on the web. */
+  topLenIn: number;
+  /** How far the window stands past the sides' ends (in): rear, bow. */
+  pastRearIn: number;
+  pastBowIn: number;
+}
+
+const up16 = (v: number): number => Math.ceil(v * 16 - 1e-9) / 16; // the blank and its template: whole sixteenths
+export function sheerBlank(L: Layout, p: { gunwaleEndLongIn: number; deckCaptureDepthIn: number; sheerBlankMarginIn: number }, bandT: number): SheerBlank {
+  const x0 = L.xSideStart, x1 = L.xSideEnd, n = 400;
+  const dev: Vec2[] = [];
+  let u = 0;
+  for (let i = 0; i <= n; i++) {
+    const x = x0 + ((x1 - x0) * i) / n;
+    if (i) { const xp = x0 + ((x1 - x0) * (i - 1)) / n; u += Math.hypot(x - xp, L.turnIn(x) - L.turnIn(xp)); }
+    dev.push([u, sideTopAt(L, x)]);
+  }
+  // Carry the curve past each end along its end tangent (over the web's reach into the transom and bulkhead, plus the overhang for the end stops).
+  const tangent = (a: Vec2, b: Vec2): Vec2 => { const m = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / m, (b[1] - a[1]) / m]; };
+  const t0 = tangent(dev[0], dev[3]), t1 = tangent(dev[n - 3], dev[n]);
+  const pastRear = p.deckCaptureDepthIn / Math.max(0.5, t0[0]) + p.gunwaleEndLongIn;
+  const pastBow = p.deckCaptureDepthIn / Math.max(0.5, t1[0]) + p.gunwaleEndLongIn;
+  const top: Vec2[] = [[dev[0][0] - t0[0] * pastRear, dev[0][1] - t0[1] * pastRear], ...dev, [dev[n][0] + t1[0] * pastBow, dev[n][1] + t1[1] * pastBow]];
+  // Rotate so the chord (end to end) is level.
+  const a = top[0], b = top[top.length - 1];
+  const phi = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  const c = Math.cos(phi), s = Math.sin(phi);
+  const rot = (q: Vec2): Vec2 => [(q[0] - a[0]) * c + (q[1] - a[1]) * s, -(q[0] - a[0]) * s + (q[1] - a[1]) * c];
+  const rTop = top.map(rot);
+  const rBot = top.map((q): Vec2 => rot([q[0], q[1] - L.railBand]));
+  const all = [...rTop, ...rBot];
+  const u0 = Math.min(...all.map((q) => q[0])), u1 = Math.max(...all.map((q) => q[0]));
+  const v0 = Math.min(...all.map((q) => q[1])), v1 = Math.max(...all.map((q) => q[1]));
+  const M = p.sheerBlankMarginIn;
+  const shift = (q: Vec2): Vec2 => [q[0] - u0 + M, q[1] - v0 + M];
+  let topLen = 0, runOut = 0;
+  for (let i = 1; i < top.length; i++) {
+    topLen += Math.hypot(top[i][0] - top[i - 1][0], top[i][1] - top[i - 1][1]);
+    runOut = Math.max(runOut, Math.abs(Math.atan2(rTop[i][1] - rTop[i - 1][1], rTop[i][0] - rTop[i - 1][0])));
+  }
+  return {
+    stock: { t: bandT, w: up16(v1 - v0 + 2 * M), l: up16(u1 - u0 + 2 * M) }, top: rTop.map(shift), bottom: rBot.map(shift),
+    chordDeg: (-phi * 180) / Math.PI, runOutDeg: (runOut * 180) / Math.PI, topLenIn: topLen, pastRearIn: pastRear, pastBowIn: pastBow,
+  };
 }
 
 // ── Body ──
@@ -394,6 +453,7 @@ export function buildBody(ctx: Ctx): Part[] {
   // Developed lengths of the bands (D-93): the chine along the plan S, the gunwale along its centerline in the developed web plane (plan S and sheer together).
   const bandLen = sideBandLengths(L, p);
   const sheerLen = bandLen.centerIn, chineLen = bandLen.chineIn;
+  const sheerBl = sheerBlank(L, p, bandT);
   const slope0 = (sideSlopeAt(L, x0s + 0.1) * 180) / Math.PI; // (sideSlopeAt clamps at the end, which halves the slope exactly at the transom)
   const slopeMid = (sideSlopeAt(L, (x0s + x1s) / 2) * 180) / Math.PI;
   const webTopAtX = (x: number) => topEdge(x) - L.webCap;
@@ -419,21 +479,17 @@ export function buildBody(ctx: Ctx): Part[] {
     };
     parts.push(extPart(ctx, chineSpec(true)));
     parts.push(extPart(ctx, chineSpec(false)));
-    // Gunwale (sheer) bands: strips edge-bent to the sheer (concave sweep up to the rear, D-57) and plan-bent with the web. Radius of the sheer ~170 in: 0.45% strain on a 1.5 in strip.
+    // Gunwale (sheer) bands (D-105): sawn to the sheer from a flat blank by the sheer template, then bent only across their thickness, to the plan S, with the web.
     const gunSpec = (outer: boolean) => {
       const stock: Dims = { t: bandT, w: L.railBand, l: sheerLen };
       const area = rectArea(gunOutline);
       return {
         id: outer ? `${id}-gunwale` : `${id}-gunwale-in`, partNo: outer ? 'side-gunwale-out' : 'side-gunwale-in', name: `${nm} gunwale band (${outer ? 'outer' : 'inner'})`, group: 'body' as const, mat: 'oak' as const, step: HULL_STEP.sides, grain: 'x' as const, fab: 'bentlam' as const, kind: 'bentlam' as const,
-        center: cxy(outer ? ycOut : ycIn, (topEdge(x0s) + topEdge(x1s)) / 2), outline: gunOutline, depth: bandT, transform: compose([0, 0, 0]), planYc: outer ? ycOut : ycIn, grainFollowsTop: true, stock, extraLb: finishCredit(area),
-        notes: `${outer ? 'OUTER' : 'INNER'} gunwale band of the sandwich side (D-61, D-62): a ${bandT.toFixed(3)}" × ${L.railBand}" × ${sheerLen.toFixed(1)}" oak STRIP (not a 12 in wide bandsawn blank: that wasted 87% of the board and put the grain 19 degrees across the sheer), glued full-face to the ${outer ? 'outside' : 'inside'} of the ${mmOf(pl)} mm web along the top. Its top is a ${p.sheerCurveIn === 0 ? 'straight line' : `concave sweep (a ${p.sheerCurveIn}" sag below the straight line at mid-length)`} from ${p.sideHeightRearIn}" above the deck at the rear transom to ${L.sideH.toFixed(2)}" at x = ${x1s.toFixed(1)}", where it ends at the bow bulkhead; the slope is ${slope0.toFixed(1)}° at the rear transom (${slopeMid.toFixed(1)}° at mid-length). The strip is bent ON EDGE to that sweep (a radius of about 170", under 0.5% strain) and across its thickness to the plan S together with the web, so the grain FOLLOWS the sheer; the top is trimmed flush with the web cap (the web stops ${L.webCap}" under the top, and the oak cap strip bedded in thickened epoxy fills the slot between the two bands). The strip is ${bandLen.gunwaleRoughIn.toFixed(1)}" ROUGH (${sheerLen.toFixed(1)}" along its centerline, the sheer and the plan S together, + ${p.gunwaleEndLongIn}" past each end of the web for the end stops), so a 5 ft board does NOT make it: buy 6 ft (or longer) white oak, or scarf (8:1) two pieces, or butt them only in the middle third of the length (never in the first 4" behind the transom, under the grab boards, the lash-point doublers or the sign knob stations), staggered at least 12" from the joint in the other band of the same face. ${bendNote}Left long and cut to the measured length (S1). ${SIDE_ASSEMBLY_NOTE}`,
+        center: cxy(outer ? ycOut : ycIn, (topEdge(x0s) + topEdge(x1s)) / 2), outline: gunOutline, depth: bandT, transform: compose([0, 0, 0]), planYc: outer ? ycOut : ycIn, grainFollowsTop: true, stock, blank: { ...sheerBl.stock }, extraLb: finishCredit(area),
+        notes: `${outer ? 'OUTER' : 'INNER'} gunwale band of the sandwich side (D-61, D-62, D-105): a ${bandT.toFixed(3)}" oak band, ${L.railBand}" tall, glued full-face to the ${outer ? 'outside' : 'inside'} of the ${mmOf(pl)} mm web along the top. It is NOT bent on edge to the sheer (that did not work in the shop): it is SAWN to the sheer from a flat ${bandT.toFixed(3)}" × ${sheerBl.stock.w.toFixed(2)}" × ${sheerBl.stock.l.toFixed(1)}" blank with the sheer template, and then bent only across its thickness, to the plan S, together with the web, which is easy. Its top is a ${p.sheerCurveIn === 0 ? 'straight line' : `concave sweep (a ${p.sheerCurveIn}" sag below the straight line at mid-length)`} from ${p.sideHeightRearIn}" above the deck at the rear transom to ${L.sideH.toFixed(2)}" at x = ${x1s.toFixed(1)}", where it ends at the bow bulkhead; the slope is ${slope0.toFixed(1)}° at the rear transom (${slopeMid.toFixed(1)}° at mid-length). The template draws the sheer in the developed plane of the web (the plan S unrolled), and carries it ${frac64(sheerBl.pastRearIn)} past the rear end and ${frac64(sheerBl.pastBowIn)} past the bow end of the sides (the web's reach into the transom and bulkhead, plus ${p.gunwaleEndLongIn}" for the end stops). The blank lies along the chord of the curve, so the grain runs out of the cut edges by at most ${sheerBl.runOutDeg.toFixed(0)}°; the top is trimmed flush with the web cap (the web stops ${L.webCap}" under the top, and the oak cap strip bedded in thickened epoxy fills the slot between the two bands). A ${sheerBl.stock.l.toFixed(0)}" blank needs a 6 ft board (or longer), or scarf (8:1) two pieces, or butt them only in the middle third of the length (never in the first 4" behind the transom, under the grab boards, the lash-point doublers or the sign knob stations), staggered at least 12" from the joint in the other band of the same face. ${bendNote}Left long and cut to the measured length (S1). ${SIDE_ASSEMBLY_NOTE}`,
       };
     };
-    for (const outer of [true, false]) {
-      const g = extPart(ctx, gunSpec(outer));
-      if (g.rough) g.rough = { ...g.rough, l: Math.max(g.rough.l, bandLen.gunwaleRoughIn) }; // long enough for the end stops (the cut list reads it for a strip)
-      parts.push(g);
-    }
+    for (const outer of [true, false]) parts.push(extPart(ctx, gunSpec(outer)));
     // Web: the full-height thin ply panel (D-73) in the middle of the sandwich, ONE piece from a full sheet (D-62, D-68). Its top follows the sheer less the cap; bent in plan with the
     // turn-in; its rear end enters a dado in the transom, its front end one in the bulkhead (both run out through the top edge).
     {

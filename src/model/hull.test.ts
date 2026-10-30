@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultParams, derived, STORAGE_LOCATION, thinSheet, validateParams, type Params } from '../params';
 import { buildModel } from './index';
 import { computeLayout } from './layout';
-import { liftBarStressPsi, liftSlot, scupperSites, sideBandLengths, transomBackerBlocks, TRANSOM_BACKER_BAND_CLEAR_IN } from './body';
+import { liftBarStressPsi, liftSlot, scupperSites, sheerBlank, sideBandLengths, transomBackerBlocks, TRANSOM_BACKER_BAND_CLEAR_IN } from './body';
 import { handleGeometry, socketScrewZ } from './handle';
 import { chooseDomino, DOMINOS, endJoint, frac, joinerySummary } from './joinery';
 import { SIGN_PROUD_IN, HULL_STEP, box, makeCtx } from './build-utils';
@@ -226,10 +226,14 @@ describe('the plan-curved sheer sides (D-54, D-57)', () => {
     expect(gun.notes).toMatch(/OUTER gunwale band/);
     expect(gun.notes).toMatch(/18\.[89]° at the rear transom/); // build review M1: the slope at the transom, not the mid-length figure
     expect(gun.notes).toMatch(/tightest radius/);
-    expect(gun.notes).toMatch(/grain FOLLOWS the sheer/);
-    expect(gun.stock!.t).toBeCloseTo(L.sideBand, 9); // a strip, not a 12 in wide blank
+    expect(gun.notes).toMatch(/SAWN to the sheer/); // D-105: not bent on edge, sawn from a flat blank with the sheer template
+    expect(gun.notes).toMatch(/bent only across its thickness/);
+    expect(gun.stock!.t).toBeCloseTo(L.sideBand, 9); // the finished band
     expect(gun.stock!.w).toBeCloseTo(defaults.railBandIn, 9);
     expect(gun.stock!.l).toBeGreaterThan(58); // the 59 in side along its sheer
+    expect(gun.blank!.t).toBeCloseTo(L.sideBand, 9); // the blank is the same thickness, wide enough for the sheer's dip, long enough for the ends
+    expect(gun.blank!.w).toBeGreaterThan(defaults.railBandIn + defaults.sheerCurveIn);
+    expect(gun.blank!.w).toBeLessThan(defaults.bandsawResawCapacityIn - defaults.laminateWidthAllowanceIn); // it must still resaw on the 6 in bandsaw
     expect(chine.fab).toBe('bentlam');
     expect(chine.kind).toBe('bentlam');
     const rMin = L.taper.minRadiusIn; // D-66: the derived taper's tightest bend (31 in)
@@ -557,8 +561,8 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
     expect(c.stock!.l).toBeCloseTo(sideBandLengths(L, p).chineIn, 6); // the developed plan S (D-93), not the x extent
     expect(c.rough!.l).toBeCloseTo(c.stock!.l + p.laminateLengthAllowanceIn, 6); // a bent strip: the laminate allowance (Eric 2026-10-12)
     expect(c.rough!.t).toBeCloseTo(L.sideBand + p.millingAllowanceIn, 6); // a strip, not a 5/8 block (S2)
-    // The gunwale bands are cut longer still: their rough strip stands 1 in past each web end for the side form's end stops (D-93, body.ts sideBandLengths).
-    expect(get(parts, 'side-L-gunwale').rough!.l).toBeCloseTo(sideBandLengths(L, p).gunwaleRoughIn, 6);
+    // The gunwale bands are sawn from a blank that stands past each web end (the end stops) and is tilted along the chord of the sheer (D-105, body.ts sheerBlank).
+    expect(get(parts, 'side-L-gunwale').rough!.l).toBeCloseTo(sheerBlank(L, p, L.sideBand).stock.l + p.laminateLengthAllowanceIn, 6);
     for (const x of parts.filter((q) => q.rough && q.stock && (q.group === 'body' || q.group === 'frame') && !/-gunwale/.test(q.id))) expect(x.rough!.l - x.stock!.l, x.id).toBeCloseTo(x.kind === 'bentlam' || x.plies !== undefined ? p.laminateLengthAllowanceIn : p.roughLengthAllowanceIn, 6);
   });
 

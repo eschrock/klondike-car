@@ -33,7 +33,7 @@ function wellFormed(xml: string): string | null {
 
 describe('forms and templates', () => {
   it('draws the side form, rail form, crown templates, brake-flap and knee templates, and the end templates', () => {
-    expect(drawings.map((d) => d.id)).toEqual(['side-form', 'rail-form', 'crown-templates', 'brake-flap-template', 'brake-knee-template', 'end-templates']);
+    expect(drawings.map((d) => d.id)).toEqual(['side-form', 'rail-form', 'crown-templates', 'brake-flap-template', 'brake-knee-template', 'end-templates', 'sheer-template']);
   });
 
   it('D-94: the end templates copy the transom and the bulkhead with every dado and rail mortise cut through, grown to stay one piece, and fit the laser bed', () => {

@@ -157,6 +157,8 @@ export interface Part {
   kind: PartKind;
   material: string;
   stock?: Dims;
+  /** The flat blank a part is SAWN from when that is bigger than the finished `stock` (the gunwale bands, sawn to the sheer by a template, D-105): the cut list sizes the rough strip from it. */
+  blank?: Dims;
   rough?: Dims;
   /** Laminated member (D-62, build 3c S2): `stock` and `rough` are ONE strip and the part is this many strips glued face to face (1 = a single strip, such as a sandwich band bent onto the web). */
   plies?: number;

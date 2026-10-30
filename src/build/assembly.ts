@@ -1349,7 +1349,7 @@ const TEMPLATES_1: Template[] = [
     kind: 'prep',
     steps: [0],
     view: 'side',
-    why: 'A shop jig, not a sled part. Each side of the hull is a thin plywood web with oak bands glued along its top and bottom edges, on both faces. Two bends are locked in as the bands cure: the top band is bent on edge to follow the web\'s curved top edge, and the front of the whole side curves in toward the center. This one bench holds the web and bands in that shape while the epoxy cures: first as the S-ramp for the inside faces ([[step:sides-inner]]), then, rebuilt once ([[step:side-form-2]]), as the mirror ramp for the outside faces ([[step:sides-outer]]). The ribs under the ramp are cut from the layers of the rail form\'s counter-form, so the rails are glued up first ([[step:rail-glue]]). The highlighted parts in the 3D view are what it makes.',
+    why: 'A shop jig, not a sled part. Each side of the hull is a thin plywood web with oak bands glued along its top and bottom edges, on both faces. Two shapes are locked in as the bands cure: the top band is sawn to the web\'s curved top edge (the sheer template), and the front of the whole side curves in toward the center. This one bench holds the web and bands in that shape while the epoxy cures: first as the S-ramp for the inside faces ([[step:sides-inner]]), then, rebuilt once ([[step:side-form-2]]), as the mirror ramp for the outside faces ([[step:sides-outer]]). The ribs under the ramp are cut from the layers of the rail form\'s counter-form, so the rails are glued up first ([[step:rail-glue]]). The highlighted parts in the 3D view are what it makes.',
     forParts: /^side-[LR]-(web|chine|chine-in|gunwale|gunwale-in)$/,
     // D-94: the webs are cut here, once the forms are proved with a hardboard test web and the deck's edge is measured.
     cuts: /^side-[LR]-web$/,
@@ -1400,12 +1400,35 @@ const TEMPLATES_1: Template[] = [
             'Lay a dry web on the template and the ramp, with its top edge 1/8" off the cleats.',
             `It must lie on the ramp with no step at the start of the S, and every cleat must stand solid: ${web ? 're-set any cleat the real web does not meet at 1/8"' : 'fix the ramp or the cleat now'}.`,
             'Then lay a spare band strip on the dry web against the cleats and the end stops, over the S, weight it with the bags as for gluing, and leave it an hour.',
-            'The gunwale band bends two ways at once there (on edge to the sheer, and across its thickness to the S). If the strip cracks or checks, stop and re-plan the gunwale bands before any glue.',
+            'The gunwale band is already sawn to the sheer (above), so it only bends across its thickness to the S, which a plain strip of the same thickness shows. If the strip cracks or checks, stop and re-plan before any glue.',
           ]),
         ],
         checks: ['Template flat on the bench, taped, its screws flush', 'Cleats solid, standing on edge, taped, tight to the 1/8" gap against a dry web', 'A dry web lies on the ramp with no step at the S', ...(web ? ['Deck edge measured against the web length before the sheet was cut', 'Webs cut net from the file; the blank nests on the sheet'] : [])],
       };
     },
+  },
+  {
+    id: 'sheer-bands',
+    title: 'Saw the gunwale bands to the sheer',
+    kind: 'prep',
+    steps: [0],
+    view: 'side',
+    why: 'The top band of each side follows the sheer, the web\'s curved top edge. A strip this tall would not bend on edge to it (it was tried, even thin and narrow), so each band is sawn to the curve from a flat blank with a plywood template; on the side form it then only bends across its thickness, to the S at the bow, which a thin strip does easily.',
+    forParts: /^side-[LR]-gunwale(-in)?$/,
+    tools: ['laser', 'bandsaw', 'jointer and planer', 'sanding block or spokeshave', 'pencil and clamps'],
+    build: (c) => ({
+      goal: 'Saw the four gunwale bands to the sheer, so the side form only has to bend them across their thickness.',
+      items: [
+        ...(c.by('side-L-gunwale') ? [
+          I('Cut the sheer template (sheer template drawing) on the laser: one piece of 1/4" plywood with the band\'s outline cut through as a window.', ['It needs the extension rails, like the web.']),
+          I(`Plane each blank to its band thickness and joint one long edge straight: ${((bk) => (bk ? `${roughFrac(bk.w)} wide × ${roughFrac(bk.l)} long` : 'see the cut list'))(c.by('side-L-gunwale')?.blank)} before the rough allowance.`, ['The blanks are the gunwale strips of the cut list, the widest ones.'], ['side-L-gunwale', 'side-L-gunwale-in', 'side-R-gunwale', 'side-R-gunwale-in']),
+          I('Lay the template on a blank, its bottom edge on the jointed edge and its rear end flush with the blank\'s, clamp it and trace the window.', ['Trace the top curve, the bottom curve and the two end lines.']),
+          I('Bandsaw 1/16" outside the lines, then sand or plane to them.', ['Saw the bottom curve first, then the top. Support the whole length.', 'Make one band first and use it as the pattern for the other three.']),
+          I('Mark REAR and BOW on each band and store them flat.', ['The four bands are the same shape: a left band turned over is a right band.', 'The grain runs out of the cut edges by a few degrees at the ends: lift each band by its middle, not by an end.']),
+        ] : []),
+      ],
+      checks: ['Each band follows the template window with no flat spots', 'REAR and BOW marked on all four'],
+    }),
   },
   {
     id: 'sides-inner',
@@ -1540,7 +1563,7 @@ const TEMPLATES_1: Template[] = [
           I('Epoxy the outer chine band and the outer gunwale band to the outside face.', [
             `The outer chine band is ${bandSize('side-L-chine')} and the outer gunwale band ${bandSize('side-L-gunwale')}.`,
             'Push the outer chine band against the edge stops, so it runs flush with the web\'s bottom edge: it is the face that sits on the rail.',
-            `The gunwale band bends on edge to the sheer and across its thickness to the S, both at once; leave it ${fin(c.p.gunwaleEndLongIn)} past each web end and set the end stops against it.`,
+            `The gunwale band is already sawn to the sheer and bends only across its thickness to the S; leave it ${fin(c.p.gunwaleEndLongIn)} past each web end and set the end stops against it.`,
             isDyed(c.p) ? 'These are the faces everyone sees: wipe the squeeze-out off the web and the bands before it kicks, or the dye will not take there.' : false,
           ], ['side-L-chine', 'side-L-gunwale', 'side-R-chine', 'side-R-gunwale']),
           I('Weight the bands with the same bags as cure 1, along the bands only: the web keeps its S now.'),

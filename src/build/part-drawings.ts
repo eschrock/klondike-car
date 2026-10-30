@@ -867,7 +867,8 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
 
   // ── F1: outline features (notches, steps, angled and curved ends) ──
   if (part.kind === 'bentlam') {
-    notes.push(`Cut as a straight strip ${frac(part.stock?.t ?? b.N)} × ${frac(part.stock?.w ?? b.V)} × ${frac(part.stock?.l ?? b.U)}, left long and trimmed at the dry fit. The view is the band as it sits on the side, drawn along the plan curve (${frac(b.U)}); ${part.geometry.type === 'mesh' && part.geometry.grainFollowsTop ? `the straight strip is longer, ${frac(part.stock?.l ?? b.U)}, because it also follows the sheer: that is its developed length along its centerline` : 'the straight strip is the developed length along it'}.`);
+    if (part.blank) notes.push(`Sawn to the sheer from a flat blank ${frac(part.blank.t)} × ${frac(part.blank.w)} × ${frac(part.blank.l)} with the sheer template, then bent only across its thickness to the plan S on the side form. The view is the finished band.`);
+    else notes.push(`Cut as a straight strip ${frac(part.stock?.t ?? b.N)} × ${frac(part.stock?.w ?? b.V)} × ${frac(part.stock?.l ?? b.U)}, left long and trimmed at the dry fit. The view is the band as it sits on the side, drawn along the plan curve (${frac(b.U)}); ${part.geometry.type === 'mesh' && part.geometry.grainFollowsTop ? `the straight strip is longer, ${frac(part.stock?.l ?? b.U)}, because it also follows the sheer: that is its developed length along its centerline` : 'the straight strip is the developed length along it'}.`);
     if (feats.some((f) => f.k !== 'note')) notes.push('Cut the holes and mortises after the side is glued up, with the mating part in place where the joint needs it.');
   } else {
     const ang = part.geometry.type === 'extrusion' ? angleSection(b.main, b) : null;

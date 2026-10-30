@@ -33,7 +33,7 @@ describe('assembly steps', () => {
       'Build the rail form',
       'Glue up the rails on the rail form',
     ]);
-    expect(steps.slice(0, 9).map((s) => s.id)).toEqual(['verify', 'mill', 'cut-deck', 'rail-form', 'rail-glue', 'side-forms', 'sides-inner', 'side-form-2', 'sides-outer']);
+    expect(steps.slice(0, 10).map((s) => s.id)).toEqual(['verify', 'mill', 'cut-deck', 'rail-form', 'rail-glue', 'side-forms', 'sheer-bands', 'sides-inner', 'side-form-2', 'sides-outer']);
     expect(steps.map((s) => s.n)).toEqual(steps.map((_, i) => i));
     for (const s of steps.filter((x) => x.kind === 'prep')) {
       expect(s.partIds, s.id).toEqual([]);
@@ -1079,7 +1079,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(t).not.toMatch(/locator|centerline [\d\-/]+" from the transom/);
       expect(t).not.toMatch(/Drive them while the epoxy is wet/);
       expect(t).not.toMatch(/\bjoist\b/i);
-      expect(t).toMatch(/the tail of a band strip \(each strip comes off its board about [\d\-/]+" longer than it needs: leave the tail on until the strip is planed[^;]*; the same thickness as the bands/); // the spares stay for the bend test
+      expect(t).toMatch(/the tail of a band strip \(each strip comes off its board [\d\-/]+" to [\d\-/]+" longer than it needs: leave the tail on until the strip is planed[^;]*; the same thickness as the bands/); // the spares stay for the bend test
       // the filler lengths are the cut list's, rounded up to 1/8" the way its rough sizes are
       const fl = ribFillers(msr, ppp);
       expect(t).toContain(`about ${roughFrac(fl[1].lengthIn)} at the mid rib, about ${roughFrac(fl[2].lengthIn)} at the bow post and about ${roughFrac(fl[3].lengthIn)} at the rear rib`);
