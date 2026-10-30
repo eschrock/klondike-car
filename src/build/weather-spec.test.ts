@@ -304,7 +304,7 @@ describe('the thin-sheet line is priced by priceKey (D-80)', () => {
 describe('the cost pass totals (D-79 to D-83)', () => {
   it('Standard costs about $1,600 and mostly quoted; Extreme about $2,400; the shop stock adds nothing to the estimate', () => {
     expect(bStd.totalUsd).toBeGreaterThan(1350);
-    expect(bStd.totalUsd).toBeLessThan(1620); // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought: about $1,579; it was under $1,560 on the 6 mm Baltic birch)
+    expect(bStd.totalUsd).toBeLessThan(1650); // D-105: the gunwale bands are sawn from 5-3/8 in blanks (more oak than 1-1/2 in strips) // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought: about $1,579; it was under $1,560 on the 6 mm Baltic birch)
     expect(bExt.totalUsd).toBeGreaterThan(2000);
     expect(bExt.totalUsd).toBeLessThan(2700);
     expect(bStd.estimateShare).toBeLessThan(0.15);

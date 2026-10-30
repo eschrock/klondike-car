@@ -6,7 +6,7 @@
  * from the layout, the parts' meshes and the params. The revision stamp is a hash of the params state (never the wall clock), unless the caller passes `opts.date`.
  *
  * Drawings (ids): 'side-form' (a: the cleat-line template and the S-ramp), 'rail-form' (b), 'crown-templates' (c: handlebow and bow bulkhead), 'brake-flap-template' (d), 'brake-knee-template' (e),
- * 'end-templates' (f: plywood copies of the transom and the bow bulkhead, tried on the built hull before the oak is cut, D-94).
+ * 'end-templates' (f: plywood copies of the transom and the bow bulkhead, tried on the built hull before the oak is cut, D-94), 'sheer-template' (g: the curve the four gunwale bands are sawn to, D-105).
  *
  * Each drawing also says how to BUILD the form (Eric 2026-10-12: "am I cutting out two pieces of plywood in that shape?"): `FormDrawing.build` is an ordered list of steps (material and
  * thickness, how many layers or pieces cut to which line, how they stack and fasten, the base, the braces, ribs or cleats and their spacing, the tape, the spring-back, the clamping), every
@@ -15,7 +15,7 @@
 import type { Params } from '../params';
 import { computeLayout, outerHalfWidth, samples, sideTopAt, type Layout } from '../model/layout';
 import { bowGeometry } from '../model/handle';
-import { transomTopOutline } from '../model/body';
+import { sheerBlank, transomTopOutline } from '../model/body';
 import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
 import { epoxyTimeFactor } from './finishing';
@@ -461,7 +461,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
         `Stand each on edge, ${frac(CLEAT_TALL_IN)} tall, so the band cannot ride over it, even where the web is up on a ramp. No spacers.`,
         `Set them against a dry web, not against the scored line: lay the web on (on a ramp, hold it down with the bags of sand used for gluing), hold a 1/8" hardboard scrap in the gap against its top edge (the gunwale bands stand 1/8" above the web)${capPart ? '; for the outside faces use a cap strip in the gap instead, lying on the inner band\'s overhang' : ''}, and screw each cleat against it: two #8 × 2-1/2" screws into the bench beside the template (a 3" would come out its underside), or, where the web is on a ramp, two #8 × 3" down through the cap into the rib or block under it, piloted 1/8" (MDF edges split).`,
         ...(hasRamp ? ['On the S-ramp the dry web lies inside face up; on the mirror ramp, outside face up (turned over along its length).'] : []),
-        `END STOPS, 4 more blocks the same size: cut each gunwale band ${frac(p.gunwaleEndLongIn)} long at each end of the web, and screw a block against the band's lower edge just past each end of the web (at the bow end, on the cap). The sheer curves away from the cleats at its ends, so a bent band pushes its middle into the cleats and its ends swing away: the stops hold the ends.`,
+        `END STOPS, 4 more blocks the same size: cut each gunwale band ${frac(p.gunwaleEndLongIn)} long at each end of the web, and screw a block against the band's lower edge just past each end of the web (at the bow end, on the cap). The band is sawn to the sheer, so it lies against the cleats; the stops keep it from sliding along them.`,
         `EDGE STOPS, ${EDGE_STOPS} more blocks: screw them against the web's straight bottom edge about every 12" along it. They fix the web across the form, and in the second cure the outer chine band is pushed against them, so it ends flush with the web (it is the face that sits on the rail).`,
         'Cover the cleat and stop faces with packing tape.',
       ],
@@ -1107,10 +1107,83 @@ function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
   };
 }
 
+// ── (g) The sheer template: the curve the gunwale bands are sawn to (D-105) ──
+/**
+ * One 1/4 in plywood template, the size of the band blank, with the band's outline cut through as a window. The blank lies under it, its jointed edge and its rear end on the template's
+ * straight bottom and rear edges, and the window is traced on it. The curve is the sheer in the developed plane of the web (the plan S unrolled), so the band, bent only across its
+ * thickness to the S, comes out right on the side form.
+ */
+function sheerTemplatePlan(parts: Part[], p: Params, L: Layout): Plan | null {
+  const band = parts.find((x) => x.id === 'side-L-gunwale');
+  if (!band) return null;
+  const sb = sheerBlank(L, p, L.sideBand);
+  const W = sb.stock.l, H = sb.stock.w;
+  const window: Vec2[] = [...sb.top, ...[...sb.bottom].reverse()];
+  const n = sb.top.length;
+  const outer = rectLoop(0, 0, W, H);
+  // The band's net ends (the transom's inner face and the bulkhead's face): scored across the window, so the length that stays is visible.
+  const endLines: Vec2[][] = [[sb.top[1], sb.bottom[1]], [sb.top[n - 2], sb.bottom[n - 2]]];
+  const dropIn = Math.max(...sb.top.map((q) => q[1])) - Math.min(...sb.top.map((q) => q[1]));
+  const netIn = Math.hypot(sb.top[n - 2][0] - sb.top[1][0], sb.top[n - 2][1] - sb.top[1][1]);
+  const bandsN = parts.filter((x) => /^side-[LR]-gunwale(-in)?$/.test(x.id)).length;
+  const dims: FormDim[] = [
+    lenDim('sheer-template-length', 'Template and blank: length', W),
+    lenDim('sheer-template-width', 'Template and blank: width', H),
+    lenDim('sheer-template-band', 'Band height', L.railBand),
+    lenDim('sheer-template-margin', 'Oak left outside the curve', p.sheerBlankMarginIn),
+    lenDim('sheer-template-drop', 'Rise of the curve across the blank', dropIn),
+    lenDim('sheer-template-net', 'Band between the transom and the bulkhead (along the top)', netIn),
+    angleDim('sheer-template-tilt', 'Chord of the sheer, from level', sb.chordDeg),
+    angleDim('sheer-template-runout', 'Most the grain runs out of a cut edge', sb.runOutDeg),
+    countDim('sheer-template-bands', 'Bands sawn to it', bandsN, 'band'),
+  ];
+  const notes = [
+    `The window is the gunwale band in the developed plane of the web, the plan S unrolled flat. Saw to it, and the band needs only to bend across its thickness to the S on the side form, which a ${frac(L.sideBand)} strip does easily.`,
+    `The blank lies along the chord of the sheer (the line from one end of the curve to the other), which tilts ${Math.round(sb.chordDeg)}° from level, so the grain runs out of the cut edges by ${Math.round(sb.runOutDeg)}° at most, at the ends. That is as little as any layout gives.`,
+    `The window runs ${frac(sb.pastRearIn)} past the rear end and ${frac(sb.pastBowIn)} past the bow end of the sides, straight on along the end tangent: the web's reach into the transom and bulkhead and ${frac(p.gunwaleEndLongIn)} more for the end stops. The scored lines across the window are the transom's inner face and the bulkhead's face.`,
+    `All ${bandsN} bands are the same shape (a left band turned over is a right band), so one template saws them all.`,
+  ];
+  const build: FormBuildStep[] = [
+    { step: `TEMPLATE (laser): cut ONE template in ${frac(TEMPLATE_STOCK_IN)} plywood from the laser file for this drawing, ${frac(W)} × ${frac(H)}, with the band's outline cut through as a window.` },
+    {
+      step: `USE (side forms step, before the bands are glued): saw each of the ${bandsN} gunwale bands to the window.`,
+      sub: [
+        `Plane the blank to its final thickness (${frac(L.sideBand)}) and joint one long edge straight. That jointed edge and a square-cut rear end go against the template's bottom and rear edges.`,
+        "Lay the template on the blank, its bottom edge on the jointed edge and its rear end flush with the blank's. Clamp it.",
+        'Trace inside the window with a pencil: the top curve, the bottom curve and the two end lines. Trace the scored end lines too, to see the net ends.',
+        'Bandsaw 1/16" outside the lines, the bottom curve first and then the top, on the waste side. Keep the blank flat on the table and support its length.',
+        'Sand to the lines with a sanding block or a spokeshave (the curves are gentle, a radius of about 14 ft). The first band can be the pattern for the rest.',
+        `Mark REAR and BOW on each band and on the template, and set them aside flat: the ends of the grain are short, so lift a band by its middle.`,
+      ],
+    },
+    { step: 'Keep the template: a band that cracks while it is sawn or bent is replaced with a new blank and the same window.' },
+    { step: 'No base, braces, clamps or spring-back: this is a sawing template.' },
+  ];
+  const materials = [`${TEMPLATE_PLY}: one laser template, ${roughFrac(W)} × ${roughFrac(H)}`];
+  return {
+    id: 'sheer-template', title: 'Sheer template: the gunwale band', w: W, h: H + 1.2, dims, notes, build, materials,
+    laser: [{
+      id: 'sheer-template', title: 'Sheer template: the gunwale band', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
+      items: [{ shape: { ...emptyShape('sheer-template', 'Sheer template', outer), holes: [window], score: endLines }, qty: 1 }],
+      notes: ['The window (red) is cut through; the two scored lines across it (blue) are the transom face and the bulkhead face. Longer than the basic laser set (39"): it needs the extension rails.'],
+    }],
+    subtitle: [`${frac(W)} × ${frac(H)}; the band's outline cut through as a window, the curve ${frac(dropIn)} high across the blank, the chord ${Math.round(sb.chordDeg)}° from level.`],
+    draw: (place) => {
+      const T: Xf = ([u, v]) => place([u, v + 1.2]);
+      const g: string[] = [];
+      g.push(label(T, [0, -0.35], 'REAR (the high end)', 0.2), label(T, [W, -0.35], 'BOW', 0.2, 'end'));
+      for (const e of endLines) g.push(guideEl(polyD(e, T), { dashed: true, label: 'the transom or bulkhead face' }));
+      g.push(dimTo(T, [0, 0], [W, 0], `length ${inch(W)}`, -0.6), dimTo(T, [W, 0], [W, H], `width ${inch(H)}`, 0.6));
+      g.push(label(T, [0, H + 0.2], 'Bottom edge of the template on the jointed edge of the blank; rear end flush', 0.18));
+      return `<g id="sheer-template">${outsideCut(outer, T, TEMPLATE_STOCK_IN, 'Sheer template (outline)')}${pathEl({ cutType: 'inside', d: polyD(window, T), depthIn: TEMPLATE_STOCK_IN + BREAKTHROUGH_IN, label: 'Band window' })}</g><g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`;
+    },
+  };
+}
+
 /** Every form and template drawing for the current model. `opts.date` is shown beside the design revision (the caller's choice; the wall clock is never read here). */
 export function formDrawings(parts: Part[], p: Params, opts: { date?: string } = {}): FormDrawing[] {
   const L = computeLayout(p);
-  const plans = [sideFormPlan(parts, p, L), railFormPlan(parts, p, L), crownPlan(parts, p, L), flapPlan(parts, p), kneePlan(parts, p), endTemplatesPlan(parts, p)];
+  const plans = [sideFormPlan(parts, p, L), railFormPlan(parts, p, L), crownPlan(parts, p, L), flapPlan(parts, p), kneePlan(parts, p), endTemplatesPlan(parts, p), sheerTemplatePlan(parts, p, L)];
   return plans.filter((x): x is Plan => x !== null).map((x) => finishDrawing(x, p, opts.date));
 }
 

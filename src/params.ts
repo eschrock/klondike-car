@@ -1917,7 +1917,12 @@ const defs = {
   gunwaleEndLongIn: {
     label: 'Gunwale band overhang past each web end (for the end stops)', group: 'stock', unit: 'in',
     default: 1, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-87, D-93',
-    note: 'Each gunwale band is left this long past each end of its web while it cures on the side form, so an end stop can bear on its lower edge (the bent band pushes its middle into the cleats and its ends swing away). The rough strip is cut long enough for it (it is longer than the 2 in laminate allowance gives).',
+    note: 'Each gunwale band is left this long past each end of its web while it cures on the side form, so an end stop can bear on its lower edge. The sheer template (D-105) carries the curve this far past each web end, straight along the end tangent.',
+  },
+  sheerBlankMarginIn: {
+    label: 'Oak left around the gunwale band on its sawing blank', group: 'stock', unit: 'in',
+    default: 0.375, min: 0.25, max: 1, step: 0.125, status: 'assumed', ref: 'D-105',
+    note: 'D-105: each gunwale band is sawn to the sheer from a flat blank of the band stock (Eric: the strip would not bend on edge to the sheer, even 1/16 in thick or 3/4 in tall). The blank is the band\'s bounding box, laid along the chord of the sheer, grown by this much on every side, and the 1/4 in sheer template is the same size, so the window in it is this far inside every edge of the template.',
   },
   laminateLengthAllowanceIn: {
     label: 'Rough-stock length allowance (laminated / edge-glued / bent pieces)', group: 'stock', unit: 'in',

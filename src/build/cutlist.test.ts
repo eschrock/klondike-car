@@ -183,9 +183,9 @@ describe('cutList', () => {
     expect(pool.spares).toBeGreaterThanOrEqual(RESAW_MIN_SPARES);
     expect(pool.strips).toBe(8);
     expect(pool.board === '4/4' && pool.boardWidthIn <= 8 && pool.boards === 1).toBe(false);
-    // the cost of the one-board 4/4 x 10 in and the two-board 4/4 x 6 in options are both at least the pick
+    // D-105: the four gunwale blanks are 5-3/8 in lanes, so one 10 in board no longer holds the pool; the pick costs no more than two 10 in boards
     const bf = (boards: number, w: number): number => (boards * 1 * w * pool.boardLengthIn) / 144;
-    expect(pool.boardFeet).toBeLessThanOrEqual(Math.min(bf(1, 10), bf(2, 6)) + 1e-9);
+    expect(pool.boardFeet).toBeLessThanOrEqual(bf(2, 10) + 1e-9);
   });
 
   it('splits plywood into the 4 mm and 12 mm sheets', () => {
@@ -548,7 +548,7 @@ describe('bandsaw capacity (Eric 2026-10-12: my bandsaw has 6" capacity)', () =>
 
   it('says so in the text: the resaw height against the saw, and which board to rip the lanes from first', () => {
     const rail = dcl.resaw.find((r) => Math.abs(r.roughT - dcl.strips.find((s) => s.partNo === 'rail')!.rough.t) < 1e-6)!;
-    expect(rail.resawHeightText).toBe('resaw height 3-3/8" (your bandsaw: 6")');
+    expect(rail.resawHeightText).toBe('resaw height 5-3/8" (your bandsaw: 6")'); // D-105: the gunwale blanks (5-3/8 in lanes) set the resaw height of the pool
     expect(rail.ripText).toBe(rail.boards > 1 ? `rip the lanes from ${rail.boards} boards, each ${rail.boardWidthIn}" wide, first` : `rip the lanes from a ${rail.boardWidthIn}"-wide board first`);
     expect(rail.text).toContain(rail.ripText[0].toUpperCase() + rail.ripText.slice(1));
     expect(rail.text).toContain(rail.resawHeightText);
