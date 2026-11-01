@@ -39,7 +39,7 @@ describe('D-66 matched tracks', () => {
   it('mass 115.5 lb (119.9 before): the narrower bow, a shorter front beam and king beam, the shorter stubs and the lighter rear plates (D-72/D-73: 120.7 lb with the solid axle rod, +1.9, and the 1/4 in white oak sides, box and lid, +2.8)', () => {
     const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
     expect(m).toBeGreaterThan(119.5); // D-76: 120.2 lb (the side ribs, +0.96); D-74: 119.2 lb with the 2-1/8 in laminated beams, knees and chocks (-1.3 lb on 120.5)
-    expect(m).toBeLessThan(123); // 2026-10-24: 122.81 lb (13 mm deck, 5 mm combi-core white oak sides as bought); D-85: 122.80 lb (the rear ribs and rings, +0.72 lb); D-80/D-83: 121.64 lb (the 6 mm Baltic birch thin sheet is heavier than the 1/4 in white oak ply, the 2 in clamp plates, less the lighter EVA seat pads); D-77: 121.09 lb (the pivot straps and the knee roofs, +0.87)
+    expect(m).toBeLessThan(124); // D-106: 123.16 lb (the 5/8 in transom, +1.34 lb); 2026-10-24: 122.81 lb (13 mm deck, 5 mm combi-core white oak sides as bought); D-85: 122.80 lb (the rear ribs and rings, +0.72 lb); D-80/D-83: 121.64 lb (the 6 mm Baltic birch thin sheet is heavier than the 1/4 in white oak ply, the 2 in clamp plates, less the lighter EVA seat pads); D-77: 121.09 lb (the pivot straps and the knee roofs, +0.87)
     // with the D-71 tube and the 4 mm okoume (PRE_D72) the D-66 / D-71 mass is back
     const old = totalMass(buildModel({ ...defaults, ...PRE_D72, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472 } as Params, { rider: 'none', cargo: false })); // 2026-10-24: and the 12 mm deck (the defaults are the 13 mm sheet as bought)
     expect(old).toBeGreaterThan(114.9); // D-76: 115.5 lb (the side ribs); D-74: 114.5 lb (the 2-1/8 in laminated parts), 115.5 before
@@ -109,7 +109,7 @@ describe('D-66 the numbers that moved', () => {
     const high = cs.filter((c) => c.status !== 'info' && ((c.util ?? 0) > 0.9 || (c.utilCargo ?? 0) > 0.9)).map((c) => c.id).sort();
     expect(high).toEqual(['park-hold', 'seat-stow', 'side-web', 'turn-radius']); // 2026-10-24: side-web 0.96 marginal on the 5 mm combi-core white oak sides as bought (0.33 on the 6 mm Baltic birch); D-85: the ring count is no longer above 0.9 (8 rings); // D-71 tube: axle-stress 0.925 at the 200 lb rider, 0.957 on the cargo; the solid rod brings it to 0.79 / 0.82
     expect(row('rest-load').status).toBe('pass'); // the resting 250 lb adult still passes: holds up to 348 lb, the heavier wheel is the tightest member (73%)
-    expect(row('rest-load').how).toMatch(/holds up to 36\d lb/); // (2026-10-24: D-96/97/98) 360 lb with the stiffer 13 mm deck as bought (34x lb with the 12 mm deck)
+    expect(row('rest-load').how).toMatch(/holds up to (?:359|36\d) lb/); // D-106: 359 lb (the 5/8 in transom); (2026-10-24: D-96/97/98) 360 lb with the stiffer 13 mm deck as bought (34x lb with the 12 mm deck)
   });
   it('front end at the narrow bow: the roll pads (9-3/4 in out, D-83) are under the rails at every angle, the chain eyes stay inside the rails, the king beam is 17 in between the rails; every front row passes', () => {
     for (const id of ['king-bearing', 'kingpin', 'front-beam', 'front-stub', 'steer-stops', 'king-beam', 'steer-clear', 'bridle-eye']) {

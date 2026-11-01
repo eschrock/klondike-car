@@ -327,7 +327,7 @@ describe('rail-to-chine screws (round 3, build critic S4)', () => {
 describe('handle-socket screws (round 3, build critic S3)', () => {
   it('end flush or short of the backer face: the box aft wall sits there', () => {
     const j = get('handle-socket-L').joints!.find((q) => q.to === 'transom-rear')!;
-    expect(j.size).toMatch(/1\/4-20 × 1-1\/2 \(cut to 1-3\/8"\) /); // only the T-nut barrel is threaded: 1-1/4 engaged 2-1/2 threads, 1-1/2 as bought stands 1/16 in past
+    expect(j.size).toMatch(/1\/4-20 × 1-1\/2 (?:316|18-8)/); // only the T-nut barrel is threaded; D-106: through the 5/8 in transom the 1-1/2 as bought ends 1/16 in short (it was cut to 1-3/8 for the 1/2 in one)
     expect(j.note).toMatch(/SHORT of the flange/);
     expect(j.note).not.toMatch(/PAST the flange/);
   });

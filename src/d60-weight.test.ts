@@ -13,13 +13,14 @@ import { makeContext } from './analysis/context';
 import { runChecks } from './analysis';
 import { restMaxLb } from './analysis/rest';
 import { checkTruckFit } from './truck/fit';
-import { PRE_D60, PRE_D66, PRE_D71, PRE_D72 } from './test-fixtures';
+import { PRE_D60, PRE_D66, PRE_D71, PRE_D72, PRE_D106 } from './test-fixtures';
 
 // D-66 moved the tracks, the bow and the load-height rule on; the D-60 package headline numbers (mass, width, rider range, cargo) are recorded for the D-65 design, restored with PRE_D66
 // D-71 (Harbor Freight wheels, 5/8 in axles) changed the wheel, axle and clamp numbers again: this file records the D-60 3/4 in design, restored with PRE_D71
 // D-72/D-73: and the 0.120 in DOM tube and the 4 mm okoume sides, box and lid (PRE_D72)
 // 2026-10-24: the defaults are now the sheets as bought (13 mm deck, 5 mm combi-core white oak sides); the D-60 numbers are for the 12 mm deck, so it is put back here
-const defaults = { ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472 } as Params;
+// D-106 (the 5/8 in transom) is put back too: the package's 1/2 in transom is part of what it pins
+const defaults = { ...defaultParams(), ...PRE_D106, ...PRE_D72, ...PRE_D71, ...PRE_D66, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472 } as Params;
 const pre = { ...defaults, ...PRE_D60 } as Params;
 const parts = buildModel(defaults);
 const partsPre = buildModel(pre);
@@ -49,7 +50,7 @@ describe('the changed params (every one cites D-60; the supplier-derived ones ar
   it.each(Object.entries(VALUES) as [ParamKey, number][])('%s = %s', (k, v) => {
     if (k !== 'rollPadRadiusIn') expect(defaults[k]).toBe(v);
     // D-71 moved these three on (the Harbor Freight wheel) and the axle to the solid rod; D-80 made the okoume thin sheet 6 mm (panelPlyIn 0.236); D-83 moved the roll pads out 1/4 in (the 2 in clamp plates)
-    expect(PARAM_DEFS[k].default).toBe(({ wheelMass10Lb: 3, hubLengthIn: 2.25, wheelBoreIn: 0.625, axleWallIn: 0, panelPlyIn: 0.236, rollPadRadiusIn: 9.75, seatBackPlyIn: 0.512 /* (2026-10-24: D-96/97/98) the 13 mm sheet as bought */ } as Partial<Record<ParamKey, number>>)[k] ?? v);
+    expect(PARAM_DEFS[k].default).toBe(({ wheelMass10Lb: 3, hubLengthIn: 2.25, wheelBoreIn: 0.625, axleWallIn: 0, panelPlyIn: 0.236, rollPadRadiusIn: 9.75, transomThicknessIn: 0.625 /* D-106 */, seatBackPlyIn: 0.512 /* (2026-10-24: D-96/97/98) the 13 mm sheet as bought */ } as Partial<Record<ParamKey, number>>)[k] ?? v);
   });
   it.each(Object.keys(VALUES) as ParamKey[])('%s cites D-60 in its ref or note', (k) => {
     expect(`${PARAM_DEFS[k].ref ?? ''} ${PARAM_DEFS[k].note ?? ''}`, k).toMatch(/D-60/);

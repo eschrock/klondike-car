@@ -49,12 +49,12 @@ describe('PARAM_DEFS', () => {
   it('the design defaults (D-54, D-56, D-57): 24 in body, 44 in wheelbase, 10 in wheels, 8 in deck, a sheer from 4 in at the bow to 14 in at the rear, the 1-1/2 in bow bulkhead (D-60), pivoting front axle at matched 30 in front and rear tracks (D-66) and 20 deg lock', () => {
     expect(defaults).toMatchObject({
       bodyWidthIn: 24, wheelbaseIn: 44, wheelDiameterIn: 10, deckHeightIn: 8, sideHeightBowIn: 4, sideHeightRearIn: 14, sheerCurveIn: 2.5, bowWidthIn: 18.5, bowTaperStartIn: 20, bowTaperSlackIn: 0.125,
-      bowBulkheadThickIn: 1.5, bowHoldMinClearIn: 2.5, crossmemberSpacingIn: 8.5, standDeflectionRatio: 240, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.75, // D-60: 1/4 in more, the thinner bulkhead's face is 1/4 in further forward
+      bowBulkheadThickIn: 1.5, bowHoldMinClearIn: 2.5, crossmemberSpacingIn: 8.5, standDeflectionRatio: 240, showSideSigns: 1, rearOverhangIn: 10.125 /* D-106 */, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.75, // D-60: 1/4 in more, the thinner bulkhead's face is 1/4 in further forward
        seatDepthIn: 14.5, storageVolumeIn3: 2000,
       frontTrackIn: 30, rearTrackIn: 30, steerLockDeg: 20, // D-66: matched 30 in tracks
       steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5, kingBeamLengthIn: 3,
       tongueWidthIn: 1.25, tongueDepthIn: 1.75, tongueTieAheadIn: 5, steerRopesOn: 0, frontBeamThicknessIn: 2.5, rollPadRadiusIn: 9.75, // D-66 (was 11.5, D-60), D-83 (was 9.5): tongue 1-1/4 x 1-3/4, pads out 1/4 in for the 2 in clamp plates
-      transomThicknessIn: 0.5, panelPlyIn: 0.236, seatBackPlyIn: 0.512, wheelMass10Lb: 3, wheelRatingLb: 300, hubLengthIn: 2.25, wheelBoreIn: 0.625, axleDiameterIn: 0.625, axleWallIn: 0, // D-71: the Harbor Freight wheel (3 lb, 5/8 in bore, 2.25 in hub assumed) on 5/8 in axles; Eric chose the SOLID rod (axleWallIn 0)
+      transomThicknessIn: 0.625 /* D-106 */, panelPlyIn: 0.236, seatBackPlyIn: 0.512, wheelMass10Lb: 3, wheelRatingLb: 300, hubLengthIn: 2.25, wheelBoreIn: 0.625, axleDiameterIn: 0.625, axleWallIn: 0, // D-71: the Harbor Freight wheel (3 lb, 5/8 in bore, 2.25 in hub assumed) on 5/8 in axles; Eric chose the SOLID rod (axleWallIn 0)
       weatherSpec: 0, thinSheetMaterial: 1, deckPlyIn: 0.512, // (2026-10-24: D-96/97/98) seatBackPlyIn 0.512 (was 0.472); the sheets as bought, 5 mm combi-core white oak (it followed the weather: 6 mm Baltic birch) and the 13 mm deck (was 0.472); D-73, D-80: panelPlyIn is the okoume option's thickness, now 6 mm (was 4 mm)
       crossmemberThickIn: 0.625, handleSocketDepthIn: 14,
     });

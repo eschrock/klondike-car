@@ -187,8 +187,9 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     expect(r.min[1]).toBeCloseTo(-(L.hwC + L.side), 6);
     expect(r.max[1] - r.min[1]).toBeCloseTo(defaults.bodyWidthIn, 6);
     expect(r.max[0] - r.min[0]).toBeCloseTo(L.transom, 6);
-    expect(r.min[0]).toBeCloseTo(-10, 6);
-    expect(L.transom).toBe(0.5); // D-43: the transom was ¾", D-60: ½"; the chine and gunwale ⅝"
+    expect(r.min[0]).toBeCloseTo(-10.125, 6); // D-106: the 5/8 in transom grew backward; its inner face stays at -9.5
+    expect(r.max[0]).toBeCloseTo(-9.5, 6);
+    expect(L.transom).toBe(0.625); // D-43: the transom was ¾", D-60: ½", D-106: ⅝"; the chine and gunwale ⅝"
     expect(L.side).toBe(0.625);
     // The corners are at the rear gunwale height (deck + 14 in); the crown arcs above them at the center (D-44).
     expect(r.max[2]).toBeCloseTo(8 + defaults.sideHeightRearIn + defaults.transomCrownIn, 6);
@@ -536,8 +537,8 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
   const { L } = ctx;
   const p = defaults;
 
-  it('transoms are 1/2" (D-60; was 3/4"), chines and gunwales 5/8" thick as a sandwich of two 0.214" bands and the 5 mm white oak plywood web (D-62, D-73, D-80; 0.1945" on the 6 mm Baltic birch, 0.2075" on a 0.21 in white oak sheet, 0.234" on the 4 mm okoume)', () => {
-    expect(L.transom).toBe(0.5);
+  it('the rear transom is 5/8" (D-106; D-60 made it 1/2", it was 3/4"), chines and gunwales 5/8" thick as a sandwich of two 0.214" bands and the 5 mm white oak plywood web (D-62, D-73, D-80; 0.1945" on the 6 mm Baltic birch, 0.2075" on a 0.21 in white oak sheet, 0.234" on the 4 mm okoume)', () => {
+    expect(L.transom).toBe(0.625);
     expect(L.side).toBe(0.625);
     // D-61/D-62: no grooves; a band of (0.625 - web) / 2 on each face of the web: the default web is the 0.197 in (5 mm) white oak plywood (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
     expect(thinSheet(p).thicknessIn).toBeCloseTo(0.197, 9);

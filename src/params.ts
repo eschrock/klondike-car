@@ -223,8 +223,8 @@ const defs = {
   },
   rearOverhangIn: {
     label: 'Body overhang behind rear axle', group: 'layout', unit: 'in',
-    default: 10, min: 0, max: 18, step: 0.5, status: 'explore',
-    note: 'Rear-handle sockets, the brake latch hook, and (by default) the storage box over the rear axle. The brake pedal bar sits a further 4 in or so behind it (D-55).',
+    default: 10.125, min: 0, max: 18, step: 0.125, status: 'explore',
+    note: 'Rear-handle sockets, the brake latch hook, and (by default) the storage box over the rear axle. The brake pedal bar sits a further 4 in or so behind it (D-55). This is the rear transom\'s OUTER face. D-106: 10-1/8 in (was 10 in), so the 5/8 in transom grew backward and its inner face stays 9-1/2 in behind the axle.',
   },
   frontOverhangIn: {
     label: 'Body overhang ahead of the front axle (to the bow tip)', group: 'layout', unit: 'in',
@@ -358,8 +358,8 @@ const defs = {
   },
   transomThicknessIn: {
     label: 'Transom thickness (front and rear)', group: 'stock', unit: 'in',
-    default: 0.5, min: 0.5, max: 1.25, step: 0.0625, status: 'assumed', ref: 'D-35, D-43, D-60',
-    note: '¾" gives the transom a real hand-hold bar, lets a DF 500 Domino keep a 0.15" wall, and takes the handle sockets, and quadrant bracket bolts. The chine and gunwale thickness is "Chine / gunwale stock thickness". D-60: 1/2 in (was 3/4 in; 5/8 in is the "free" step, 1/2 in a trade-off). The Domino wall and the socket bolt edge distances are thinner; the lift row goes to 0.67 (0.54 at 3/4 in).',
+    default: 0.625, min: 0.5, max: 1.25, step: 0.0625, status: 'assumed', ref: 'D-35, D-43, D-60, D-106',
+    note: 'D-106 (Eric, 2026-11-01): 5/8 in (was 1/2 in, which felt flimsy): about twice as stiff through its thickness for 1.3 lb, and an easy yield from 4/4 after jointing (3/4 in would want 5/4). It grew BACKWARD (rearOverhangIn went from 10 to 10-1/8 in), so the inner face, and everything measured from it (deck, rails, sides, box), did not move. The lift row is 0.54 (0.66 at 1/2 in, 0.46 at 3/4 in).',
   },
   scupperDiaIn: {
     label: 'Deck scupper (drain hole) diameter', group: 'body', unit: 'in',

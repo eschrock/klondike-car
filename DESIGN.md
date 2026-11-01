@@ -40,16 +40,16 @@ A **Klondike Derby sled on wheels** for Boy Scout Troop 455: a solid, wide, reus
 ### Overall
 | | Default |
 |---|---|
-| Body length, rear transom to bow | 60-3/4" (65-3/4" with the tongue) |
+| Body length, rear transom to bow | 60-7/8" (65-7/8" with the tongue) |
 | Body width | 24" outside, narrowing to 18-1/2" at the bow over a gradual 22" taper |
 | Overall width over the wheels | 34-1/4" |
 | Wheels | 10" pneumatic, 4 of them, wheelbase 44", both tracks 30" |
 | Deck height | 8" |
 | Side height | 4" at the bow rising in a concave sweep to 14" at the rear |
-| Empty mass (Standard spec) | **121.8 lb** (about 112.7 lb in Transport mode with the removable knees off, 56.4 lb per person for the two-person lift; 115.9 lb and 58.0 lb with knees that stay on) |
+| Empty mass (Standard spec) | **123.2 lb** (about 114.0 lb in Transport mode with the removable knees off, 57.0 lb per person for the two-person lift; 117.2 lb and 58.6 lb with knees that stay on) |
 
 ### Construction
-- **Body.** The two sides are sandwiches: a thin plywood web with oak bands glued on both faces at the top (gunwale) and bottom (chine). No grooves. The gunwale bands are sawn to the sheer from flat blanks with a template, then bent only to the plan S (D-105). The bow bulkhead is a shaped oak board that is the foot brace and a hand-hold. A 13 mm okoume deck rides on oak rails (each three 1/4" strips glued and bent on a form, D-101) and 8-1/2" joists. The rear transom is 1/2" oak. Four oak **ribs** per side stand on the inside face of the web (rear, box, mid and bow-post stations). Their heads carry the eight D-ring tie-downs (zinc-plated steel Standard, 316 stainless Extreme), through-bolted on two bolts each (D-83), and they stiffen the sides sideways (D-76).
+- **Body.** The two sides are sandwiches: a thin plywood web with oak bands glued on both faces at the top (gunwale) and bottom (chine). No grooves. The gunwale bands are sawn to the sheer from flat blanks with a template, then bent only to the plan S (D-105). The bow bulkhead is a shaped oak board that is the foot brace and a hand-hold. A 13 mm okoume deck rides on oak rails (each three 1/4" strips glued and bent on a form, D-101) and 8-1/2" joists. The rear transom is 5/8" oak (D-106). Four oak **ribs** per side stand on the inside face of the web (rear, box, mid and bow-post stations). Their heads carry the eight D-ring tie-downs (zinc-plated steel Standard, 316 stainless Extreme), through-bolted on two bolts each (D-83), and they stiffen the sides sideways (D-76).
 - **Front end.** One laminated oak axle beam under the bow carries two stub axles. It pivots about a single 5/8" grade 8 kingpin through a UHMW thrust washer into an oak king beam. UHMW roll pads take the roll. A check chain on each side is the steering stop and limits the swing to **±20°**; a short 1/8" shock cord through a screw eye under the deck holds each chain's slack 3-1/2" or more off the ground (D-56). The pullers steer through an oak **tongue** whose rope bridle ties to it on a bowline (the rope is the intended weak link). Turning radius is about 12 ft to the outer tire edge, limit 12.5 ft (the one marginal row).
 - **Rear end.** A fixed laminated oak beam on solid 5/8" 1045 steel rod axles, held by 316 or 304 clamp plates and hold-down angles into notches in the rails.
 - **Seat.** A 1-1/2" EVA foam cushion and back pad (kneeling pads, closed-cell, no cover, on hook-and-loop strips; D-83), and a frameless 12 mm okoume seat back that **flips flat and latches** with pins, so it stays on the sled (D-57). The leg reach is about 35-3/4". Two oak **grab boards** (one board per side with a routed hand hole) are bolted to the gunwales (D-84): the hole sits 5-1/2" ahead of where the rider's hip rests, 6-5/8" above the seat, so a gloved hand finds it with the forearm about level; the ends are plumb and the top corners round (1" radius); five staggered stainless screws pull through a 1/8" × 1-1/4" stainless strip, and a 1/2" oak cap glued over the strip and the heads hides them. The boards are permanent and finished in place.
@@ -75,7 +75,7 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | Stain (`stainShowFaces`, D-99) | TransTint Golden Brown water dye on the show faces, under the first coat | the same |
 | Thin sheet (as bought, D-96) | 5 mm white oak plywood | 5 mm white oak plywood |
 | Drains | drilled holes | stainless nipples |
-| Empty mass | 121.8 lb | 122.1 lb |
+| Empty mass | 123.2 lb | 123.5 lb |
 | BOM total (no shipping or tax) | **$1,594** | **$2,299** |
 
 ### Brake knees (`kneeMount`, D-78)
@@ -117,10 +117,10 @@ Sheets are always full 4' × 8' (D-68). Solid parts up to 1-3/4" thick come from
 
 ## 5. Key numbers (Standard spec, default parameters)
 
-- **Mass** 122.7 lb empty: white oak 57.4 lb, plywood 27.3 lb, wheels 12 lb, axles 5 lb, hardware, fasteners and everything else about 21 lb.
+- **Mass** 123.2 lb empty: white oak 58.7 lb, plywood 27.1 lb, wheels 12 lb, axles 5 lb, hardware, fasteners and everything else about 20 lb.
 - **Checks.** 54 rows, **none fail**. Two are marginal: turning radius (0.97 of its limit) and the side web (0.96, the 5 mm combi-core white oak at an estimated strength, D-96; the ribs give the panel support the strip check does not count). The tightest passes: seat stowage 0.94, storage packing 0.89, park-hold 0.88, brake-mount 0.87, grab board 0.86.
-- **Rider range.** Safe (nothing fails) **50 to 230 lb**; green (nothing marginal) **50 to 210 lb** (the grab-board row sets both ends, D-84; the brake-mount row also sets 210 with removable knees). The 150 lb rider is a plain pass; the 200 lb goal rider is green.
-- **Cargo.** The 200 lb payload passes. Capacity is **275 lb** (the dry removable knee's brake-mount row; 278 lb with glued knees, where the rear beam under the seat sets it); comfortable (still green) to **225 lb** (the side web is marginal from an empty bed and is left out of that measure, D-96).
+- **Rider range.** Safe (nothing fails) **50 to 230 lb**; green (nothing marginal) **50 to 200 lb** with removable knees (the dry knee's brake-mount row is 0.902 at 210 lb) and 50 to 210 lb with knees that stay on (the grab-board row sets the safe range's top and the glued-knee green top, D-84). The 150 lb rider is a plain pass; the 200 lb goal rider is green.
+- **Cargo.** The 200 lb payload passes. Capacity is **274 lb** (the dry removable knee's brake-mount row; 276 lb with glued knees, where the rear beam under the seat sets it); comfortable (still green) to **223 lb** (the side web is marginal from an empty bed and is left out of that measure, D-96).
 - **Resting load.** A 250 lb adult sitting or standing on one foot anywhere on the deck passes (capacity 348 lb).
 - **Stability.** Straight tip 45° against a 35° limit; full-lock tip the same; slides before it tips (0.78 of limit).
 - **Sides.** A 50 lbf push moves a gunwale about 0.12" (under the 1/8" "feels solid" mark; reported, not judged).

@@ -41,15 +41,15 @@ describe('hull checks (D-43)', () => {
     expect(sigma / al.oakDesignMorPsi).toBeLessThan(0.6);
   });
 
-  it('the lift row at the defaults by hand (D-54, D-58): the rear lifter holds the 0.75 in high x 1/2 in thick (D-60) bar over the 4.5 in rear slot; the front lifter holds the hand-hold through the 1 1/2 in bow bulkhead (D-60, x = 50.0 in); the CG-weighted rear share is about 53%', () => {
+  it('the lift row at the defaults by hand (D-54, D-58): the rear lifter holds the 0.75 in high x 5/8 in thick (D-106) bar over the 4.5 in rear slot; the front lifter holds the hand-hold through the 1 1/2 in bow bulkhead (D-60, x = 50.0 in); the CG-weighted rear share is about 53%', () => {
     const c = liftCheck(ctx);
     const { massLb, xCg } = transportMassCg(ctx.parts);
     expect(Math.abs(massLb / 114 - 1)).toBeLessThan(0.15); // the sled with the removable parts off (the tongue among them; it moves as parts change); 138 lb before the D-60 weight package
     expect(xCg).toBeGreaterThan(14);
     expect(xCg).toBeLessThan(21);
-    // hand-holds: rear bar at x = xRear + transom/2 = -10 + 0.25 = -9.75 in (1/2 in transom, D-60); the front hold at the middle of the bulkhead thickness
+    // hand-holds: rear bar at x = xRear + transom/2 = -10.125 + 0.3125 = -9.8125 in (5/8 in transom grown backward, D-106); the front hold at the middle of the bulkhead thickness
     const xr = ctx.L.xRear + ctx.L.transom / 2;
-    expect(xr).toBeCloseTo(-9.75, 9);
+    expect(xr).toBeCloseTo(-9.8125, 9);
     const xf = (ctx.L.hold.x0 + ctx.L.hold.x1) / 2;
     expect(xf).toBeCloseTo(50, 9); // the 1-1/2 in bulkhead (D-60) from 49.25 to 50.75
     const rear = massLb * (xf - xCg) / (xf - xr);
@@ -59,15 +59,15 @@ describe('hull checks (D-43)', () => {
     expect(s.lengthIn).toBe(4.5);
     expect(s.barIn).toBe(0.75);
     expect(s.thickIn).toBe(ctx.L.transom);
-    expect(ctx.L.transom).toBe(0.5); // D-60: 1/2 in rear transom (was 3/4 in)
+    expect(ctx.L.transom).toBe(0.625); // D-106: 5/8 in rear transom (D-60 made it 1/2 in, it was 3/4 in)
     // the rear bar: P = share x dynamicFactor (3) on one hand; sigma = (P L / 4) / (t h^2 / 6)
     const P = rear * ctx.p.dynamicFactor;
-    const sigma = (P * 4.5 / 4) / (0.5 * 0.75 ** 2 / 6);
+    const sigma = (P * 4.5 / 4) / (0.625 * 0.75 ** 2 / 6);
     const bend = c.details!.find((d) => d.name === 'rear slot bar bending')!;
     expect(bend.value).toBeCloseTo(sigma, 6);
     expect(bend.limit).toBeCloseTo(al.oakDesignMorPsi, 6);
     const shear = c.details!.find((d) => d.name === 'rear slot bar shear')!;
-    expect(shear.value).toBeCloseTo((1.5 * (P / 2)) / (0.5 * 0.75), 6);
+    expect(shear.value).toBeCloseTo((1.5 * (P / 2)) / (0.625 * 0.75), 6);
     expect(shear.limit).toBeCloseTo(850, 0);
     // the front lifter: Pf = (m - rear) x 3 lbf on one hand; the bar above the hand-hold is the bulkhead's crown, 1.5 in thick (D-60) with barIn of oak over the 4.5 in hold
     const Pf = (massLb - rear) * 3;
@@ -79,9 +79,9 @@ describe('hull checks (D-43)', () => {
     const fs = c.details!.find((d) => d.name.includes('bow bulkhead') && /shear/.test(d.name))!;
     expect(fs.value).toBeCloseTo((1.5 * (Pf / 2)) / (bh.thickIn * bh.barIn), 6);
     expect(fb.util).toBeLessThan(0.3); // the front bar is still far from its limit (0.24 with the D-60 1-1/2 in bulkhead; it was under 0.1 at 1-3/4 in)
-    // the rear bar is the tightest (util 0.67, D-60; was 0.54)
+    // the rear bar is the tightest (util 0.54: D-106's 5/8 in transom; 0.67 at D-60's 1/2 in, 0.54 at 3/4 in)
     expect(c.details!.reduce((m, d) => (d.util > m.util ? d : m)).name).toBe('rear slot bar bending');
-    expect(Math.abs(bend.util / 0.67 - 1)).toBeLessThan(0.1); // 0.54 with the 3/4 in transom; the 1/2 in transom (D-60) is a weaker bar, and the sled is lighter
+    expect(Math.abs(bend.util / 0.54 - 1)).toBeLessThan(0.1); // D-106: about 0.54 with the 5/8 in transom; 0.67 with D-60's 1/2 in
     expect(c.status).toBe('pass');
     expect(c.how).toMatch(/hand-hold through the bow bulkhead/);
   });

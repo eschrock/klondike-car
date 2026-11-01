@@ -124,7 +124,7 @@ describe('S-5: the cargo load-height rule', () => {
     expect(c.how).toMatch(/keep the CENTER of the load under 10 in/);
     expect(c.how).toMatch(/reaches its 35° limit at 15\.[5-9] in/); // 15.7 in (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought); 15.1-15.6 before
     expect(c.how).toMatch(/at 10 in (40\.[7-9]|41\.[0-3])°/); // 41.0 (2026-10-24, as bought); 40.5-40.9 before
-    expect(c.how).toMatch(/at 18 in 32\.[6-9]°/); // 32.9 (2026-10-24, as bought)
+    expect(c.how).toMatch(/at 18 in (?:32\.[6-9]|33\.[0-2])°/); // 33.0 (D-106: the 5/8 in transom); 32.9 (2026-10-24, as bought)
     expect(c.how).toMatch(/at 24 in 28\.[3-8]°/); // 28.6 (2026-10-24, as bought); 28.1-28.5 before
   });
   it('the Simple view cargo card says it in plain words (D-66: 10 in above the floor; D-67: it tips at about 15 in)', () => {

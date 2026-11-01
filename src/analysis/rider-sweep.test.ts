@@ -31,7 +31,7 @@ describe('riderSweep', () => {
     // D-71 (Eric chose the solid rod) and D-73 (1/4 in white oak sides, +2.8 lb): the rod's axle-stress is 0.79 at 200 lb, so the groove bearing on the oak (0.89 at 220 lb, 0.90 from 230 lb) ends green at 220 lb.
     // D-83 (the 233 lbf D-rings, the 2 in clamp plates, the 1-1/2 in EVA seat that seats the rider lower): the groove bearing drops to 0.75 at 200 lb and green runs to 240 lb.
     // D-84 (the grab board turns about its lower edge, the honest row): the strip and washer bearing reach 0.9 at 220 lb and the lower-edge bearing is red from 240 lb, so green is 50-210 lb and safe 50-230 lb.
-    expect(r.green).toMatchObject({ loLb: 50, hiLb: 210, openLow: true, openHigh: false }); // (2026-10-24: D-96/97/98) 210 lb on the sheets as bought (the grab board goes yellow at 220)
+    expect(r.green).toMatchObject({ loLb: 50, hiLb: 200, openLow: true, openHigh: false }); // D-106: 200 lb (brake-mount 0.902 at 210 lb with the 5/8 in transom); (2026-10-24: D-96/97/98) 210 lb on the sheets as bought (the grab board goes yellow at 220)
     expect(r.points.find((x) => x.w === 200)!.worst!.id).toBe('park-hold'); // a fit fact (0.883), as with the 3/4 in axle; the D-71 tube had axle-stress (0.925)
     expect(r.points.find((x) => x.w === 250)!.worst!.id).toBe('seat-grip'); // D-84: the grab board is the tightest row at 250 lb (it fails there); D-83 had brake-slow
     for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'lift', 'brake-force']) expect(r.points.every((x) => !x.fails.includes(id)), id).toBe(true);

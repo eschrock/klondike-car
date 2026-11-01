@@ -62,3 +62,10 @@ export const PRE_D72: Partial<Params> = {
   panelPlyIn: 0.157, okoumeMoePerpPsi: 150000, okoumeMorPerpPsi: 1500, // D-80 made the okoume option 6 mm (0.236 in, 315,000 / 3,000 psi across the grain); these are the 4 mm values
   axleWallIn: 0.12,
 };
+
+/**
+ * D-106 (Eric, 2026-11-01) made the rear transom 5/8 in (it was 1/2 in) and grew it backward: the outer face went from 10 to 10-1/8 in behind the rear axle, so the inner face did not move.
+ * `PRE_D106` puts the 1/2 in transom back for the tests whose literal numbers were worked out for it (the D-60 weight package and the older pinned masses). The new defaults are tested in
+ * d106.test.ts.
+ */
+export const PRE_D106: Partial<Params> = { transomThicknessIn: 0.5, rearOverhangIn: 10 };

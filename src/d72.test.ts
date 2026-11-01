@@ -22,7 +22,7 @@ import { bom } from './build/bom';
 import { PLYWOOD_PRICE, METAL_PRICE_PER_FT } from './build/prices';
 import { verifyChecklist } from './build/verify';
 import { assemblySteps } from './build/assembly';
-import { PRE_D72 } from './test-fixtures';
+import { PRE_D72, PRE_D106 } from './test-fixtures';
 
 const defaults = defaultParams();
 const withMat = (m: number): Params => ({ ...defaults, thinSheetMaterial: m });
@@ -30,7 +30,7 @@ const OAK = THIN_SHEET.whiteOakPly, OKOUME = THIN_SHEET.okoumeMarine, BALTIC = T
 // 2026-10-24: the defaults are now the sheets as bought (white oak thin sheet, 13 mm deck, 5 mm combi-core white oak values). The D-73 / D-80 thin-sheet rules
 // and the material comparisons are pinned on the design they were written for: follow the weather (Standard = 6 mm Baltic birch), the 12 mm deck and the D-73 white oak estimates
 const D80_SHEETS: Partial<Params> = { thinSheetMaterial: THIN_SHEET.followWeather, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472, whiteOakPlyThickIn: 0.21, whiteOakPlyDensityPcf: 40, whiteOakPlyMoePsi: 1100000, whiteOakPlyMorPsi: 5500, whiteOakPlyMoePerpPsi: 500000, whiteOakPlyMorPerpPsi: 2750 };
-const base80 = { ...defaults, ...D80_SHEETS } as Params;
+const base80 = { ...defaults, ...D80_SHEETS, ...PRE_D106 } as Params; // D-106: the D-80 comparison keeps its 1/2 in transom
 const sizeKey = (s: string): string | null => /^(?:\d+ [x×] )?(#\d+) [×x] ([\d-/]+)/.exec(s)?.slice(1, 3).join(' x ') ?? null;
 
 describe('D-72: three wood-screw sizes, every screw inside its stack with its bite', () => {
@@ -371,7 +371,7 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
 
 describe('the numbers at the defaults (2026-10-24: the bought 5 mm white oak and 13 mm deck; the D-80 6 mm Baltic birch design beside it; the solid rod, the 3 wood-screw sizes)', () => {
   it('empty mass 122.08 lb (D-84, D-80/D-83: the 6 mm Baltic sides, box and lid and the 2 in clamp plates, less the lighter EVA seat pads and lights; 121.09 lb with the 1/4 in white oak ply at D-77, +0.87 lb the pivot straps and knee roofs; D-76: +0.96 lb the side ribs; 115.95 lb at D-71)', () => {
-    expect(totalMass(buildModel(defaults, { rider: 'none', cargo: false }))).toBeCloseTo(121.818, 2); // (2026-10-24: gunwale cap strip) +0.113 lb, the two oak caps (0.046 lb each) and their epoxy beds; 121.705 before. (2026-10-24: D-96/97/98) 13 mm deck, 5 mm combi-core white oak sides as bought, the two-block transom backers (D-97, -1.3 lb) and the seat-back insert pads (D-98); 122.811 before D-97
+    expect(totalMass(buildModel(defaults, { rider: 'none', cargo: false }))).toBeCloseTo(123.159, 2); // D-106: +1.341 lb, the 5/8 in transom (121.818 before); (2026-10-24: gunwale cap strip) +0.113 lb, the two oak caps (0.046 lb each) and their epoxy beds; 121.705 before. (2026-10-24: D-96/97/98) 13 mm deck, 5 mm combi-core white oak sides as bought, the two-block transom backers (D-97, -1.3 lb) and the seat-back insert pads (D-98); 122.811 before D-97
     // the D-80 design (6 mm Baltic birch, 12 mm deck: D80_SHEETS) and the materials beside it
     const m = totalMass(buildModel(base80, { rider: 'none', cargo: false }));
     expect(m).toBeCloseTo(121.562, 2); // (2026-10-24: gunwale cap strip) +0.132 lb, the two 6 mm wide oak caps and their epoxy beds; 121.430 before. (2026-10-24: D-96/97/98) the two-block transom backers (D-97, -1.30 lb) and the seat-back insert pads (D-98); 122.732 before; 122.754 before the 1/4 in handlebow pins and the deeper post relief groove (2026-10-24 review); 122.739 before the steering chain keepers (D-56: two 1/8 in shock cords and their two screw eyes, +0.015 lb); 122.754 before the flag blocks' 1/4 in cradle was drawn (-0.015 lb); 122.649 before the 8 sign standoff discs (+0.105 lb: 0.025 lb of oak, 0.08 lb of epoxy at 0.01 lb a glue joint); 122.686 before D-93 (-0.037 lb: the lid 1/8 in shorter at its aft end -0.020, the rounded 5/8 in turn-buttons -0.006, the 1-1/4 in flag blocks -0.010); 122.606 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); D-88 final: +0.014 lb, the kingpin slot 3/4 in tall for the thin nylock (jam) nut keeps oak; 122.592 before that; 122.942 before the storage turn-buttons (D-89, round 3); assembly review round 2: +0.148 lb (the narrower kingpin nut slot keeps more oak, the brake down-ties and snap hooks, the lid-support block, less the lighter lid hinges); round 1: -0.011 lb (the bigger kingpin nut slot and the king-beam reliefs for the plate bolt heads); 122.805 before. D-85: +0.725 lb (the rear ribs, rings and ties, the box rib moved, no sign strips); 122.080 before. Older note: // D-84: +0.32 lb (the 1/8 in grab-board strip and the oak caps, one screw and washer fewer); was 121.617; merged with the final review of the build outputs (121.639 before: 13/32 knee holes, 7/8 narrow washers and the rib-knee shift)
@@ -385,16 +385,16 @@ describe('the numbers at the defaults (2026-10-24: the bought 5 mm white oak and
     const rodOk4 = totalMass(buildModel({ ...base80, ...PRE_D72, axleWallIn: 0 }, { rider: 'none', cargo: false }));
     expect(rodOk4 - tubeOk).toBeCloseTo(1.88, 1); // the rod over the tube
   });
-  it('riders safe 50-230 lb, green 50-210 lb; cargo capacity 275 lb (278 with glued knees); nothing fails', () => {
+  it('riders safe 50-230 lb, green 50-200 lb; cargo capacity 274 lb (276 with glued knees); nothing fails', () => {
     const sw = riderSweep(defaults);
     expect(sw.safe).toEqual({ loLb: 50, hiLb: 230, openLow: true, openHigh: false }); // D-84: the honest grab-board row
-    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 210, openLow: true, openHigh: false }); // (2026-10-24: D-96/97/98) 210 lb on the sheets as bought (the grab board goes yellow at 220); D-83: 220 lb (230 with the 4 mm okoume) before the 2 in clamp plates added groove bearing area
+    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 200, openLow: true, openHigh: false }); // D-106: 200 lb (the 1.3 lb aft of the 5/8 in transom takes brake-mount from 0.898 to 0.902 at 210 lb); (2026-10-24: D-96/97/98) 210 lb on the sheets as bought (the grab board goes yellow at 220); D-83: 220 lb (230 with the 4 mm okoume) before the 2 in clamp plates added groove bearing area
     const cap = cargoCapacity(defaults);
-    expect(cap.capacityLb).toBe(275); // (2026-10-24: D-96/97/98) 275 (13 mm deck, 5 mm combi-core white oak sides as bought, the lighter two-block transom backers); 276 before; 277 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 276 before the storage turn-buttons (D-89: 0.35 lb lighter); D-78 removable knees (the default): the dry knee's brake-mount row limits it
-    expect(cap.comfortableLb).toBe(225); // (2026-10-24: D-96/97/98) the side-web row is already marginal (0.96) with an empty bed on the bought 5 mm combi-core white oak sides, so "comfortable" ignores it (a row marginal at the lightest load does not set it)
+    expect(cap.capacityLb).toBe(274); // D-106: 274 (the 5/8 in transom); (2026-10-24: D-96/97/98) 275 (13 mm deck, 5 mm combi-core white oak sides as bought, the lighter two-block transom backers); 276 before; 277 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 276 before the storage turn-buttons (D-89: 0.35 lb lighter); D-78 removable knees (the default): the dry knee's brake-mount row limits it
+    expect(cap.comfortableLb).toBe(223); // D-106: 223 (225 with the 1/2 in transom); (2026-10-24: D-96/97/98) the side-web row is already marginal (0.96) with an empty bed on the bought 5 mm combi-core white oak sides, so "comfortable" ignores it (a row marginal at the lightest load does not set it)
     expect(cap.limiter!.id).toBe('brake-mount');
     const glued = cargoCapacity({ ...defaults, kneeMount: KNEE_MOUNT.fixed });
-    expect(glued.capacityLb).toBe(278); // (2026-10-24: D-96/97/98) 278 with the lighter two-block transom backers (D-97); 276 (the 13 mm deck as bought leaves 0.04 in less hanger above the rear beam seat); 286 before; 285 before the flag blocks' cradle (-0.015 lb); 286 before the sign standoff discs (+0.105 lb); 285 before D-93 (the sled 0.037 lb lighter); D-85: 285 (the 0.7 lb heavier sled); D-83: 254 before the 2 in clamp plates (the groove bearing limited it)
+    expect(glued.capacityLb).toBe(276); // D-106: 276 (the 5/8 in transom); (2026-10-24: D-96/97/98) 278 with the lighter two-block transom backers (D-97); 276 (the 13 mm deck as bought leaves 0.04 in less hanger above the rear beam seat); 286 before; 285 before the flag blocks' cradle (-0.015 lb); 286 before the sign standoff discs (+0.105 lb); 285 before D-93 (the sled 0.037 lb lighter); D-85: 285 (the 0.7 lb heavier sled); D-83: 254 before the 2 in clamp plates (the groove bearing limited it)
     expect(glued.limiter!.id).toBe('rear-beam-seat'); // was 'bearing-groove'
     const cs = runChecks(defaults, { includeTruck: false });
     expect(cs.filter((c) => c.status === 'fail')).toEqual([]);

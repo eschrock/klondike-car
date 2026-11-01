@@ -461,7 +461,7 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
       expect(c.roughExact.w).toBeCloseTo(transom.stock!.w / 3 + 0.375, 9);
       expect(c.rough.w).toBeLessThanOrEqual(6);
       expect(c.glueUp).toBe('Rear transom panel');
-      expect(c.roughText).toMatch(/^5\/8 \u00d7 5-7\/8 \u00d7 26$/);
+      expect(c.roughText).toMatch(/^3\/4 \u00d7 5-7\/8 \u00d7 26$/); // D-106: the 5/8 in transom, milled from 4/4 (5/8 rough for the 1/2 in one)
     }
     const g = dcl.glueUps.find((x) => x.partNo === 'transom-rear')!;
     expect(g.label).toBe('Rear transom panel');
@@ -519,7 +519,7 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
     const t = dcl.finished.find((f) => f.partNo === 'transom-rear')!;
     expect(t.from).toBe('glue-up');
     expect(t.final.w).toBeCloseTo(dparts.find((x) => x.id === 'transom-rear')!.stock!.w, 9);
-    expect(t.finalText).toBe('1/2 \u00d7 16-3/8 \u00d7 24');
+    expect(t.finalText).toBe('5/8 \u00d7 16-3/8 \u00d7 24'); // D-106
     expect(dcl.finished.find((f) => f.partNo === 'joist')!.from).toBe('board');
     expect(dcl.finished.find((f) => f.partNo === 'rail')!.final.t).toBeCloseTo(0.75, 9); // two 3/8 plies
     expect(dcl.csv.cuts.split('\r\n')[0]).toContain('Glued into');

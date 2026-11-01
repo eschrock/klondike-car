@@ -863,8 +863,8 @@ describe('readability round 2 (steps)', () => {
         const t = allText(s);
         expect(t, s.id).not.toMatch(/from the parts list|in each end, in the (left|right) end|the screws on the joint list/);
       }
-      expect(text('handle')).toMatch(/2 × 1\/4-20 × 1-1\/2" stainless button-head cap screws cut to 1-3\/8" per socket/);
-      expect(text('hang')).toMatch(/2 × 1\/4-20 × 1-1\/2" stainless button-head cap screws cut to 1-3\/8" per socket/);
+      expect(text('handle')).toMatch(/2 × 1\/4-20 × 1-1\/2" stainless button-head cap screws per socket/); // D-106: used as bought through the 5/8 in transom
+      expect(text('hang')).toMatch(/2 × 1\/4-20 × 1-1\/2" stainless button-head cap screws per socket/); // D-106: used as bought through the 5/8 in transom
       expect(text('frame')).toMatch(/at both ends of each crossmember: 7\/8" from the bottom edge/);
     });
 
@@ -1105,7 +1105,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(rib).toMatch(/reach check[\s\S]*Cut the two grab boards and their oak caps on the Shaper[\s\S]*Drill the stainless strips on the drill press[\s\S]*Drill the side through each board's own holes[\s\S]*Drill dry from the inside through them, the inner band, the web and the outer band[\s\S]*Do not drill the board again/);
       // the sign: knob holes through the web and inserts in the ribs, the sign as the template, before the finish; the final fit only hangs it
       expect(rib).toMatch(/Sign knob holes and inserts: 4 a side, through the web into the rib behind it, with the sign as the drill template/);
-      expect(rib).toMatch(/Rib shaft centers, from the transom's outer face, on both sides: 4-1\/2" \(the rear rib\) and 13" \(the box rib\) \(the stations they were set at\), within 1\/8"/); // to each rib's center, at the side-rib step's 1/8" stations
+      expect(rib).toMatch(/Rib shaft centers, from the transom's outer face, on both sides: 4-5\/8" \(the rear rib\) and 13-1\/8" \(the box rib\) \(the stations they were set at\), within 1\/8"/); // D-106: 1/8 in farther from the outer face of the 5/8 in transom (it grew backward); to each rib's center, at the side-rib step's 1/8" stations
       expect(rib).toMatch(/Bore each spot 5\/16", square to the side, 13\/16" deep from the web's outer face/); // the web, the 33/64" flush insert (signInsertLenIn) and 1/16" (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought)
       expect(rib).toMatch(/#10-32 × 33\/64" [^\n]*threaded insert on epoxy/);
       expect(rib).toMatch(/Then the 8 oak standoff discs, one per hole/);
