@@ -126,7 +126,7 @@ describe('assembly steps', () => {
     expect(steps.filter((s) => s.clampCure).length).toBeGreaterThan(12);
   });
 
-  it('uses the one epoxy the BOM buys (U.S. Composites 635, 2:1) for every glue-up, the closing of the ends included (small batches, mixed alone)', () => {
+  it('uses the one epoxy the BOM buys (TotalBoat Traditional 5:1) for every glue-up, the closing of the ends included (small batches, mixed alone)', () => {
     const get = (id: string) => steps.find((s) => s.id === id)!;
     expect(get('frame').cure!.hardener).toBe('556');
     expect(get('frame').cure!.potMin).toEqual(EPOXY_SYSTEM.potMin);
@@ -817,14 +817,14 @@ describe('readability round 2 (steps)', () => {
       const mill = get('mill');
       expect(mill.instructions.join('\n')).not.toMatch(/GLUE CARD/);
       const card = flattenInstr([glueCard(name === 'Standard' ? pStd : p)], parts).join('\n');
-      // the glue card states the kit the BOM buys: U.S. Composites 635, 2 parts resin to 1 of hardener, fumed silica; nothing of the West System 105/206 5:1 kit
-      expect(card).toMatch(/Epoxy \(U\.S\. Composites 635 thin epoxy, 2 parts resin to 1 part hardener by volume\)/);
-      expect(card).toMatch(/Pot life is about 35-40 min/);
+      // the glue card states the kit the BOM buys: TotalBoat Traditional 5:1, 5 parts resin to 1 of hardener, fumed silica; nothing of the West System 105/206 kit
+      expect(card).toMatch(/Epoxy \(TotalBoat Traditional 5:1 marine epoxy, 5 parts resin to 1 part hardener by volume\)/);
+      expect(card).toMatch(/Pot life is about 20-25 min/);
       expect(card).toMatch(/Clamp overnight, 12-24 h/);
       expect(card).toMatch(/full cure about 7 days/);
       expect(card).toMatch(/fumed silica/);
       expect(card).toMatch(/check the can/);
-      expect(card).not.toMatch(/105|206|5:1|5 parts|\b406\b|microballoon/i);
+      expect(card).not.toMatch(/105|206|\b406\b|microballoon/i);
       expect(card).toMatch(/Cold shop/);
       expect(card).toMatch(/Below 55 °F/);
       expect(/Titebond III/.test(card)).toBe(name === 'Standard');
@@ -1332,21 +1332,21 @@ describe('D-79..D-83: the cost-pass build text', () => {
     expect(stepText(std, 'final-fit')).toMatch(/clips must be printed to the real lights, so measure the lights first/);
   });
 
-  it('the epoxy facts come from ONE place (the kit the BOM buys): no West System 105/206, 5:1, 406 filler, 205/209 or microballoon text in the Standard build text, both specs name the 635 kit', () => {
+  it('the epoxy facts come from ONE place (the kit the BOM buys): no West System 105/206, 406 filler, 205/209 or microballoon text in the Standard build text, both specs name the TotalBoat kit', () => {
     const t = `${everything(std)} ${flattenInstr([glueCard(p)], parts).join(' ')}`; // the glue card is a box before the steps
-    expect(t).not.toMatch(/\b105\/206\b|\b105 resin|5:1|\b406\b|\b205\b|\b209\b|\b206\b|microballoon|West System|second person/i);
-    expect(t).toMatch(/U\.S\. Composites 635 thin epoxy, 2 parts resin to 1 part hardener by volume/);
+    expect(t).not.toMatch(/\b105\/206\b|\b105 resin|\b406\b|\b205\b|\b209\b|\b206\b|microballoon|West System|second person/i);
+    expect(t).toMatch(/TotalBoat Traditional 5:1 marine epoxy, 5 parts resin to 1 part hardener by volume/);
     expect(t).toMatch(/fumed silica/);
     // the Extreme spec buys the same kit; its low-density filler is bought, so it may name it
     const x = `${everything(ext)} ${flattenInstr([glueCard({ ...p, weatherSpec: 1 } as Params)], parts).join(' ')}`;
-    expect(x).not.toMatch(/\b105\/206\b|5:1|\b406\b|\b206\b|West System|second person/i);
-    expect(x).toMatch(/U\.S\. Composites 635 thin epoxy/);
+    expect(x).not.toMatch(/\b105\/206\b|\b406\b|\b206\b|West System|second person/i);
+    expect(x).toMatch(/TotalBoat Traditional 5:1 marine epoxy/);
     // the finishing schedule and its buy list say the same
     for (const [pp, mm] of [[pStd, partsStd], [p, buildModel(p)]] as const) {
       const sch = finishingSchedule(mm, pp);
       const ft = sch.steps.map((q) => q.instructions.join(' ')).join(' ') + sch.assumptions.join(' ') + sch.buy.map((b) => `${b.item} ${b.note}`).join(' ');
-      expect(ft).not.toMatch(/West System|\b105\b|\b206\b|5:1|\b301\b|\b303\b|\b207\b/);
-      expect(ft).toMatch(/2 parts resin to 1 part hardener by volume/);
+      expect(ft).not.toMatch(/West System|\b105\b|\b206\b|\b301\b|\b303\b|\b207\b/);
+      expect(ft).toMatch(/5 parts resin to 1 part hardener by volume/);
       expect(sch.buy.some((b) => b.item === EPOXY_SYSTEM.buyItem)).toBe(true);
     }
   });

@@ -319,7 +319,6 @@ export const totalsLine = (core: number, touches: number, total: number): string
  * its store; the others have no walk-in counter in Atlanta. Local pickups (Peach State Lumber, Harbor Freight, Home Depot, Ace, Rockler) are not listed.
  */
 export const SHIPPING_VENDORS: ReadonlyArray<{ match: RegExp; name: string }> = [
-  { match: /U\.S\. Composites/, name: 'U.S. Composites' },
   { match: /Speedy Metals/, name: 'Speedy Metals' },
   { match: /Online Metals/, name: 'Online Metals' },
   { match: /Bolt Depot/, name: 'Bolt Depot' },
@@ -1092,9 +1091,9 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   if (!std) consumables.push(line('Consumables', 'microballoons', 'Low-density fairing filler', 1, FILLERS.microballoons, { vendor: FILLERS.microballoons.source, notes: `Price: ${FILLERS.microballoons.note}.` }));
   const tapeFt = Math.ceil(tapeJoints * TAPE_FT_PER_JOINT * (1 + TAPE_WASTE));
   if (tapeFt > 0) {
-    // Sold by the yard (D-79): whole yards.
+    // Sold as a 50 yd roll (D-108): one roll covers the yards the build needs.
     const tapeYd = Math.ceil(tapeFt / 3 - 1e-9);
-    consumables.push(line('Consumables', 'glass-tape', 'Fiberglass tape, 2" wide, by the yard', tapeYd, GLASS_TAPE, { vendor: GLASS_TAPE.source, notes: joinNotes(`Price: ${GLASS_TAPE.note}.`, `${tapeJoints} taped joints x ${TAPE_FT_PER_JOINT} ft, +${Math.round(TAPE_WASTE * 100)}%: ${tapeFt} ft, ${tapeYd} yd`) }));
+    consumables.push(line('Consumables', 'glass-tape', 'Fiberglass tape, 2" wide, 6 oz, 50 yd roll', Math.max(1, Math.ceil(tapeYd / 50)), GLASS_TAPE, { vendor: GLASS_TAPE.source, notes: joinNotes(`Price: ${GLASS_TAPE.note}.`, `${tapeJoints} taped joints x ${TAPE_FT_PER_JOINT} ft, +${Math.round(TAPE_WASTE * 100)}%: ${tapeFt} ft, ${tapeYd} yd`) }));
   }
   consumables.push(...noteLines);
   // The finish products, container by container, exactly as the schedule's buy list names them.

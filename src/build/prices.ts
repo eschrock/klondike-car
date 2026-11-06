@@ -414,8 +414,8 @@ export const EPOXY_KITS: Array<{ id: string; label: string; /** Resin in the kit
  */
 export const EPOXY_PUMPS_300: Price = found(28.99, 'set', ROCK_WEST, ROCK_WEST_WEST_URL, 'West System 300 Mini Pump Set, 3 pumps (resin, 205/206 hardener, 207/209 hardener), yellow heads: do not mix with old white-head pumps. Replaces the 301 and 303 sets, which West System no longer sells');
 export const FILLERS: Record<string, Price> = {
-  // D-79: U.S. Composites fumed silica (Aerosil / Cab-O-Sil), a quart by volume. The 635 resin is thin, so every glue joint is thickened with it.
-  silica: foundCP(4.6, 'qt', 'U.S. Composites', 'https://uscomposites.com/prices.html', 'Aerosil / Cab-O-Sil fumed silica, 1 quart (by volume; 2.5 qt is $6.95), for thickened glue and fillets. West 406 colloidal silica, 5.5 oz, is $41.82; TotalBoat silica thickener, 1 qt, is $14.99'),
+  // D-108: Cab-O-Sil fumed silica from Amazon, a quart by volume; the epoxy is thin, so every glue joint and fillet is thickened with it.
+  silica: amazon(12.99, 'qt', 'Fasco Epoxies Cab-O-Sil fumed silica thickener, 1 quart ($0.10 a fluid ounce; the gallon is $24.99), for thickened glue and fillets', AM + 'dp/B074Y6V7QT/'),
   microballoons: found(40.1, 'ea', 'Fiberglass Supply', 'https://fiberglasssupply.com/epoxy/west-system/?page=5', 'West System 407-5 low-density filler, 4 oz, for fairing the sealed deck (the smallest 407 size; 410-7 Microlight 5 oz is 58.88)'),
 };
 /** Items that exist only as text in a note or a joint (see `NOTE_ITEMS` in bom.ts). */
@@ -430,18 +430,15 @@ export const NOTE_PRICE: Record<string, Price> = {
   // D-79: the troop's paracord (the stop cord of each brake; the chock cords are in PURCHASED_PRICE).
   paracord: owned('ea', 'paracord for the brake stop cords (3/16 in, about 6 in each with the knots)'),
 };
-/**
- * Glass tape, 2" wide, by the yard (D-79): U.S. Composites 8.7 oz glass cloth tape, $0.70 a yard [F] (50 yd roll $21.75; Fiberglass Supply $0.99 a yard [S]; West 729-10 10 ft roll $14.88).
- * `usd` is per yard and `unit` is 'yd'; the BOM buys whole yards.
- */
-export const GLASS_TAPE: Price = foundCP(0.7, 'yd', 'U.S. Composites', 'https://uscomposites.com/prices.html', '8.7 oz glass cloth tape, 2" wide, sold by the yard ($0.70; 20 ft is $4.67). The West 729-10 (9 oz, 10 ft roll) is $14.88');
+/** Glass tape (D-108): NEZUIBAN E-glass tape, 2" wide, 6 oz/yd², 0.010" thick, selvage edges, not adhesive backed, a 50 yd roll at $11.99 (the build uses about 5 yd of it). */
+export const GLASS_TAPE: Price = amazon(11.99, 'roll', 'NEZUIBAN fiberglass cloth tape, 2" x 50 yd roll, 6 oz per square yard, E-glass, for epoxy, polyester and vinyl ester resin', AM + 'dp/B0B2QK6721/');
 
 export const FINISH_PRICE: Record<string, Price> = {
   // D-99: one 2 oz bottle of the concentrate, mixed with water; not looked up (Eric's figure, about $20 at Rockler or Woodcraft).
   dye: est(20, 'bottle', 'Rockler / Woodcraft', 'TransTint liquid dye concentrate, Golden Brown, 2 oz bottle (Homestead Finishing), about $20'),
   varnish: found(53.99, 'qt', 'TotalBoat', 'https://www.totalboat.com/products/lust-marine-spar-varnish', 'TotalBoat Lust Rapid Recoat marine spar varnish, quart (heavily fortified with UV stabilizers)'),
   // D-106: the lid legend is filled with black epoxy (pigment in a little mixed epoxy), not a paint marker or a half pint of enamel.
-  pigment: est(5, 'ea', 'U.S. Composites or an art-supply store', 'ESTIMATE, no source: a small tube of black epoxy pigment (a pinch fills the lid legend grooves); not in any price research'),
+  pigment: est(5, 'ea', 'Art-supply store', 'ESTIMATE, no source: a small tube of black epoxy pigment (a pinch fills the lid legend grooves); not in any price research'),
   // D-79: shop stock. The thinner is mineral spirits Eric already has; the sandpaper and the supplies lot (brushes, rollers, cups, gloves) too.
   thinner: owned('pt', 'mineral spirits for the urethane (coat 1 thinning and brush cleaning)'),
   sandpaper: { ...owned('lot', 'sandpaper, the discs and sheets 80 to 320 grit for the finishing schedule'), packQty: 1, packUsd: 0 },
@@ -629,16 +626,11 @@ export const TITEBOND_BOTTLES: GlueBottle[] = [
  * (`pumpsIncluded` false). `anySpec` = the kit is considered for the Extreme spec too (the small 5:1 kits are Standard only).
  */
 export interface OtherEpoxyKit { id: string; label: string; resinFlOz: number; mixedFlOz: number; price: Price; pumpsIncluded: boolean; resinShare: number; pumps?: Price; anySpec?: boolean }
-export const EPOXY_PUMPS_USC_2TO1: Price = foundCP(8.5, 'set', 'U.S. Composites', 'https://www.uscomposites.com/epoxy.html', 'epoxy pump set (EPX-P31 is the 3:1; the 2:1 set is the same price), 38 mm screw top, for the 635 resin and #556 hardener cans');
 export const EPOXY_KITS_SMALL: OtherEpoxyKit[] = [
-  // D-79: U.S. Composites 635 THIN epoxy, 2:1 by volume with the #556 hardener (35-40 min pot life): 64 oz resin + 32 oz hardener, 96 oz mixed for $53.45, plus the 2:1 pumps ($8.50). The cheapest per ounce by far.
-  // It is a thin, low-viscosity resin: thicken every glue joint and fillet with the fumed silica (bought with it), check blush and the cure schedule on the data sheet, and the price list is dated 2026-08-07. Shipping was not read.
-  { id: 'uscomposites-635-2-1', label: 'U.S. Composites 635 thin epoxy kit, 2:1, 64 oz resin + 32 oz hardener (96 oz mixed)', resinFlOz: 64, mixedFlOz: 96, pumpsIncluded: false, resinShare: 2 / 3, pumps: EPOXY_PUMPS_USC_2TO1, anySpec: true,
-    price: foundCP(53.45, 'kit', 'U.S. Composites', 'https://uscomposites.com/prices.html', '635 Thin Epoxy 2:1 (hardener #556, 35-40 min): 64 oz resin + 32 oz hardener, 96 oz mixed; the pumps are extra. Price list dated 2026-08-07; shipping not read (epoxy can ship as hazardous freight: batch it with the silica and glass tape, same order). Thin resin: thicken the glue joints') },
-  { id: 'mas-5-1', label: 'MAS Epoxies 5:1 Traditional Marine Epoxy kit, 38.4 oz, with pumps', resinFlOz: 32, mixedFlOz: 38.4, pumpsIncluded: true, resinShare: 5 / 6,
-    price: found(59.99, 'kit', 'MAS Epoxies', 'https://masepoxies.com/products/5-1-traditional-marine-epoxy-kits', '5:1 Traditional Marine Epoxy Kit, 38.4 oz: 32 fl oz resin + 6.4 fl oz hardener, with 2 quart mixing cups and 2 pumps. The page shows the same $59.99 for the 38.4 oz and the 1.2 gallon sizes, so the 38.4 oz price is likely this figure but not certain') },
-  { id: 'totalboat-5-1', label: 'TotalBoat 5:1 Marine Epoxy kit, quart, with pumps', resinFlOz: 32, mixedFlOz: 38.4, pumpsIncluded: true, resinShare: 5 / 6,
-    price: found(68.99, 'kit', 'TotalBoat', 'https://www.totalboat.com/products/5-1-marine-epoxy-resin-kits', '5:1 Marine Epoxy Resin Kit, quart (fast or slow), with pumps; fetched. The gallon kit without pumps is 154.99') },
+  // D-108: TotalBoat Traditional 5:1 marine epoxy, gallon kit with the slow hardener and color-coded pumps included: 127 fl oz resin + 25 fl oz hardener, 152 fl oz mixed, $149.91 on Amazon (list $159.99).
+  // At 75 F the pot life is 20 minutes with the slow hardener (12 with the fast). It is not meant for clear coating (the sled's epoxy is dyed and covered with urethane), and it is thin enough that every glue joint and fillet is thickened with silica.
+  { id: 'totalboat-5-1-gallon', label: 'TotalBoat Traditional 5:1 marine epoxy, gallon kit with slow hardener and pumps (152 fl oz mixed)', resinFlOz: 127, mixedFlOz: 152, pumpsIncluded: true, resinShare: 5 / 6, anySpec: true,
+    price: amazon(149.91, 'kit', 'TotalBoat 5:1 Marine Epoxy Resin for Fiberglass & Wood, 1 gallon kit, slow hardener, pumps included (list $159.99; the quart kit is $59.98)', AM + 'dp/B00HR8515C/') },
 ];
 
 // ── Spar urethane (Standard topcoat) ──

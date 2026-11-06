@@ -7,7 +7,7 @@ import { PRE_D72 } from '../test-fixtures';
 import { cutList, isBuilt } from './cutlist';
 import { EPOXY_BUY_RE, finishingSchedule, glueEpoxyFlOz } from './finishing';
 import { oakBoardFeet } from './nesting';
-import { EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, EPOXY_PUMPS_USC_2TO1, FASTENER_PRICE, FASTENER_PRICE_STANDARD, FILLERS, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_PRICE_PER_FT, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, OWNED_NOTE, PEACH_STATE_LUMBER_URL, PLYWOOD_PRICE, PURCHASED_PRICE, PURCHASED_PRICE_STANDARD, RESEARCH_DATE, RESEARCH_DATE_COST_PASS, SEARCH_READ_NOTE, TITEBOND_OWNED, type Price } from './prices';
+import { EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, FASTENER_PRICE, FASTENER_PRICE_STANDARD, FILLERS, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_PRICE_PER_FT, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, OWNED_NOTE, PEACH_STATE_LUMBER_URL, PLYWOOD_PRICE, PURCHASED_PRICE, PURCHASED_PRICE_STANDARD, RESEARCH_DATE, RESEARCH_DATE_COST_PASS, SEARCH_READ_NOTE, TITEBOND_OWNED, type Price } from './prices';
 
 // D-72/D-73: this file's counts and prices are the 4 mm okoume / 4×20 Domino / DOM tube configuration (PRE_D72); the BOM for the white oak plywood and the solid rod follows the weather spec (bom.ts).
 const p = { ...defaultParams(), ...PRE_D72, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472, weatherSpec: 1 }; // the EXTREME weather spec (316, Sipo, epoxy everywhere, marine varnish); the Standard spec is tested in weather-spec.test.ts. PRE_D72's 4 mm okoume goes with its 12 mm deck (2026-10-24: the default deck is the 13 mm sheet as bought).
@@ -140,10 +140,10 @@ describe('bom', () => {
     for (const no of new Set(hardeners.map((x) => /\b(20\d)\b/.exec(x.item)![1]))) {
       expect(cons.find((l) => l.key === `epoxy-${no}`)?.qty, no).toBe(hardeners.filter((x) => new RegExp(no).test(x.item)).reduce((a, x) => a + x.qt * 2, 0));
     }
-    // pumps: one set, with whichever kit is bought (West System no longer sells the 301 and 303 sets; one 300 Mini Pump Set does both ratios; the U.S. Composites 2:1 kit has its own $8.50 set)
+    // pumps: the TotalBoat gallon kit includes its pumps (D-108); a West kit needs one 300 Mini Pump Set (it does both ratios)
     const west = cons.some((l) => /^epoxy-(gallon|quart)$/.test(l.key));
-    expect(cons.filter((l) => /pumps/.test(l.key)).map((l) => [l.key, l.qty, l.unitUsd])).toEqual([['epoxy-pumps', 1, west ? EPOXY_PUMPS_300.usd : EPOXY_PUMPS_USC_2TO1.usd]]);
-    expect(cons.find((l) => l.key === 'epoxy-pumps')!.description).toMatch(west ? /300 Mini Pump Set/ : /Pump set for the U\.S\. Composites/);
+    expect(cons.filter((l) => /pumps/.test(l.key)).map((l) => [l.key, l.qty, l.unitUsd])).toEqual(west ? [['epoxy-pumps', 1, EPOXY_PUMPS_300.usd]] : []);
+    if (west) expect(cons.find((l) => l.key === 'epoxy-pumps')!.description).toMatch(/300 Mini Pump Set/);
     // the glue epoxy is finishing.ts's estimate by joint type plus the waste, and per joint it is well above the old 0.12 fl oz
     expect(b.consumables.glueEpoxyFlOz).toBeCloseTo(glueEpoxyFlOz(parts, undefined, p) * (1 + EPOXY_WASTE), 6); // with `p`: the Extreme spec counts every joint, and the D-70 face laminations
     expect(b.consumables.glueEpoxyFlOz / b.jointCounts.glue).toBeGreaterThan(0.25);
@@ -151,14 +151,14 @@ describe('bom', () => {
     const finishFlOz = sched.steps.find((x) => x.id === 'epoxy')!.products.reduce((a, q) => a + q.qtNeeded, 0) * 32;
     expect(b.consumables.finishEpoxyFlOz).toBeCloseTo(finishFlOz, 6);
     expect(b.consumables.closeEpoxyFlOz).toBeCloseTo(sched.closeEpoxyFlOz, 6);
-    // resin: 5/6 of the mixed epoxy at 5:1 (the West kits); the 2:1 U.S. Composites kit needs 2/3 of it. The cheapest family is bought, and no West combination is cheaper
+    // resin: 5/6 of the mixed epoxy at 5:1 (the West kits and the TotalBoat kit). The cheapest family is bought, and no West combination is cheaper
     const need = (b.consumables.glueEpoxyFlOz * 5) / 6 + ((b.consumables.finishEpoxyFlOz + b.consumables.closeEpoxyFlOz) * 5) / 6;
     expect(b.consumables.resinFlOz).toBeCloseTo(need, 6);
     const [quart, gallon] = EPOXY_KITS;
     const nQ = cons.filter((l) => l.key === 'epoxy-quart').reduce((a, l) => a + l.qty, 0), nG = cons.filter((l) => l.key === 'epoxy-gallon').reduce((a, l) => a + l.qty, 0);
-    const usc = EPOXY_KITS_SMALL.find((k) => k.id === 'uscomposites-635-2-1')!;
+    const usc = EPOXY_KITS_SMALL.find((k) => k.id === 'totalboat-5-1-gallon')!;
     const nU = cons.filter((l) => l.key === `epoxy-${usc.id}`).reduce((a, l) => a + l.qty, 0);
-    if (nU > 0) expect(nU * usc.resinFlOz).toBeGreaterThanOrEqual(b.consumables.epoxyFlOz * usc.resinShare); // the 2:1 kit's resin share is 2/3 of the mixed volume
+    if (nU > 0) expect(nU * usc.resinFlOz).toBeGreaterThanOrEqual(b.consumables.epoxyFlOz * usc.resinShare); // the kit's resin share is 5/6 of the mixed volume
     else expect(nQ * quart.resinFlOz + nG * gallon.resinFlOz).toBeGreaterThanOrEqual(need);
     const paid = cons.filter((l) => /^epoxy-/.test(l.key)).reduce((a, l) => a + l.extUsd, 0);
     for (let g = 0; g <= 4; g++) for (let q = 0; q <= 8; q++) if (q * quart.resinFlOz + g * gallon.resinFlOz >= need) expect(g * gallon.price.usd + q * quart.price.usd + EPOXY_PUMPS_300.usd, `${g} gal + ${q} qt`).toBeGreaterThanOrEqual(paid - 1e-9);
@@ -397,12 +397,13 @@ describe('pack-priced parts (no bulk section: Eric, 2026-10-19)', () => {
     expect(fast.some((l) => /T-nut/.test(l.key))).toBe(true);
   });
 
-  it('prices the glass tape by the yard (D-79): whole yards of the feet the sled needs, in place', () => {
+  it('prices the glass tape as the 50 yd roll (D-108): one roll covers the yards the sled needs, in place', () => {
     const tape = secLines('consumables').find((l) => l.key === 'glass-tape')!;
-    expect(tape.unit).toBe('yd');
-    expect(tape.qty).toBe(Math.ceil(b.consumables.tapeFt / 3));
+    expect(tape.unit).toBe('roll');
+    expect(tape.qty).toBe(1);
+    expect(Math.ceil(b.consumables.tapeFt / 3)).toBeLessThanOrEqual(50);
     expect(tape.unitUsd).toBe(GLASS_TAPE.usd);
-    expect(tape.extUsd).toBeCloseTo(tape.qty * 0.7, 2);
+    expect(tape.extUsd).toBeCloseTo(11.99, 2);
     expect(bulk.some((l) => l.key === 'glass-tape')).toBe(false);
   });
 
@@ -538,23 +539,22 @@ describe('price research applied (2026-10-12)', () => {
   it('prices no 207 or 209 hardener and no 301 or 303 pump set (the schedule uses 206 only; the 300 set does both ratios)', () => {
     for (const l of lines()) expect(`${l.key} ${l.description}`, l.key).not.toMatch(/\b(207|209|301|303)\b/);
     expect(b.unpriced).toEqual([]);
-    expect(line('epoxy-pumps').description).toMatch(/pump set/i);
+    expect(lines().some((l) => l.key === 'epoxy-pumps')).toBe(false); // D-108: the TotalBoat gallon kit includes its pumps
   });
 
-  it('picks the cheapest kit family: the U.S. Composites 635 thin epoxy 2:1 (96 oz mixed, $53.45, plus its $8.50 pumps) beats the West System gallon group, which stays the alternative', () => {
+  it('picks the cheapest kit family: the TotalBoat Traditional 5:1 gallon kit (152 oz mixed, $149.91, pumps included) beats the West System gallon group, which stays the alternative', () => {
     const gallon = EPOXY_KITS[1].price;
     expect(gallon.usd).toBe(179.99);
     expect(gallon.url).toBe('https://www.rockwestcomposites.com/ws-slow-1-2gal-kit.html');
     expect(gallon.alternatives!.map((a) => [a.source, a.usd])).toEqual([['Fiberglass Supply', 205.8]]);
-    const usc = EPOXY_KITS_SMALL.find((k) => k.id === 'uscomposites-635-2-1')!;
-    expect([usc.price.usd, usc.mixedFlOz, usc.resinFlOz, usc.resinShare, usc.pumpsIncluded]).toEqual([53.45, 96, 64, 2 / 3, false]);
-    expect(usc.pumps!.usd).toBe(8.5);
-    const l = line('epoxy-uscomposites-635-2-1');
-    expect(l.qty).toBe(1); // 96 oz mixed covers the glue, the coat and the closes
+    const usc = EPOXY_KITS_SMALL.find((k) => k.id === 'totalboat-5-1-gallon')!;
+    expect([usc.price.usd, usc.mixedFlOz, usc.resinFlOz, usc.resinShare, usc.pumpsIncluded]).toEqual([149.91, 152, 127, 5 / 6, true]);
+    const l = line('epoxy-totalboat-5-1-gallon');
+    expect(l.qty).toBe(1); // 152 oz mixed covers the glue, the coat and the closes
     expect(l.basis).toBe('quoted');
     expect(l.notes).toMatch(/West System \$\d/); // the West family is listed with its total, not substituted
     expect(l.alternatives!.some((a) => a.source === 'West System')).toBe(true);
-    expect(b.consumables.epoxyFlOz * usc.resinShare).toBeLessThanOrEqual(usc.resinFlOz); // 2:1 resin share, not the 5:1 share
+    expect(b.consumables.epoxyFlOz * usc.resinShare).toBeLessThanOrEqual(usc.resinFlOz); // 5:1 resin share
     expect(secLines('consumables').some((q) => /^epoxy-(quart|gallon)$/.test(q.key))).toBe(false);
   });
 

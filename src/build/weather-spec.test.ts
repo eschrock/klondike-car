@@ -304,16 +304,16 @@ describe('the thin-sheet line is priced by priceKey (D-80)', () => {
 describe('the cost pass totals (D-79 to D-83)', () => {
   it('Standard costs about $1,600 and mostly quoted; Extreme about $2,400; the shop stock adds nothing to the estimate', () => {
     expect(bStd.totalUsd).toBeGreaterThan(1350);
-    expect(bStd.totalUsd).toBeLessThan(1650); // D-105: the gunwale bands are sawn from 5-3/8 in blanks (more oak than 1-1/2 in strips) // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought: about $1,579; it was under $1,560 on the 6 mm Baltic birch)
+    expect(bStd.totalUsd).toBeLessThan(1700); // D-108: the TotalBoat gallon kit ($149.91) in place of the US Composites kit ($62); D-105: the gunwale bands are sawn from 5-3/8 in blanks (more oak than 1-1/2 in strips) // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought: about $1,579; it was under $1,560 on the 6 mm Baltic birch)
     expect(bExt.totalUsd).toBeGreaterThan(2000);
     expect(bExt.totalUsd).toBeLessThan(2700);
     expect(bStd.estimateShare).toBeLessThan(0.15);
     // the lumber is Peach State's 4/4, 5/4 and 8/4 (D-95)
     const lum = bStd.sections.find((x) => x.id === 'lumber')!.lines;
     expect(lum.map((l) => [l.key, l.unitUsd, l.basis])).toEqual([['4/4', 8.25, 'quoted'], ['5/4', 10, 'quoted'], ['8/4', 12.5, 'quoted']]);
-    // the 2:1 U.S. Composites kit with its pumps and the fumed silica by the quart
+    // the TotalBoat 5:1 gallon kit (pumps included) and the fumed silica by the quart
     expect(lines(bStd).find((l) => l.key === 'silica')!.unit).toBe('qt');
-    expect(lines(bStd).find((l) => l.key === 'epoxy-pumps')!.unitUsd).toBe(8.5);
+    expect(lines(bStd).some((l) => l.key === 'epoxy-pumps')).toBe(false); // D-108: the kit includes its pumps
     // the brake bungee is a 10 ft piece from Amazon (D-106), not a roll; the D-rings by the 2-pack
     const cord = lines(bStd).find((l) => l.key === 'brake-cord')!;
     expect([cord.unit, cord.unitUsd]).toEqual(['10 ft piece', 6.99]);
@@ -456,24 +456,24 @@ describe('the epoxy kits', () => {
     expect(ep.length).toBeGreaterThan(0);
     const cost = ep.reduce((a, l) => a + l.extUsd, 0);
     const alts = ep[0].alternatives ?? [];
-    expect(alts.length).toBeGreaterThanOrEqual(2);
+    expect(alts.length).toBeGreaterThanOrEqual(1); // D-108: the West family (the other 5:1 kits are no longer listed)
     for (const a of alts) expect(a.usd, a.source).toBeGreaterThanOrEqual(cost - 1e-9);
     expect(ep[0].notes).toMatch(/Alternatives \(not substituted\)/);
     expect(alts.map((a) => a.source).join(' ')).toMatch(/West System/);
-    // a small 5:1 kit comes with its pumps; a West kit needs the 300 pumps; the U.S. Composites 2:1 kit needs its own $8.50 set. Whichever is bought, exactly one pump line
+    // the TotalBoat kit comes with its pumps; a West kit needs the 300 pumps
     const west = ep.some((l) => /^epoxy-(gallon|quart)$/.test(l.key));
-    expect(lines(bStd).filter((l) => l.key === 'epoxy-pumps').length).toBe(west || ep.some((l) => /uscomposites/.test(l.key)) ? 1 : 0);
-    expect(ep[0].key).toBe('epoxy-uscomposites-635-2-1'); // D-79: the 635 thin epoxy 2:1 is the cheapest family (96 oz mixed for $53.45 plus pumps)
+    expect(lines(bStd).filter((l) => l.key === 'epoxy-pumps').length).toBe(west ? 1 : 0);
+    expect(ep[0].key).toBe('epoxy-totalboat-5-1-gallon'); // D-108: the TotalBoat gallon kit is the cheapest family (152 oz mixed for $149.91, pumps included)
     expect(ep[0].qty).toBe(1);
     // enough resin
     expect(bStd.consumables.resinFlOz).toBeGreaterThan(20);
     expect(bStd.consumables.resinFlOz).toBeLessThan(bExt.consumables.resinFlOz);
-    // Extreme considers the 635 kit too: its 96 oz mixed (64 oz resin at 2:1) is cheaper than the West gallon group, which is listed as the alternative
+    // Extreme considers the TotalBoat kit too: it is cheaper than the West gallon group, which is listed as the alternative
     const eep = lines(bExt).filter((l) => /^epoxy-/.test(l.key) && l.key !== 'epoxy-pumps');
-    expect(eep.map((l) => l.key)).toEqual(['epoxy-uscomposites-635-2-1']);
-    expect(eep[0].qty).toBe(Math.ceil((bExt.consumables.epoxyFlOz * 2) / 3 / 64 - 1e-9)); // the resin is 2/3 of the mixed epoxy at 2:1, 64 oz a kit
+    expect(eep.map((l) => l.key)).toEqual(['epoxy-totalboat-5-1-gallon']);
+    expect(eep[0].qty).toBe(Math.ceil((bExt.consumables.epoxyFlOz * 5) / 6 / 127 - 1e-9)); // the resin is 5/6 of the mixed epoxy at 5:1, 127 oz a kit
     expect(eep[0].alternatives!.some((a) => a.source === 'West System')).toBe(true);
-    expect(lines(bExt).filter((l) => l.key === 'epoxy-pumps').length).toBe(1);
+    expect(lines(bExt).filter((l) => l.key === 'epoxy-pumps').length).toBe(0); // the kit's pumps are included
   });
 });
 
@@ -554,7 +554,7 @@ describe('cost critic round 2: Standard metal, notes, shipping and tax', () => {
       expect(b.totalsText).toMatch(/, excluding shipping and tax$/);
       expect(b.csv).toContain('excluding shipping and tax');
       expect(b.shippingNote).toMatch(/Shipping and sales tax are not in any price/);
-      for (const v of ['U.S. Composites', 'Speedy Metals', 'Online Metals', 'Bolt Depot']) expect(b.shippingVendors.join('|'), v).toContain(v);
+      for (const v of ['Speedy Metals', 'Online Metals', 'Bolt Depot']) expect(b.shippingVendors.join('|'), v).toContain(v);
       expect(b.shippingNote).not.toMatch(/\$\d/); // no shipping number is invented
     }
     expect(lines(bStd).every((l) => !/^(shipping|tax)/i.test(l.key))).toBe(true);
@@ -572,8 +572,8 @@ describe('cost critic round 2: Standard metal, notes, shipping and tax', () => {
   });
 
   it('a single epoxy kit with a thin margin says to plan a second kit or a top-up', () => {
-    const e = lines(bExt).find((l) => /^epoxy-uscomposites/.test(l.key))!;
-    const spare = (e.qty * 96 - bExt.consumables.epoxyFlOz) / (e.qty * 96);
+    const e = lines(bExt).find((l) => /^epoxy-totalboat/.test(l.key))!;
+    const spare = (e.qty * 152 - bExt.consumables.epoxyFlOz) / (e.qty * 152);
     if (spare < 0.15) expect(e.notes).toMatch(/Thin margin[\s\S]*second kit, or a quart of epoxy as a top-up/);
     else expect(e.notes).not.toMatch(/Thin margin/);
   });

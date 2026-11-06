@@ -37,32 +37,32 @@ export const GLUE_WASTE = 0.2;
 export const END_GRAIN_FACTOR = 2;
 /**
  * THE epoxy system of the build (D-79): the one the BOM buys, under both weather specs. Every ratio, pot life, hardener name, thickener and pump in the
- * build text and the buy list reads these facts; assembly.ts (glue card, steps) and the BOM notes do not repeat them. U.S. Composites 635 thin epoxy with the #556 hardener, 2:1 by volume;
- * pot life as the vendor's price list gives it (docs/price-research/price-research-cost-pass-2026-10.md item 22); the data sheet's clamp and cure times were not read, so assembly.ts uses planning times and tells the builder to check the can.
+ * build text and the buy list reads these facts; assembly.ts (glue card, steps) and the BOM notes do not repeat them. D-108: TotalBoat Traditional 5:1 marine epoxy, the gallon kit with the slow hardener and pumps, 5 parts resin to 1 part hardener by volume;
+ * pot life as the Amazon listing gives it (20 min at 75 F; a little longer at 70 F); the data sheet's clamp and cure times were not read, so assembly.ts uses planning times and tells the builder to check the can.
  */
 export const EPOXY_SYSTEM = {
   /** Resin parts to 1 part hardener, by volume. */
-  resinParts: 2,
+  resinParts: 5,
   /** The ratio as the shop reads it. */
-  ratio: '2:1',
-  ratioText: '2 parts resin to 1 part hardener by volume',
-  /** "U.S. Composites 635 thin epoxy" */
-  name: 'U.S. Composites 635 thin epoxy',
-  hardener: '#556 hardener',
-  /** Pot life of a mixed batch at 70 °F, minutes, from the vendor's list (confirm on the label). */
-  potMin: [35, 40] as [number, number],
-  pumps: 'the 2:1 pump set (one pump on each can)',
+  ratio: '5:1',
+  ratioText: '5 parts resin to 1 part hardener by volume',
+  /** "TotalBoat Traditional 5:1 marine epoxy" */
+  name: 'TotalBoat Traditional 5:1 marine epoxy',
+  hardener: 'slow hardener',
+  /** Pot life of a mixed batch at 70 °F, minutes: the listing says 20 at 75 °F for the slow hardener, so 20 to 25 at 70 (confirm on the label). */
+  potMin: [20, 25] as [number, number],
+  pumps: 'the 5:1 pumps from the kit (use the pump that goes with each can)',
   /** The resin is thin and runny: every glue joint, fillet and bedding is thickened. */
   thickener: 'fumed silica',
   /** Sanding dust of the oak, stirred in where a fillet or a plug should match the wood. */
   colorMatch: 'fine white oak sanding dust',
   /** The buy-list item. */
-  buyItem: 'Epoxy, U.S. Composites 635 thin, 2:1 (the kit in the bill of materials)',
+  buyItem: 'Epoxy, TotalBoat Traditional 5:1, slow (the kit in the bill of materials)',
 } as const;
-/** Resin parts : 1 part hardener by volume (2 : 1). */
+/** Resin parts : 1 part hardener by volume (5 : 1). */
 export const EPOXY_RESIN_PARTS = EPOXY_SYSTEM.resinParts;
 /** The buy-list line of the epoxy (the BOM prices it as the epoxy kit, not as a finish product). */
-export const EPOXY_BUY_RE = /^Epoxy, U\.S\. Composites 635/;
+export const EPOXY_BUY_RE = /^Epoxy, TotalBoat Traditional/;
 
 /**
  * ft² per US quart of MIXED epoxy, ONE saturation coat on porous wood and plywood. WEST System's published coating-quantity table
@@ -1062,7 +1062,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     ? [{ unit: 'qt' as const, qty: Math.max(1, Math.ceil(varnishQt - 1e-9)), qt: Math.max(1, Math.ceil(varnishQt - 1e-9)) }]
     : urethaneContainers(varnishQt);
   const buy: BuyLine[] = [
-    ...buyLines(EPOXY_SYSTEM.buyItem, resinFlOz / FLOZ_PER_QT, `${f(resinFlOz, 0)} fl oz resin + ${f(hardenerFlOz, 0)} fl oz #556 hardener (${EPOXY_SYSTEM.ratio}) = ${f(totalMixedFlOz, 0)} fl oz mixed: ${extreme ? `the one seal coat ${f(coatFlOz, 0)} fl oz (${f(epoxyArea, 0)} ft² at ${EPOXY_COVERAGE} ft² per mixed quart, +${f(FINISH_WASTE * 100, 0)} % waste)` : `the edge, end-grain and deck-underside coat ${f(coatFlOz, 0)} fl oz (${f(epoxyArea, 1)} ft² at ${EPOXY_COVERAGE} ft² per mixed quart, +${f(FINISH_WASTE * 100, 0)} % waste)`} plus the glue joints that use epoxy ${f(glueFlOz, 0)} fl oz (+${f(GLUE_WASTE * 100, 0)} % waste). NOT a separate purchase: the BOM's one epoxy kit (${EPOXY_SYSTEM.ratio}, with ${EPOXY_SYSTEM.pumps}) covers the glue-ups, the coat and the closes together; there is nothing else to buy for the mix. Thicken with ${EPOXY_SYSTEM.thickener} (a separate line)`),
+    ...buyLines(EPOXY_SYSTEM.buyItem, resinFlOz / FLOZ_PER_QT, `${f(resinFlOz, 0)} fl oz resin + ${f(hardenerFlOz, 0)} fl oz ${EPOXY_SYSTEM.hardener} (${EPOXY_SYSTEM.ratio}) = ${f(totalMixedFlOz, 0)} fl oz mixed: ${extreme ? `the one seal coat ${f(coatFlOz, 0)} fl oz (${f(epoxyArea, 0)} ft² at ${EPOXY_COVERAGE} ft² per mixed quart, +${f(FINISH_WASTE * 100, 0)} % waste)` : `the edge, end-grain and deck-underside coat ${f(coatFlOz, 0)} fl oz (${f(epoxyArea, 1)} ft² at ${EPOXY_COVERAGE} ft² per mixed quart, +${f(FINISH_WASTE * 100, 0)} % waste)`} plus the glue joints that use epoxy ${f(glueFlOz, 0)} fl oz (+${f(GLUE_WASTE * 100, 0)} % waste). NOT a separate purchase: the BOM's one epoxy kit (${EPOXY_SYSTEM.ratio}, with ${EPOXY_SYSTEM.pumps}) covers the glue-ups, the coat and the closes together; there is nothing else to buy for the mix. Thicken with ${EPOXY_SYSTEM.thickener} (a separate line)`),
     // D-99: the dye concentrate, by the bottle (either spec); a clear finish buys none.
     ...(dyed ? [{ item: DYE.buyItem, unit: 'bottle' as const, qty: dyeBottles, qt: (dyeBottles * DYE.bottleFlOz) / FLOZ_PER_QT,
       note: `${f(dyeFt2, 0)} ft² of show faces, 1 coat: about ${f(dyeProduct.qtNeeded, 1)} qt of mixed dye at ${DYE_COVERAGE} ft²/qt (+${f(FINISH_WASTE * 100, 0)} % waste), ${DYE.flOzPerQt} oz of dye a quart of water to start; the diluted okoume mix and the test panels stretch it further` }] : []),
