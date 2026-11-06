@@ -223,7 +223,7 @@ describe('Standard hardware', () => {
     expect(byKey('steer-chain').unitUsd).toBeCloseTo((10.89 / 12) * 2.12 + 2 * 3.96, 2); // D-106: Everbilt quick links, $3.96 each
     const collar = lines(bStd).find((l) => /shaft collar/.test(l.key))!;
     expect(collar.key).toMatch(/^zinc-plated/);
-    expect(collar.unitUsd).toBe(4.52);
+    expect([collar.unitUsd, collar.packQty]).toEqual([6.95, 4]); // D-106: the Luyostik 4-pack, $6.95 (was Penn Tool, $4.52 each)
     const insert = lines(bStd).find((l) => /threaded insert/.test(l.key))!;
     expect(insert.key).toMatch(/^zinc /);
     // the model's part names say 316: the Standard BOM says 304
@@ -307,7 +307,7 @@ describe('the cost pass totals (D-79 to D-83)', () => {
     expect(bStd.totalUsd).toBeLessThan(1650); // D-105: the gunwale bands are sawn from 5-3/8 in blanks (more oak than 1-1/2 in strips) // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought: about $1,579; it was under $1,560 on the 6 mm Baltic birch)
     expect(bExt.totalUsd).toBeGreaterThan(2000);
     expect(bExt.totalUsd).toBeLessThan(2700);
-    expect(bStd.estimateShare).toBeLessThan(0.17); // D-106: the Amazon picks whose prices were not read yet are estimates (collars, plugs, lights, banding, anti-seize)
+    expect(bStd.estimateShare).toBeLessThan(0.15);
     // the lumber is Peach State's 4/4, 5/4 and 8/4 (D-95)
     const lum = bStd.sections.find((x) => x.id === 'lumber')!.lines;
     expect(lum.map((l) => [l.key, l.unitUsd, l.basis])).toEqual([['4/4', 8.25, 'quoted'], ['5/4', 10, 'quoted'], ['8/4', 12.5, 'quoted']]);
