@@ -199,7 +199,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       how: [
         it('Measure the real lights before anything is printed.', [
           'The lights are a WORKPRO front and rear set.',
-          'Measure each light\'s mount: the distance between its two screw holes and the hole size.',
+          'Measure each light and its base plate: the size of the light, the size of the plate and the width of its strap slots (the light twists off the plate).',
         ]),
         it(`Print a 1" test slice of the clip and push it into a ${handHold} test slot cut in an offcut of the bulkhead stock.`),
       ],

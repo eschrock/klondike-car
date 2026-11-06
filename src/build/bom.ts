@@ -323,9 +323,6 @@ export const SHIPPING_VENDORS: ReadonlyArray<{ match: RegExp; name: string }> = 
   { match: /Speedy Metals/, name: 'Speedy Metals' },
   { match: /Online Metals/, name: 'Online Metals' },
   { match: /Bolt Depot/, name: 'Bolt Depot' },
-  { match: /Knot & Rope Supply/, name: 'Knot & Rope Supply' },
-  { match: /Bicycle Warehouse/, name: 'Bicycle Warehouse (unless bought in the store)' },
-  { match: /Blue Dog Ink/, name: 'Blue Dog Ink' },
 ];
 export const shippingNoteText = (vendors: readonly string[]): string =>
   `Shipping and sales tax are not in any price here (no shipping figure was read, so none is invented).${vendors.length ? ` These orders ship, so freight is extra: ${vendors.join(', ')}. Batch each vendor's items into one order.` : ''}`;

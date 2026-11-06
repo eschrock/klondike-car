@@ -31,12 +31,12 @@ function within(b: LightBuild, size: [number, number, number], slack = 0.02): vo
 }
 
 describe('which parts get a real mesh', () => {
-  it('the front lamp, the rear light, the four side reflectors (amber at the front, red at the rear)', () => {
+  it('the front lamp, the rear light, the four side reflectors (all red, D-106)', () => {
     expect(lightKindOf(get('front-light'))).toBe('lamp');
     expect(lightKindOf(get('rear-light'))).toBe('taillight');
     for (const tag of ['L', 'R']) {
       expect(lightKindOf(get(`reflector-${tag}1`)), `${tag} rear`).toBe('reflector-red');
-      expect(lightKindOf(get(`reflector-${tag}2`)), `${tag} front`).toBe('reflector-amber');
+      expect(lightKindOf(get(`reflector-${tag}2`)), `${tag} front`).toBe('reflector-red');
     }
     expect(lightKindOf(get('deck'))).toBeNull();
   });

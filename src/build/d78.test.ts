@@ -129,7 +129,7 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(pouch.notes).toMatch(/not part of the sled and not in its weight/);
     expect(pouch.notes).toMatch(/may already own/);
     const seize = lr.find((l) => l.key === 'anti-seize')!;
-    expect(seize.basis).toBe('quoted'); // D-79 research: the Permatex 1 oz tube, $3.97 at Walmart (via search)
+    expect(seize.basis).toBe('estimate'); // D-106: an Amazon pick, price not read yet (the figure is the Walmart $3.97)
     expect(seize.unitUsd).toBe(3.97);
     const nut = (ls: BomLine[]) => ls.find((l) => /nylon-insert lock nut 3\/8-16/.test(l.key))!;
     expect(nut(lr).key).toMatch(spec === WEATHER_SPEC.standard ? /^18-8/ : /^316/);

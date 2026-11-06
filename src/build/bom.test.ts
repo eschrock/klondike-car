@@ -653,8 +653,8 @@ describe('price research applied (2026-10-12)', () => {
     expect(line('lash-point').alternatives![0].specGap).toBe(true);
     expect(line('seat-hinge').unitUsd).toBeCloseTo(13.545, 3); // Seachoice 316 pair, $27.09
     expect(line('seat-hinge').extUsd).toBeCloseTo(27.09, 2);
-    expect(line('front-light').unitUsd).toBe(41.95); // D-83: Giant Recon 600 (Bicycle Warehouse), Planet Bike Spok
-    expect(line('rear-light').unitUsd).toBe(21.99);
+    expect(line('front-light').unitUsd).toBe(8.495); // D-106: the WORKPRO pair, $16.99, half each (an estimate until the order price is read)
+    expect(line('rear-light').unitUsd).toBe(8.495);
   });
 
   it('buys metal bars and tubes as the fixed pieces the vendors sell', () => {

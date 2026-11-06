@@ -384,7 +384,7 @@ describe('lights and reflectors', () => {
     expect((light.min[2] + light.max[2]) / 2).toBeCloseTo(zMid, 6);
     expect(lamp.removable).toBe(true);
     expect(lamp.joints!.some((j) => j.to === 'rear-lamp-clip')).toBe(true);
-    expect(lamp.sourcing!.vendor).toMatch(/Planet Bike Spok/); // D-83
+    expect(lamp.sourcing!.vendor).toMatch(/WORKPRO/); // D-106
     expect(lamp.massLb).toBeCloseTo(0.06, 6);
     // the thinnest rear lane the validator allows still keeps the inside end 1/8 in off the box end
     const thin = { ...defaults, blockingThickIn: 0.5 };

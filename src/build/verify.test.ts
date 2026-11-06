@@ -90,7 +90,7 @@ describe('verify checklist (D-100: only the fits that change a purchase or a cut
     const c = list.find((q) => q.id === 'lamp-clip')!;
     expect(c.when).toBe('before cutting');
     expect(c.whatToDo).toMatch(/Measure the real lights before anything is printed/);
-    expect(c.whatToDo).toMatch(/Giant Recon 600/);
+    expect(c.whatToDo).toMatch(/WORKPRO/);
     expect(c.whatToDo).toContain('4-1/2" × 1-1/4"'); // hand-hold = clip + 1/50" a side
   });
 

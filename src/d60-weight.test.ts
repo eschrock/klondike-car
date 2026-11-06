@@ -111,12 +111,12 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
   });
   it('by group (lb): body 36.5 (D-65: the signs, 0.6 lb, are in the body now, not a removable part), running gear 18.8, front end 16.0, frame 13.5, brake 10.3 (D-65: 11.1 before the pull-pin brake), seat 8.5, storage 7.0, hardware 5.9 (epoxy joints of the sandwich), removable 1.9 (the handle), lighting 1.9', () => {
     const g = groupMass(parts);
-    const want: Record<string, number> = { body: 36.6, /* (2026-10-24: D-96/97/98) the two-block transom backers, -1.3 lb (D-97); 37.6 before */ /* D-76: the side ribs, knees and box ties */ 'running-gear': 18.8, 'front-end': 16.0, frame: 13.5, brake: 10.5, /* D-77: the pivot straps and the taller knees (+0.87); D-74: 9.31 with the 2-1/8 in knees and chocks */ seat: 8.4, storage: 6.2 /* D-89: oak turn-buttons in place of the draw latches (-0.35) */, hardware: 6.4 /* the pooled fasteners 5.6 and the 8 D-ring brackets 0.9 (D-85); assembly review round 1 added 0.06 */, removable: 1.9, lighting: 1.9 };
+    const want: Record<string, number> = { body: 36.6, /* (2026-10-24: D-96/97/98) the two-block transom backers, -1.3 lb (D-97); 37.6 before */ /* D-76: the side ribs, knees and box ties */ 'running-gear': 18.8, 'front-end': 15.4, frame: 13.5, brake: 10.5, /* D-77: the pivot straps and the taller knees (+0.87); D-74: 9.31 with the 2-1/8 in knees and chocks */ seat: 8.4, storage: 6.2 /* D-89: oak turn-buttons in place of the draw latches (-0.35) */, hardware: 6.4 /* the pooled fasteners 5.6 and the 8 D-ring brackets 0.9 (D-85); assembly review round 1 added 0.06 */, removable: 1.9, lighting: 1.9 };
     for (const [k, v] of Object.entries(want)) expect(Math.abs(g[k] - v), `${k} ${g[k]?.toFixed(2)}`).toBeLessThan(0.6);
     const gp = groupMass(partsPre);
     // the same sled before the package (PRE_D60, rebuilt with the D-62 sandwich sides, bridle and clamps): running gear 26.1, front end 18.7, body 40.1
     expect(gp['running-gear']).toBeCloseTo(26.1, 0);
-    expect(Math.abs(gp['front-end'] - 18.4)).toBeLessThan(0.5); // D-75: 18.0 (the square bolt seat on the tongue head); 18.7 before
+    expect(Math.abs(gp['front-end'] - 18.3)).toBeLessThan(0.5); // D-106: 18.3 (the lighter 3/4 in bronze bushing, -0.09 lb); D-75: 18.0 (the square bolt seat on the tongue head); 18.7 before
     expect(gp.body).toBeCloseTo(40.6, 0); // (2026-10-24: D-96/97/98) the two-block transom backers (D-97), 41.8 before; D-76: +1.0 (the side ribs, knees and box ties); 40.1 before D-65 moved the signs into the body group
   });
   it('the biggest single savings are where the study said: the hollow axles (3.5 lb), the wheels (4.8 lb), the 1/2 in transom (2.6 lb), the 4 mm side webs, box and lid', () => {

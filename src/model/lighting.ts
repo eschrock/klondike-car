@@ -199,16 +199,18 @@ export function buildLighting(ctx: Ctx): Part[] {
       const gf = gripFrame(p, L), capHalf = (gripCapLen(p.grabBoardLengthIn) * gf.cs) / 2;
       const stripX0 = gf.xh - capHalf - 0.3, stripX1 = gf.xh + capHalf + 0.3;
       // D-76: and it stays 1/4 in clear of the outside fender washers of the side-rib D-ring bolts (D-83) (the box rib's station is set so the rear one does not have to move).
-      for (const [wa, wb] of washers) if (x + REFLECTOR_SIZE[0] / 2 + 0.25 > wa && x - REFLECTOR_SIZE[0] / 2 - 0.25 < wb) x = wb + REFLECTOR_SIZE[0] / 2 + 0.25;
+      for (const [wa, wb] of washers) if (x + REFLECTOR_SIZE[0] / 2 + 0.3 > wa && x - REFLECTOR_SIZE[0] / 2 - 0.3 < wb) x = wb + REFLECTOR_SIZE[0] / 2 + 0.3; // 0.3 in: the reflector is tilted to the sheer, so its corner reaches a little past 1/4 in
       if (x + REFLECTOR_SIZE[0] / 2 + 0.1 > stripX0 && x - REFLECTOR_SIZE[0] / 2 - 0.1 < stripX1) x = stripX1 + REFLECTOR_SIZE[0] / 2 + 0.3;
       const color = 'red'; // red all round: nothing requires amber at the front of a sled used off the road
       // D-66: the side draws in toward the bow (L.turnIn), so the reflector sits on the tapered outer face and turns with it in plan.
       const outerHalf = L.hwC + L.side - L.turnIn(x);
       const dTurn = (L.turnIn(x + 0.25) - L.turnIn(x - 0.25)) / 0.5;
+      // the long reflector's flat back touches the tapered face at its middle; where the face bulges, its two ends would dig in, so it stands off by the largest gap
+      const sag = Math.max(0, ...[-REFLECTOR_SIZE[0] / 2, REFLECTOR_SIZE[0] / 2].map((e) => L.hwC + L.side - L.turnIn(x + e) - (outerHalf - dTurn * e)));
       parts.push(box(ctx, {
         id: `reflector-${tag}${i + 1}`, partNo: 'reflector', name: `Side reflector ${tag}${i + 1} (${color}, ${i === 0 ? 'rear' : 'front'})`, group: 'lighting', mat: 'fixed', massLb: REFLECTOR_MASS_LB,
         kind: 'purchased', material: 'reflector', fab: 'buy', step: STEP.finish, size: [...REFLECTOR_SIZE],
-        center: [x, s * (outerHalf + REFLECTOR_SIZE[1] / 2), sideTopAt(L, x) - L.railBand / 2], rot: { y: sideSlopeAt(L, x), z: -s * Math.atan(dTurn) },
+        center: [x, s * (outerHalf + sag + REFLECTOR_SIZE[1] / 2), sideTopAt(L, x) - L.railBand / 2], rot: { y: sideSlopeAt(L, x), z: -s * Math.atan(dTurn) },
         sourcing: { vendor: `Amazon (Runseaway 3-3/4" × 15/16" oval self-adhesive reflector, ${color}, 4-pack)`, costUsd: 1.65 },
         notes: `Stick-on ${color} prismatic reflector on the gunwale's outer face; wipe the varnish clean and press for 60 s (D-41, 3c-5).`,
       }));
