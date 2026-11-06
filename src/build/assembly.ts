@@ -2408,9 +2408,13 @@ const TEMPLATES_2: Template[] = [
       return {
         goal: 'Fit the stub axles, clamp plates and roll pads to the front beam on the bench, then hang it on its kingpin under the king beam.',
         items: [
-          I(`Screw the {{king-thrust}} to the {{king-beam}}'s bottom face (facing up now): a ${fin(c.p.kingThrustOdIn)} disc of ${fin(c.p.kingThrustThickIn)} UHMW plastic with a center hole for the kingpin bolt.`, [
-            `Lay out 3 screw holes on the disc, on a circle ${discR ? `${discR}" ` : ''}from its center: one straight aft and two at 120° either side of it, so none lands in the nut slot${fwdOff ? ` (the two forward screws sit ${fwdOff} either side of it)` : ''}.`,
-            `Counterbore each from the face the beam turns on${cbore ? `, ${cbore}` : ''}, so a #8 flat head sits below that face, then drill through for the screw.`,
+          I(`Cut the {{king-thrust}} on the Shaper from the ${fin(c.p.kingThrustThickIn)} UHMW sheet: a ${fin(c.p.kingThrustOdIn)} disc with a ${fin(c.p.kingpinDiaIn + 0.06)} center hole for the kingpin bolt.`, [
+            'Use the thrust disc file. Hold the sheet down with Shaper Tape, then cut the center hole and the outline. The sheet is much bigger than the disc, so there is plenty of room to tape it.',
+            'UHMW is soft and gummy: take a light cut with a sharp bit, and let the chips clear.',
+            `The 3 screw holes are marked on the file, on a circle ${discR ? `${discR}" ` : ''}from the center: one straight aft and two at 120° either side of it, so none lands in the nut slot${fwdOff ? ` (the two forward screws sit ${fwdOff} either side of it)` : ''}.`,
+            `Drill them on the drill press, then counterbore each from the face the beam turns on${cbore ? `, ${cbore}` : ''}, so a #8 flat head sits below that face.`,
+          ]),
+          I(`Screw the {{king-thrust}} to the {{king-beam}}'s bottom face (facing up now), counterbored side up toward you.`, [
             'Push the kingpin bolt through the disc into the kingpin hole to center it, then drill the pilots into the king beam through the disc\'s holes and screw the disc down.',
             disc ? `Pilots ${holeText(disc)}.` : SEE_ITEM,
           ]),

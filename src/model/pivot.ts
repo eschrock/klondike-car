@@ -18,9 +18,15 @@ import { joistId, kingNutSlot } from './frame';
 import { axleMaterial, axleSourcing, axleStockNote } from './axle-stock';
 import { cotterHoleJoint } from './running-gear';
 import { chainKeeper, KEEPER_CORD_LB_PER_IN } from './chain-keeper';
-import type { Part, Vec2 } from './types';
+import type { Part, Vec2, Vec3 } from './types';
 
 const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
+/** A circle as a 96-sided loop about the origin (a vertex on each axis); CCW for an outer edge, CW for a hole. */
+const circleLoop = (r: number, cw: boolean): Vec2[] => {
+  const pts: Vec2[] = [];
+  for (let i = 0; i < 96; i++) { const a = ((cw ? -i : i) * 2 * Math.PI) / 96; pts.push([r * Math.cos(a), r * Math.sin(a)]); }
+  return pts;
+};
 const frac = (x: number) => {
   const w = Math.floor(x + 1e-9);
   let n = Math.round((x - w) * 16), d = 16;
@@ -157,11 +163,13 @@ export function buildPivot(ctx: Ctx): Part[] {
   // ── Thrust disc: UHMW disc lying directly on the axle beam (turns with it), screwed up to the king beam (fixed). The tongue no longer lies under it (D-58). ──
   {
     const od = p.kingThrustOdIn, t = p.kingThrustThickIn;
-    const z = b.top + t / 2;
     const vol = Math.PI * ((od / 2) ** 2 - (kd / 2 + 0.03) ** 2) * t;
     parts.push(mk({
       id: 'king-thrust', partNo: 'king-thrust', name: 'Kingpin thrust disc (UHMW)', group: 'front-end', kind: 'purchased', material: 'UHMW polyethylene disc',
-      geometry: { type: 'cylinder', radius: od / 2, length: t }, transform: translation(kx, 0, z), massLb: (vol / 1728) * UHMW_PCF, body: 'chassis', fab: 'buy', step: STEP.gear, explode: [0, 0, 0.6],
+      // D-107: a flat disc (outline and bore) so the Shaper Origin file is made from the model; the disc stands on the axle beam, its bottom face at the beam top.
+      geometry: { type: 'extrusion', outline: circleLoop(od / 2, false), holes: [circleLoop((kd + 0.06) / 2, true)], depth: t }, transform: translation(kx, 0, b.top), massLb: (vol / 1728) * UHMW_PCF, body: 'chassis', fab: 'shaper-origin', stock: { t, w: od, l: od }, grain: 'x', step: STEP.gear, explode: [0, 0, 0.6],
+      // D-107: the three flat-head screws sit in 3/8" counterbores 1/4" deep from the sliding (bottom) face; they are on the same circle as the screws (joinery.ts), one straight aft and two at 120 degrees either side.
+      joints: [{ type: 'hole', to: 'king-beam', count: 3, size: '3/8" wide counterbore, 1/4" deep, from the sliding face (the face against the axle beam)', at: [180, 60, 300].map((deg): Vec3 => [(od / 4 + kd / 4 + 0.015) * Math.cos((deg * Math.PI) / 180), (od / 4 + kd / 4 + 0.015) * Math.sin((deg * Math.PI) / 180), 0]), cut: { kind: 'counterbore', dia: 0.375, depth: 0.25, what: 'the head of each flat-head screw' } }],
       sourcing: { vendor: `Amazon (UHMW-PE sheet ${frac(t)}" thick, about 12" x 12"; cut a ${f2(od)}" disc with a ${f2(kd + 0.06)}" bore on the Shaper). Screwed to the underside of the king beam, the axle beam turns under it. Check the bearing pressure at the supplier's PV limit (king-bearing row)` },
       notes: `The thrust bearing (D-56, D-58): the king beam bears down through this ${f2(od)}" × ${frac(t)}" disc onto the TOP of the axle beam, which turns under it. It carries the static front load and the tilt of the tow pull; the one-wheel roll of a bump goes through the roll pads instead. UHMW against oak, no grease needed (wipe off sand). Its top face is the king beam bottom (z ${f2(L.king.bot)}"); the clamp plates on the beam top (to z ${f2(b.top + p.axleProudIn + p.clampPlateThickIn)}") pass under the king beam with ${f2(L.king.bot - b.top - p.axleProudIn - p.clampPlateThickIn)}" to spare.`,
     }));

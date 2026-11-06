@@ -415,6 +415,13 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
   };
 
   for (const j of part.joints ?? []) {
+    // D-107: a counterbore recorded on this part (joint.cut) is a round recess from the face its point lies on: drilled with a depth stop, never cut through.
+    if (j.cut?.kind === 'counterbore' && j.cut.dia && j.cut.depth && (j.at ?? []).length) {
+      const cb = (j.at ?? []).map((at): { uv: Vec2; local: Vec3 } => ({ uv: f.toPattern(at), local: at }));
+      for (const g of cb) items.push({ k: 'drill', c: g.uv, dia: j.cut.dia, onFace: fr.signedFace(g.local) });
+      holeFeature(j, cb.map((g) => g.uv), j.cut.dia, j.cut.depth, 'drill', `Counterbore Ø${fmt(j.cut.dia)} x ${fmt(j.cut.depth)} deep for ${j.cut.what}, drill from the ${fr.signedFace(cb[0].local) === '+' ? 'top' : 'bottom'} face with a depth stop`);
+      continue;
+    }
     const mate = byId.get(j.to);
     const text = `${j.size ?? ''} ${j.note ?? ''}`;
     const pts = j.at ?? [];
