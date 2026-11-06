@@ -994,19 +994,19 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
       legend
         ? it(`The "${legend.text}" letters (${frac32(legend.letterHeightIn)} tall, ${legend.face} face) were scored, filled and sanded flush at the storage lid step, before the panel was sealed.`)
         : it('The legend was lettered at the storage lid step, before the panel was sealed.'),
-      it('Check every letter: filled, dark and flush, with no fill smeared on the face around it.', ['Touch up a thin spot with the black paint marker and let it dry 24 h.']),
+      it('Check every letter: filled, dark and flush, with no fill smeared on the face around it.', ['Touch up a thin spot with a little more black epoxy, let it cure 24 h, and sand it flush.']),
       extreme
         ? it('Do it after the epoxy seal has cured and been sanded, and before any varnish.')
         : it('Do it after the final sanding, and before any urethane.'),
       it('The letters read from a standing position; the lid is for a cushion to sit on, not a step.'),
     ],
     products: [
-      { name: 'Black oil-based paint marker, for touch-ups', areaFt2: 0.1, coats: 1, coverageFt2PerQt: 0, qtNeeded: ENGRAVE_FILL_PT / 2 },
+      { name: 'Black epoxy fill, for touch-ups', areaFt2: 0.1, coats: 1, coverageFt2PerQt: 0, qtNeeded: ENGRAVE_FILL_PT / 2 },
     ],
     coats: 1,
     recoat: '-',
-    cure: 'Paint marker: 24 h before the topcoat.',
-    winter: 'Touch up in a warm area: the marker dries slowly below 55 °F.',
+    cure: 'Black epoxy fill: 24 h before the topcoat.',
+    winter: 'Touch up in a warm area: the epoxy cures slowly below 55 °F.',
   });
 
   // ---- 6. topcoat: 3 coats on the show faces, 2 on the hidden ones. EXTREME: marine spar varnish. STANDARD: exterior spar urethane (Minwax Helmsman class, about 100 ft² a quart).
@@ -1072,7 +1072,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
       unit: c.unit, qty: c.qty, qt: c.qt,
       note: `${f(areas.show.totalFt2, 0)} ft² × ${VARNISH_COATS_SHOW} + ${f(areas.hidden.totalFt2, 0)} ft² × ${VARNISH_COATS_HIDDEN} coats at ${topCoverage} ft²/qt, +${f(FINISH_WASTE * 100, 0)} % waste = ${f(varnishQt, 1)} qt; ${extreme ? 'quart cans, not a gallon (an open can skins over)' : 'quarts, or a gallon once three quarts are needed (decant it into jars)'}`,
     })),
-    { item: 'Black oil-based paint marker (or black epoxy pigment) for the lid legend', unit: 'pt', qty: 1, qt: 0.5, note: 'engraving fill: one marker fills the grooves' },
+    { item: 'Black epoxy pigment for the lid legend (a pinch, mixed into a little of the epoxy)', unit: 'pt', qty: 1, qt: 0.5, note: 'engraving fill: a small tube of pigment fills the grooves' },
     { item: extreme ? 'Thinner for the varnish (mineral spirits or the maker\'s thinner)' : 'Thinner for the urethane (mineral spirits)', unit: 'pt', qty: 1, qt: 0.5, note: 'coat 1 thinning and brush cleaning' },
   ];
 

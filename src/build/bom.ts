@@ -715,8 +715,8 @@ export const NOTE_ITEMS: NoteItem[] = [
     noteRef: 'grab-board backing joint note: "epoxy or polysulfide sealant"; gasket note: "continuous strip, spliced at a corner". The handle sockets are bedded in thickened epoxy (D-79), not sealant',
     expand(built) {
       const uses = byIds(built, ['seat-grip-backing-L', 'seat-grip-backing-R']).filter((x) => /sealant|polysulfide/i.test(ptext(x)));
-      const gasket = built.some((x) => x.id === 'storage-gasket-side-L' && /spliced/i.test(x.notes ?? ''));
-      const oz = uses.length * SEALANT_OZ_PER_USE + (gasket ? SEALANT_OZ_PER_USE / 2 : 0);
+      const gasket = false; // the gasket splice needs no glue (the self-stick backing holds both ends)
+      const oz = uses.length * SEALANT_OZ_PER_USE;
       if (!oz) return null;
       return { items: [{ label: `Polysulfide marine sealant, ${SEALANT_TUBE_OZ} oz tube`, qty: Math.ceil(oz / SEALANT_TUBE_OZ) }], note: `${Math.ceil(oz)} oz: beds for the ${[...new Set(uses.map((x) => x.name.replace(/\s+[LR]\d*$/, '').toLowerCase()))].join(', ')}${gasket ? ' and the lid gasket splice' : ''} (the handle sockets are bedded in thickened epoxy, not sealant)` };
     },
@@ -1107,7 +1107,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     if (/thinner/i.test(item)) return { key: 'thinner', table: 'thinner', price: FINISH_PRICE.thinner };
     if (/urethane/i.test(item)) return { key: 'urethane', table: 'urethane', price: URETHANE_CONTAINER_PRICE.qt! };
     if (/varnish/i.test(item)) return { key: 'varnish', table: 'varnish', price: FINISH_PRICE.varnish };
-    if (/paint marker|enamel|pigment/i.test(item)) return { key: 'paint-marker', table: 'enamel', price: FINISH_PRICE.enamel };
+    if (/pigment/i.test(item)) return { key: 'legend-pigment', table: 'pigment', price: FINISH_PRICE.pigment };
     return null;
   };
   for (const bl of sched.buy) {
@@ -1116,9 +1116,9 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     // The real container price where the research found one, else the base per-quart price scaled by the container size.
     // The dye is bought by the bottle (D-99): its price is per bottle.
     const price: Price = bl.unit === 'bottle' ? k.price : (k.table === 'urethane' ? URETHANE_CONTAINER_PRICE[bl.unit] : FINISH_CONTAINER_PRICE[k.table]?.[bl.unit]) ?? { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
-    // The paint marker is bought as a marker, not by the pint (the schedule counts it as a half pint of fill).
-    const desc = k.key === 'paint-marker' ? bl.item : `${bl.item}, ${bl.unit}`;
-    consumables.push(line('Consumables', k.key === 'paint-marker' ? 'paint-marker' : `${k.key}-${bl.unit}`, desc, bl.qty, price, { vendor: price.source, notes: joinNotes(price.url ? `Price: ${price.note}.` : undefined, bl.note) }));
+    // The pigment is bought as a small tube, not by the pint (the schedule counts it as a half pint of fill).
+    const desc = k.key === 'legend-pigment' ? bl.item : `${bl.item}, ${bl.unit}`;
+    consumables.push(line('Consumables', k.key === 'legend-pigment' ? 'legend-pigment' : `${k.key}-${bl.unit}`, desc, bl.qty, price, { vendor: price.source, notes: joinNotes(price.url ? `Price: ${price.note}.` : undefined, bl.note) }));
   }
   // Sandpaper and the supplies lot are shop stock (D-79): $0 lines so they are not forgotten.
   consumables.push(line('Consumables', 'sandpaper', 'Sandpaper, lump sum', 1, FINISH_PRICE.sandpaper, { vendor: FINISH_PRICE.sandpaper.source }));

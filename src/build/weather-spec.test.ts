@@ -387,8 +387,9 @@ describe('finishing schedule by spec', () => {
       expect(sc.buy.filter((b) => /^TransTint/.test(b.item)).map((b) => `${b.qty} ${b.unit}`)).toEqual(['1 bottle']);
       expect(sc.buy.some((b) => /conditioner|gel stain/i.test(b.item))).toBe(false);
     }
-    // the lid legend is filled with a paint marker, not enamel
-    expect(sS.buy.some((b) => /paint marker/.test(b.item))).toBe(true);
+    // the lid legend is filled with black epoxy pigment (D-106), not a paint marker or enamel
+    expect(sS.buy.some((b) => /pigment/.test(b.item))).toBe(true);
+    expect(sS.buy.some((b) => /paint marker/.test(b.item))).toBe(false);
     expect(sS.buy.some((b) => /enamel/i.test(b.item))).toBe(false);
     for (const spec of [WEATHER_SPEC.standard, WEATHER_SPEC.extreme]) {
       const pc: Params = { ...defaultParams(), weatherSpec: spec, stainShowFaces: 0 };

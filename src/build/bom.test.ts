@@ -129,7 +129,7 @@ describe('bom', () => {
     const cons = b.sections.find((s) => s.id === 'consumables')!.lines;
     // every finish product of the buy list is a BOM line with the same container and quantity
     for (const bl of sched.buy.filter((x) => !/West System/.test(x.item) && !EPOXY_BUY_RE.test(x.item))) { // the epoxy is a kit line, checked below
-      const marker = /paint marker/.test(bl.item); // D-83: bought as a marker, not by the pint
+      const marker = /pigment/.test(bl.item); // D-106: bought as a small tube of pigment, not by the pint
       const l = cons.find((q) => q.description === (marker ? bl.item : `${bl.item}, ${bl.unit}`));
       expect(l, bl.item).toBeTruthy();
       expect(l!.qty).toBe(bl.qty);
@@ -208,7 +208,7 @@ describe('bom', () => {
   const consumables = () => b.sections.find((x) => x.id === 'consumables')!.lines;
   const qtyOf = (lines: typeof b.sections[number]['lines'], re: RegExp): number => lines.filter((l) => re.test(l.key)).reduce((a, l) => a + need(l), 0);
 
-  it('lists what the steps and notes use (build MUST-10): axle retention, hinge screws, handlebow rods, rail screws, plugs, washers, hook-and-loop, banding, sealant, cement, batten screws', () => {
+  it('lists what the steps and notes use (build MUST-10): axle retention, hinge screws, handlebow rods, rail screws, plugs, washers, hook-and-loop, banding, cement, batten screws (no sealant: D-106)', () => {
     const wheels = parts.filter((x) => /^wheel-/.test(x.id)).length;
     expect(wheels).toBe(4);
     const f = fasteners(), c = [...consumables(), ...secLines('touches')]; // the hook-and-loop belongs to the seat comfort touches
@@ -226,9 +226,9 @@ describe('bom', () => {
     expect(qtyOf(f, /wood screw #8 x 5\/8"/)).toBe(6 + 6); // the hardware-into-thin-stock screws: the two lid hinges, 3 into the lid frame and 3 into the fixed strip each (D-89: no lid stay; the battens are glued, no screws; turn-buttons, no latches)
     expect(qtyOf(c, /^hook-and-loop$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^edge-banding$/)).toBeGreaterThanOrEqual(1);
-    expect(qtyOf(c, /^sealant$/)).toBeGreaterThanOrEqual(1);
+    expect(qtyOf(c, /^sealant$/)).toBe(0); // D-106: the grab-board strips are epoxied and the gasket splice needs no glue
     expect(qtyOf(c, /^contact-cement$/)).toBeGreaterThanOrEqual(1);
-    for (const l of c.filter((q) => ['hook-and-loop', 'edge-banding', 'sealant', 'contact-cement'].includes(q.key))) expect(l.notes, l.key).toBeTruthy(); // the note it came from is data (noteRef), not printed
+    for (const l of c.filter((q) => ['hook-and-loop', 'edge-banding', 'contact-cement'].includes(q.key))) expect(l.notes, l.key).toBeTruthy(); // the note it came from is data (noteRef), not printed
     // the stop blocks' own screw joints carry their screws; the note table does not add them twice
     expect(parts.find((x) => x.id === 'seat-wedge-L')!.joints!.some((j) => j.type === 'screw')).toBe(true);
     expect(NOTE_ITEMS.find((i) => i.key === 'stop-block-screws')!.expand(parts, uniqueJoints(parts))).toBeNull();
@@ -291,7 +291,7 @@ describe('bom', () => {
     for (const bl of sched.buy) {
       if (/West System 105/.test(bl.item) || EPOXY_BUY_RE.test(bl.item)) continue; // resin: bought as the kits
       const hard = /\b(20[5679])\b/.exec(bl.item)?.[1];
-      const l = hard ? cons.find((q) => q.key === `epoxy-${hard}`) : cons.find((q) => q.description === (/paint marker/.test(bl.item) ? bl.item : `${bl.item}, ${bl.unit}`));
+      const l = hard ? cons.find((q) => q.key === `epoxy-${hard}`) : cons.find((q) => q.description === (/pigment/.test(bl.item) ? bl.item : `${bl.item}, ${bl.unit}`));
       expect(l, bl.item).toBeTruthy();
       expect(l!.basis === 'owned' || l!.unitUsd > 0, bl.item).toBe(true); // shop stock (the thinner) is $0 and says so
     }
@@ -464,14 +464,16 @@ describe('links (Eric, 2026-10-12)', () => {
   const research = Object.values(import.meta.glob('../../docs/price-research/price-research-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string;
   const research2 = Object.values(import.meta.glob('../../docs/price-research/price-research-standard-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string; // the Standard-spec pass (the Penn Tool zinc collar)
   const research3 = Object.values(import.meta.glob('../../docs/price-research/price-research-cost-pass-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string; // the cost pass (2026-10-14): Peach State, U.S. Composites, Speedy Metals, Harbor Freight...
-  const ERIC_HOSTS = /^https:\/\/(www\.thewoodyard\.com|www\.aircraftspruce\.com|clinelumber\.com)\//;
+  const ERIC_HOSTS = /^https:\/\/(www\.thewoodyard\.com|www\.aircraftspruce\.com|clinelumber\.com|www\.amazon\.com)\//; // the Amazon listings are Eric's own links (D-106)
+  // Home Depot pages found by search on 2026-11-05 (D-106): real links, not in the research files
+  const SEARCH_LINKS = ['https://www.homedepot.com/p/Everbilt-2-in-Stainless-Steel-Non-Removable-Pin-Narrow-Utility-Hinge-2-Pack-29197/314151585', 'https://www.homedepot.com/p/Everbilt-3-8-in-x-100-ft-White-Twisted-Nylon-Rope-73215/206094352', 'https://www.homedepot.com/p/Varathane-1-Gal-Clear-Gloss-Oil-Based-Exterior-Spar-Urethane-9231/100158335'];
 
   it('carries only links Eric gave or the research lists, and invents none', () => {
     expect(research.length).toBeGreaterThan(1000);
     const lines = b.sections.flatMap((s) => s.lines);
     const urls = [...lines.map((l) => l.url), ...lines.flatMap((l) => (l.alternatives ?? []).map((a) => a.url))].filter((u): u is string => !!u);
     expect(urls.length).toBeGreaterThan(40);
-    for (const u of urls) expect(ERIC_HOSTS.test(u) || research.includes(u) || research2.includes(u) || research3.includes(u), u).toBe(true);
+    for (const u of urls) expect(ERIC_HOSTS.test(u) || SEARCH_LINKS.includes(u) || research.includes(u) || research2.includes(u) || research3.includes(u), u).toBe(true);
     const lum = secLines('lumber');
     expect(lum.find((l) => l.key === '4/4')!.url).toBe(PEACH_STATE_LUMBER_URL); // D-79: Peach State's price sheet
     expect(lum.find((l) => l.key === '5/4')!.url).toBe(PEACH_STATE_LUMBER_URL);

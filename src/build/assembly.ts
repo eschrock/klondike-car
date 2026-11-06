@@ -2769,7 +2769,7 @@ const TEMPLATES_2: Template[] = [
           I('Epoxy the bronze {{bridle-sleeve}} in the hole drilled across the stem.', [
             `Test-fit it first: if the ${fin(c.p.tongueHoleDiaIn)} bore is tight on the sleeve, sand the bore until it slides in with a film of epoxy.`,
             `${fin(c.p.tongueSleeveBoreIn)} bore, 1" OD. Ease both bore ends so the rope bears on a round edge.`,
-            ((sl) => (sl ? `The sleeve is ${fin(sl - c.p.tongueWidthIn)} longer than the stem is wide: center it so it stands ${fin((sl - c.p.tongueWidthIn) / 2)} proud of each face, and bed a 1-1/2" fender washer (its hole no smaller than the bore) on each proud end in the same epoxy, so the rope never rubs the oak.` : false))(c.by('bridle-sleeve')?.geometry?.type === 'cylinder' ? (c.by('bridle-sleeve')!.geometry as { length: number }).length : undefined),
+            ((sl) => (sl ? (sl - c.p.tongueWidthIn < 1 / 32 ? 'The sleeve is as long as the stem is wide: set it flush with both faces, and bed a 1-1/2" fender washer (its hole no smaller than the bore) over each end in the same epoxy, so the rope never rubs the oak.' : `The sleeve is ${fin(sl - c.p.tongueWidthIn)} longer than the stem is wide: center it so it stands ${fin((sl - c.p.tongueWidthIn) / 2)} proud of each face, and bed a 1-1/2" fender washer (its hole no smaller than the bore) on each proud end in the same epoxy, so the rope never rubs the oak.`) : false))(c.by('bridle-sleeve')?.geometry?.type === 'cylinder' ? (c.by('bridle-sleeve')!.geometry as { length: number }).length : undefined),
             'Mask the bore for the finish.',
           ]),
           I(`The bridle rope (${fin(c.p.bridleRopeDiaIn)} nylon) and the check chains go on at the hang step, with the eye bolts they hook to.`),
@@ -3178,7 +3178,7 @@ const TEMPLATES_2: Template[] = [
             `Test first: mask an offcut of the same sheet with the same tape and score the lettering file through it. Raise the power or add passes until the letters come out dark, just through the face veneer into the first glue line (about ${fractionText(lg.depthIn, 64)}" deep); the face veneer is thinner than that, so it is the glue line that reads.`,
             'Mask the lettering area with low-tack masking tape first, smoothed down hard: the laser scores through the tape, and the tape keeps the fill off the bare face veneer (thin epoxy wicks into its grain and leaves a grey halo).',
             'Laser: lay the panel on the bed, line it up on the black outline with the framing preview, and run the lettering file (the letters only; each stroke is several passes side by side, so the line reads from a standing position).',
-            'Fill: work black epoxy (pigment in a little mixed epoxy, thickened a little so it does not run) or an oil-based black paint marker into the letters, over the tape.',
+            'Fill: work black epoxy (pigment in a little mixed epoxy, thickened a little so it does not run) into the letters, over the tape.',
             'Peel the tape while the fill is still soft; when it is hard (24 h), sand the face flush with a block at 220 grit, lightly: do not go through the face veneer.',
             I(`The finishing schedule only checks the lettering's fill (step ${stepNo(c, 'engrave')}), before the topcoat.`, ['It is a lid to sit a cushion on, not a step.']),
           ])] : []))(c.by('storage-lid')?.legend),
@@ -3656,7 +3656,7 @@ const TEMPLATES_2: Template[] = [
         items: [
           I(`Hang the signs (${tl(ids(/^sign-[LR]$/))}): 4 thumb-knob screws each (${knobText(c)}).`, [`Through the ${/(\d+\/\d+) clearance hole/.exec(c.by('sign-L')?.joints?.find((q) => q.type === 'knob')?.size ?? '')?.[1] ?? '7/32'}" holes, the standoff discs (epoxied to the sign back) and the web, into the inserts set at [[step:side-holes]].`]),
           I('Storage hardware.', [
-            `Gasket: one continuous EPDM strip along the side and aft coaming tops under the lid frame (on the aft coaming, its aft edge ${fin(c.p.storageLidAftGapIn)} in from the box's aft face, under the lid frame's aft end), then up the fixed strip's aft face across the front, its top 1/8" below the lid top; splice it at one corner.`,
+            `Gasket: one continuous EPDM strip along the side and aft coaming tops under the lid frame (on the aft coaming, its aft edge ${fin(c.p.storageLidAftGapIn)} in from the box's aft face, under the lid frame's aft end), then up the fixed strip's aft face across the front, its top 1/8" below the lid top; splice it at one corner: butt the two ends together tight (the self-stick backing holds both ends, so the splice needs no glue; a drop of super glue is optional).`,
             ...(c.by('storage-turn-button-L') ? [(() => {
               const tb = worldAABB(c.by('storage-turn-button-L')!), aftRail = c.by('storage-rim-end-aft') ? worldAABB(c.by('storage-rim-end-aft')!).min[0] : tb.max[0];
               const w = tb.max[1] - tb.min[1];

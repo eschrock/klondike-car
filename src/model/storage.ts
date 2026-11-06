@@ -410,7 +410,7 @@ export function buildStorage(ctx: Ctx): Part[] {
       type: 'rabbet', to, count: 1, size: '1/4 deep × 1/4', note: 'panel captured in the frame (cut size includes the tongue); epoxy-sealed',
     })),
     // D-89: the letters shrink to fit a shorter lid (11 letters at 3/4 of their height each, 1/2 in margin), never over 1-1/2 in
-    legend: { text: 'DO NOT STEP', face: 'top', process: 'laser score (side-by-side passes), filled with black epoxy or a paint marker and sanded flush before the panel is sealed', lineIn: p.storageLegendLineIn, letterHeightIn: Math.max(0.5, Math.min(1.5, Math.floor(((lidX1 - lidX0 - 2 * rimW - 0.5) / (11 * 0.75)) * 8) / 8)), depthIn: p.storageLegendDepthIn },
+    legend: { text: 'DO NOT STEP', face: 'top', process: 'laser score (side-by-side passes), filled with black epoxy (pigment in a little mixed epoxy) and sanded flush before the panel is sealed', lineIn: p.storageLegendLineIn, letterHeightIn: Math.max(0.5, Math.min(1.5, Math.floor(((lidX1 - lidX0 - 2 * rimW - 0.5) / (11 * 0.75)) * 8) / 8)), depthIn: p.storageLegendDepthIn },
     notes: 'Ply lid panel captured in the oak frame; the frame underside seals on the gasket. The top face is engraved DO NOT STEP (D-58, Eric 2026-10-11): the lid is a seat-cushion box lid, not a step, and is NOT strengthened for a standing adult; the rest-load check leaves it out for that reason.' }));
   const rz: [number, number] = [zTop - pl - rimT, zTop];
   // Round 2: the corner mortise is centered low enough to stay 1/16 in under the rabbet floor (centered on the frame it broke into the rabbet wall).

@@ -98,6 +98,16 @@ const gap = (p: Price, why: string): Price => ({ ...p, specGap: true, note: `SPE
 const withAlts = (p: Price, alternatives: Price[], decision?: string): Price => ({ ...p, alternatives, ...(decision ? { decision } : {}) });
 /** An estimate the research did not find a price for: it keeps the estimate and says so. */
 const notFound = (p: Price): Price => ({ ...p, note: `${p.note ? `${p.note} - ` : ''}not found in the ${RESEARCH_DATE} research` });
+/** Amazon listings Eric picked (2026-11-05). A price he read on the page is quoted, with his link. */
+export const AMAZON_DATE = '2026-11-05';
+const AM = 'https://www.amazon.com/';
+const amazon = (usd: number, unit: string, note: string, url: string): Price => quoted(usd, unit, 'Amazon', `${note} [Amazon, ${AMAZON_DATE}, price read by Eric]`, url);
+const amazonPack = (packQty: number, packUsd: number, unit: string, note: string, url: string, packLabel?: string): Price =>
+  ({ ...amazon(packUsd / packQty, unit, note, url), packQty, packUsd, ...(packLabel ? { packLabel } : {}) });
+/** An Amazon pick whose price was not recorded: an estimate (the figure is the old vendor's price or a guess), with the listing link when there is one. */
+const amazonEst = (usd: number, unit: string, note: string, url?: string): Price => est(usd, unit, 'Amazon', `ESTIMATE: ${note} (Amazon listing picked ${AMAZON_DATE}; its price was not recorded)`, url);
+/** A Home Depot item read from a search result (not the page): an estimate, with the real link. */
+const searchEst = (usd: number, unit: string, source: string, note: string, url?: string): Price => est(usd, unit, source, `${note} [read via search, ${AMAZON_DATE}; confirm in the store]`, url);
 
 /** The links Eric gave (2026-10-12), and the cost-pass vendors (2026-10-14). */
 export const WOODYARD_URL = 'https://www.thewoodyard.com/current-pricing-list/';
@@ -232,16 +242,16 @@ export const PURCHASED_PRICE: PurchasedPriceEntry[] = [
       found(11.99, 'ea', 'Harbor Freight', 'https://www.harborfreight.com/heavy-duty-10-inch-groove-tread-tire-40729.html', 'HAUL-MASTER 10" pneumatic tire with steel hub (SKU 40729), 5/8" bore, 300 lb, 3.10 lb shipping; hub length not listed. The sturdier hub, +$2 a wheel (+$8 for four)'),
       gap(found(34, 'ea', 'Uline', 'https://www.uline.com/Product/Detail/H-5454/Casters-and-Wheels/Uline-Flat-Free-Pneumatic-Wheel-300-lb-Capacity-10', 'Uline H-5454 flat-free pneumatic wheel 10 x 3-1/2", 5/8" bore, 2-1/4" steel offset hub (the hub length is listed), 300 lb, 3.41 lb'), 'flat-free: a stiffer tire than the 30 psi pneumatic tire the design assumes, and 0.4 lb a wheel heavier; $24 more a wheel'),
     ], WHEEL_DECISION) },
-  { match: /^king-thrust$/, price: found(15.88, 'ea', 'eBay seller (Florida)', 'https://www.ebay.com/itm/143055583417', 'natural UHMW 1/2" sheet, 6" x 12" option (a 3" disc is cut from it); the listing may price one size only', true) },
+  { match: /^king-thrust$/, price: amazon(25, 'ea', 'JOIKIT UHMW polyethylene sheet, 1/2" x about 12" x 12" (the listing is a pack of two sheets: confirm that the $25 covers both). A 3" disc with its bore is cut from it on the Shaper; the sheet is far larger than needed. Measure the thickness with calipers: the pivot stack assumes 1/2" (D-62)', AM + 'JOIKIT-Polyethylene-Molecular-Industrial-Automobile/dp/B09XL6BZXJ/') },
   { match: /^kingpin$/, price: est(3.85, 'ea', BOLT_DEPOT, 'ESTIMATE: 5/8" kingpin set: 5/8-11 x 4 hex bolt, zinc grade 8 yellow, about $3.10 (not read; the x 6 is $4.14, #678) + 5/8-11 zinc thin nylon-insert lock nut (jam nylock), about $0.60 (not read; the full-height one is $0.56, #2628) + 1 SAE flat washer $0.15 (#4273; none under the nut, D-88) = $3.85. D-88: the bolt is ordered from its stack, 4" (a 6" one hit the deck); the thin nut keeps the slot 3/4" tall') },
   { match: /^roll-pad$/, price: notFound(est(2, 'ea', MCM, 'UHMW 1/4" sheet offcut (no US price found, only an import listing at about $44 before duty)')) },
-  { match: /^bridle-sleeve$/, price: foundCP(13.59, 'ea', 'Zoro (Bunting EBCB101612)', 'https://www.zoro.com/bunting-bearings-sleeve-bearing-58-id-1-od-1-12l-ebcb101612/i/G5910390/', 'cast bronze sleeve bearing 5/8" ID x 1" OD x 1-1/2" (plain cast bronze, not the oil-embedded SAE 841 the model names: that size is not priced online, McMaster-Carr hides it; the cast sleeve is fine for a bridle that turns slowly, oil it)', true) },
+  { match: /^bridle-sleeve$/, price: amazonPack(2, 11.99, 'ea', 'SpinCo 3/4" ID x 1" OD x 1-1/4" sintered bronze (SAE 841, oil-impregnated) sleeve bushing, 2-piece pack (the second is a spare). OD 1.002 to 1.003": the 1" hole must be at least 1.005", so test it in a scrap. The listing text also says "flanged": check that it is a plain sleeve', AM + 'x1-1-Sintered-Bronze-Sleeve-Bushing/dp/B0DZF473PD/', 'pack of 2') },
   // Extreme weather: 316 eye bolts are the base; the galvanized ones are the Standard spec's base (PURCHASED_PRICE_STANDARD) and the cheaper alternative here.
   { match: /^steer-eye$/, price: withAlts(EYE_316.steerEye, [gap(EYE_GALV.steerEye, 'hot-dip galvanized, not 316: right for the Standard weather spec (garage-kept), rusts and stains oak near salt')], EYE_DECISION) },
   { match: /^steer-anchor$/, price: withAlts(EYE_316.steerAnchor, [gap(EYE_GALV.steerAnchor, 'hot-dip galvanized, not 316: right for the Standard weather spec (garage-kept), rusts and stains oak near salt')], EYE_DECISION) },
   { match: /^steer-chain$/, price: found(Math.round(((CHAIN_CUT_IN / 12) * CHAIN_USD_PER_FT + 2 * QUICK_LINK_USD) * 100) / 100, 'ea', 'ACE Industries / Skydog Rigging', 'https://www.aceindustries.com/3-16-nacm-industrial-chain-316l-stainless-steel',
     `3/16" NACM industrial chain 316L at $${CHAIN_USD_PER_FT}/ft (${CHAIN_CUT_IN} in) plus two 3/16" 316 quick links at $${QUICK_LINK_USD} each (Skydog, WLL 800 lb). Grade 43 is not made in 3/16": NACM chain has a looser rating, so check the working load against the 1000 lb target`, true) },
-  { match: /^bridle$/, price: found(6.49, 'ea', 'Hamilton Marine', 'https://shop.hamiltonmarine.com/products/commercial-3-strand-nylon-rope--foot-or-reel--42842.html', '11 ft of commercial 3-strand nylon rope, 3/8", at $0.59/ft', true) },
+  { match: /^bridle$/, price: searchEst(4.18, 'ea', 'Home Depot (Everbilt)', 'Everbilt 3/8" x 100 ft white twisted nylon rope (73215), listed at $0.38 a foot, so 11 ft is about $4.18 if the store cuts it from the reel (not confirmed; the spool is $38.26). The listing rates it at a 278 lb working load: check that against the bridle pull (bridle check) before relying on it', 'https://www.homedepot.com/p/Everbilt-3-8-in-x-100-ft-White-Twisted-Nylon-Rope-73215/206094352') },
   // Extreme only (D-83): the Standard spec drills epoxy-lined holes instead. The $5.20 estimate was not supported: real nipples run $9 to $13 each.
   { match: /^(scupper|storage-drain)$/, override: true, price: withAlts(
     foundCP(9.12, 'ea', 'Titan Fittings', 'https://titanfittings.com/3-8-hose-x-3-8-npt-male-pipe-rigid-stainless-hose-barb', '3/8" hose x 3/8" NPT male rigid barb, 316 stainless', true),
@@ -250,21 +260,18 @@ export const PURCHASED_PRICE: PurchasedPriceEntry[] = [
   { match: /^seat-hinge$/, override: true, price: found(13.545, 'ea', 'Freeport Marine', 'https://www.freeportmarine.com/products/seachoice-2-316-stainless-steel-butt-hinges.oembed', 'Seachoice 33911 2" x 2" 316 stainless butt hinges, $27.09 a pair (one pair is the pack), shown as half each', true) },
   { match: /^storage-gasket/, override: true, price: found(13.185, 'ea', 'Walmart (Trim-Lok)', 'https://www.walmart.com/ip/873339043', 'Trim-Lok X110HT EPDM seal 3/8" x 3/4", 25 ft roll $52.74 (about $2.11/ft); one roll covers all four gasket lines, shown as a quarter each. Check the profile and the length against the lid frame', true) },
   // D-79 research: neoprene 3/8" is sold as sheet (Zoro 70A 6 x 12 in, $15.59 [S]); 6 x 12 in cuts four 3 x 3 in pads, so the two brake pads take one sheet.
-  { match: /^brake-pad$/, price: { ...foundPackCP(4, 15.59, 'ea', 'Zoro', 'https://www.zoro.com/i/G7797929/', 'high-strength neoprene sheet 70A, 3/8" x 6" x 12" (cuts four 3" x 3" pads; two are used, the rest is spare); the old $4 a pad was an estimate. SBR 3/8" 12 x 36 is $30.94 at Home Depot', true, '6 x 12 in sheet'), perPart: 1 } },
+  { match: /^brake-pad$/, price: { ...amazonPack(16, 21.99, 'ea', 'WochiTV solid neoprene rubber sheet, 3/8" x 12" x 12", smooth both sides (not foam). Hardness is not stated: it should feel like about 70A (a thumbnail dents it only slightly). Cuts sixteen 3" x 3" pads; two are used, the rest is spare', AM + 'WochiTV-Neoprene-Perfect-Material-Sealing/dp/B0D7PDTYJ8', '12 x 12 in sheet'), perPart: 1 } },
   // The cords are cut from a roll: whole rolls priced, `perPart` in ft from the model's vendor text (bungee 10.99 in; chock cord 30 in).
   // D-79: the bungee is bought by the foot (a short length, not a 100 ft roll); the stop cord and the wheel-chock cords are paracord from the shop (NOTE_ITEMS 'brake-stop-cord' and the entry below).
-  { match: /^brake-cord$/, override: true, price: { ...foundCP(0.19, 'ft', 'Knot & Rope Supply', 'https://www.knotandrope.com/products/1-4-shock-cord-500-spool', '1/4" shock cord, white or black, sold by the foot ($0.19/ft; shipping extra, so batch it with another order; Home Depot T-W Evans 100 ft is $18.60). The 10.99 in bungee is under a foot a side: buy 2 ft for both'), perPart: 10.99 / 12 } },
+  { match: /^brake-cord$/, override: true, price: { ...amazonPack(10, 6.99, 'ft', 'Huouo 1/4" x 10 ft black bungee shock cord (latex core, polyester cover; the same listing sells 1/8"). The 10.99 in bungee is under a foot a side: about 2 ft used', AM + '10-Bungee-Shock-Cord-Elastic/dp/B07WRY2C73/', '10 ft piece'), perPart: 10.99 / 12 } },
   { match: /^brake-chock-cord$/, override: true, price: owned('ea', 'paracord for the 30 in wheel-chock cords (a 100 ft roll was priced at $34)') },
   // D-89 (round 2): the brake stop cord is a short paracord down-tie from the flap eye to a low eye on the transom, cut from the troop's paracord.
   { match: /^brake-stop-cord$/, override: true, price: owned('ea', 'paracord for the brake stop cords (3/16 in, about 6 in each with the knots)') },
   { match: /^handle-pin$/, price: est(5, 'ea', MCM, 'clevis pin and lynch pin') },
   { match: /^(lamp-clip|rear-lamp-clip)$/, price: notFound(est(3, 'ea', 'Printed in-house (ASA)', 'about 0.2 lb of filament, no support (no US price for ASA filament found, only UK/EU listings)')) },
-  { match: /^front-light$/, override: true, price: withAlts(
-    foundCP(41.95, 'ea', 'Bicycle Warehouse', 'https://bicyclewarehouse.com/products/recon-600-led-usb-bike-headlight', 'Giant Recon 600 LED USB headlight (600/300/150 lm, 1600 mAh, 87 g); 600 lm is plenty at walking pace. The clip that holds it is printed to the light: re-measure it'),
-    [foundCP(58.95, 'ea', 'Modern Bike', 'https://www.modernbike.com/cygolite-metro-plus-800-rechargeable-headlight', 'Cygolite Metro Plus 800 (800 lm; $73.95 at Bicycle Warehouse), the light the model was first sized for', true)]) },
-  { match: /^rear-light$/, override: true, price: withAlts(
-    foundCP(21.99, 'ea', 'Bicycle Warehouse', 'https://bicyclewarehouse.com/products/planet-bike-spok-usb-taillight', 'Planet Bike Spok USB tail light (lumens not stated on the page); re-measure the printed clip'),
-    [foundCP(44.95, 'ea', 'Cahaba Cycles', 'https://www.cahabacycles.com/products/cygolite-hotshot-pro-200c-usb-light-rear-black', 'Cygolite Hotshot Pro 200C USB rear light (brighter)', true)]) },
+  { match: /^front-light$/, override: true, price: amazonEst(8.495, 'ea', 'WORKPRO bike light set, one front and one rear, $16.99 for the pair, shown as half each: IP65, USB-C, a twist-lock base on a silicone strap (the light twists off for charging). The printed clip is drawn to the light: measure the real light and its base, then re-measure the clip') },
+  { match: /^rear-light$/, override: true, price: amazonEst(8.495, 'ea', 'WORKPRO bike light set (the rear half of the pair, $16.99 for both), the same twist-lock base on a silicone strap. The printed clip is drawn to the light: measure the real light and its base, then re-measure the clip') },
+  { match: /^reflector$/, override: true, price: amazonPack(4, 6.59, 'ea', 'Runseaway red oval self-adhesive reflector, 96 x 24 mm (3.78" x 0.94"), 8.5 mm (0.33") thick, 4-pack. Red all round: nothing requires amber at the front of a sled used off the road. Not DOT-marked. It fits the 1-1/2" gunwale band with 1/4" to spare above and below', AM + 'Runseaway-Reflector-Self-Adhesive-Reflectors-Motorcycles/dp/B0DP8T1KTT', 'pack of 4') },
   // D-83: the seat pads are Harbor Freight EVA kneeling pads, $7.99 each; the cushion is two pads (edge-glued), the back one.
   { match: /^seat-cushion$/, override: true, price: foundCP(15.98, 'ea', 'Harbor Freight', 'https://www.harborfreight.com/foam-kneeling-pad-56572.html', 'two Foam Kneeling Pads #56572 (EVA, 11 x 18 x 1-1/2 in., about 1 lb each) at $7.99: the cushion is two pads edge-glued, closed-cell so it sheds rain; no vinyl cover. Check the pad size before ordering') },
   { match: /^seat-back-pad$/, override: true, price: foundCP(7.99, 'ea', 'Harbor Freight', 'https://www.harborfreight.com/foam-kneeling-pad-56572.html', 'one Foam Kneeling Pad #56572 (EVA, 11 x 18 x 1-1/2 in.) for the back pad, trimmed to size') },
@@ -283,8 +290,8 @@ export interface ModelCostNote { match: RegExp; note: string; alternatives?: Pri
 export const PURCHASED_MODEL_COST_NOTE: ModelCostNote[] = [
   // No source behind these two model costs: estimates until a quote is read.
   { match: /^brake-foot-tread$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $3 a tread for a ribbed rubber stair-tread or neoprene sheet offcut; not in any price research' },
-  { match: /^storage-bumper$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $2 a bumper, half of a hardware-store pack of clear 1/2" self-stick rubber bumpers (about $4; check one is about 1/8" tall, the two hinge leaves folded together); not in any price research' },
-  { match: /^chain-keeper-cord$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $0.15 a side for about 6" of 1/8" shock cord (a V through the screw eye, knotted to two chain links), cut from a foot bought at a hardware store (about $0.20 to $0.30 a foot; the 1/4" brake bungee cord is too stiff for this); not in any price research. The screw eyes are on the fastener lines' },
+  { match: /^storage-bumper$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $2 a bumper, half of a Home Depot pack of clear 1/2" self-stick rubber bumpers (about $4; check one is about 1/8" tall, the two hinge leaves folded together); not in any price research' },
+  { match: /^chain-keeper-cord$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $0.15 a side for about 6" of 1/8" shock cord (a V through the screw eye, knotted to two chain links), cut from the 10 ft of 1/8" Huouo shock cord bought with the brake cord (Amazon, same listing; the 1/4" brake bungee cord is too stiff for this); its price was not recorded. The screw eyes are on the fastener lines' },
   { match: /^flag-tube$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $4 for a 1" schedule 40 PVC tube cut to length (a 10 ft stick of 1" PVC is the usual sale; ask for a cut piece); not in any price research' },
   { match: /^storage-hinge$/, note: `ESTIMATE, model cost: the 2-1/2" x 1-1/2" (open, 3/4" leaves, D-89) 316 hinge was not found in the ${RESEARCH_DATE} research`, alternatives: [
     gap(found(13.545, 'ea', 'Freeport Marine', 'https://www.freeportmarine.com/products/seachoice-2-316-stainless-steel-butt-hinges.oembed', 'Seachoice 33911 2" x 2" 316 butt hinges, $27.09 a pair, shown as half each', true), 'the hinge is 2" x 2" (1" leaves), not 2-1/2" x 1-1/2": its leaf is wider than the 3/4" lid frame end it lies on (D-89)')] },
@@ -294,8 +301,6 @@ export const PURCHASED_MODEL_COST_NOTE: ModelCostNote[] = [
   { match: /^brake-pivot-pin$/, note: `model cost kept: no 3/8" 316 clevis pin found in the ${RESEARCH_DATE} research` },
   { match: /^brake-pivot-clip$/, note: 'model cost kept: no 316 hitch-pin clip found', alternatives: [
     gap(foundPack(25, 13.43, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Product-Details?product=27209', 'hitch pin clip, 0.093" wire, for 3/8" to 5/8" pins (27209), $0.82 each, 13.43 per 25 (124 per 250)', true), '18-8 stainless, not 316')] },
-  { match: /^reflector$/, note: 'model cost kept: no 2" x 1" adhesive prismatic reflector found', alternatives: [
-    gap(foundPack(4, 3.95, 'ea', 'Skycraft Surplus', 'https://skycraftsurplus.com/products/optronics-re10arfk-reflector-kit-4-pack.html', 'Optronics RE10ARFK reflector kit, 4 pack (2 red, 2 amber), FMVSS/DOT; a 2-round red/amber set is $11.05 at Walmart', true, 'pack of 4'), 'the reflectors are 3-3/16" x 1-7/16", bigger than 2" x 1", and C2 is not stated')] },
 ];
 export const modelCostNote = (partNo: string, spec: SpecName = 'extreme'): ModelCostNote | undefined =>
   (spec === 'standard' ? PURCHASED_MODEL_COST_NOTE_STANDARD.find((r) => r.match.test(partNo)) : undefined) ?? PURCHASED_MODEL_COST_NOTE.find((r) => r.match.test(partNo));
@@ -326,7 +331,7 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /cotter pin/i, price: withAlts(foundPackCP(25, 21.19, 'ea', 'Zoro', 'https://www.zoro.com/i/G3426151/', '316 extended-prong cotter pin 5/32" x 1-1/2" (Zoro Select U55700.015.0150), 25-pack: the only 316 source found (Bolt Depot has no 316 cotter pin); only four are needed, keep the rest'), [
     gap(foundPack(100, 14.95, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Product-Details?product=14570', 'cotter pin 5/32" x 1-1/4" (14570), $0.21 each, 14.95 per 100 (5/32 x 1-3/4 is $0.28, 19.68 per 100)', true), '18-8 stainless, not 316, and 1-1/4" not 1-1/2" long; Bolt Depot has no 316 cotter pin')]) },
   { match: /end plug/i, price: packed(10, 5, 'ea', FAST, 'plastic flanged plug for the DOM tube bore; pack of 10') },
-  { match: /button plug/i, price: foundPack(25, 4.55, 'ea', 'DigiKey (Keystone)', 'https://www.digikey.com.mx/en/products/detail/keystone-electronics/8604/317044', 'Keystone 8604 black nylon hole plug, 0.625", about $0.18 each at 25; pack of 25', true) },
+  { match: /button plug/i, price: { ...amazonEst(4.55 / 20, 'ea', 'Heyiarbeit black PA66 nylon snap-in hole plug, 16 mm (0.63") body, 20-piece pack, for a 5/8" hole; its panel-thickness range is not stated, so test one in a 1/8" wall (a dab of epoxy holds it if loose). The figure is the DigiKey pack it replaces', AM + 'Heyiarbeit-Plastic-Diameter-Furniture-Equipment/dp/B08VX13KX2/'), packQty: 20, packUsd: 4.55 } },
   { match: /nylon washer/i, price: withEach(foundPackCP(100, 5.17, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Product-Details?product=15939', 'nylon 6/6 flat washer 1/4" (#15939) under the button head, $0.09 each or 5.17 per 100'), 0.09) },
   { match: /stainless rod/i, price: est(2.275, 'ea', 'Speedy Metals', 'ESTIMATE: 1/4" 316 stainless round by the inch, 5 in cuts both 2-1/4" pins on the metal bandsaw; the quote was for 3/8" ($0.91 an inch), and 1/4" costs less (https://www.speedymetals.com/p-2616-x.aspx)') },
   // D-79: beech Dominos from the shop in both specs (the Sipo packs and the Sipo 4x20 decision are gone).
@@ -418,14 +423,12 @@ export const FILLERS: Record<string, Price> = {
 /** Items that exist only as text in a note or a joint (see `NOTE_ITEMS` in bom.ts). */
 export const NOTE_PRICE: Record<string, Price> = {
   // D-83: hook-and-loop for the EVA seat pads: Velcro Industrial 2" x 4 ft, $7.52 [S] (weaker in peel than Dual Lock at $19.99, and wears; fine for a 1 lb pad held in by the cushion shape).
-  hookLoop: foundCP(7.52, 'pack', 'Blue Dog Ink', 'https://www.bluedogink.com/velcro-brand-industrial-strength-heavy-duty-fasteners-2-x-4-ft-white-90595.html', 'VELCRO Brand Industrial Strength 2" x 4 ft, white (90595), adhesive back. the seat needs four 12" strips of each half, 4 ft of each (OfficeCrave $8.02; Amazon $6.19 in February 2026)', true),
+  hookLoop: amazon(3.57, 'pack', 'VELCRO Brand Industrial Strength 2" x 4 ft, adhesive back (the seat needs four 12" strips of each half, 4 ft of each); weaker in peel than Dual Lock, and wears; fine for a 1 lb pad held in by the cushion shape', 'https://www.amazon.com/VELCRO-Brand-Industrial-Strength-Fasteners/dp/B00006IC2T/'),
   // D-83: Band-It iron-on banding, 3/4" x 25 ft, $9.99 [S]; the listing is red oak: look for white oak, or use the red oak (it stains a little differently).
-  edgeBanding: foundCP(9.99, 'roll', 'Ace Hardware (Band-It)', 'https://www.acehardware.com/p/5005152', 'Band-It pre-glued red oak edge banding, 3/4" x 25 ft (iron on, flush trim); white oak if the store has it', true),
-  // D-79 and D-83: Life-Calk 1030, the 2.8 oz tube. The handle sockets are bedded in thickened epoxy now, so the tube covers the grab-board strips and the gasket splice.
-  sealant: foundCP(15.69, 'ea', 'Powerboat Supply', 'https://powerboatsupply.com/boat-supplies-accessories/paint-maintenance/sealant-adhesive/caulks-sealants/boat-life-life-calk-tube-white-1030', 'BoatLIFE Life-Calk 1030 polysulfide marine sealant, 2.8 oz tube (Fisheries $16.42; the 10.6 oz cartridge is $27.00); polyurethane 3M 5200 is not polysulfide', true),
+  edgeBanding: amazonEst(9.99, 'roll', 'pre-glued oak veneer edge banding, 3/4" wide x 25 ft (iron on, flush trim); red or white oak (white matches the sled, and the dye evens out red). The figure is the Band-It roll at Ace it replaces; no listing picked yet'),
   contactCement: owned('ea', 'contact cement (brake pads and treads), already in the shop'),
   toolPouch: est(30, 'ea', 'Hardware store', 'a small tool pouch with a 3/8" drive ratchet, a 9/16" socket and a 9/16" combination wrench (a basic set; you may already own one)'),
-  antiSeize: foundCP(3.97, 'ea', 'Walmart (Permatex 81343)', 'https://www.walmart.com/ip/19868891', 'Permatex anti-seize lubricant, 1 oz tube (Ace $6.99): a small tube for the stainless knee-bolt threads, which gall without it', true),
+  antiSeize: amazonEst(3.97, 'ea', 'Permatex anti-seize lubricant, 1 oz tube (a small tube for the stainless knee-bolt threads, which gall without it); the figure is the Walmart price it replaces'),
   // D-79: the troop's paracord (the stop cord of each brake; the chock cords are in PURCHASED_PRICE).
   paracord: owned('ea', 'paracord for the brake stop cords (3/16 in, about 6 in each with the knots)'),
 };
@@ -439,8 +442,8 @@ export const FINISH_PRICE: Record<string, Price> = {
   // D-99: one 2 oz bottle of the concentrate, mixed with water; not looked up (Eric's figure, about $20 at Rockler or Woodcraft).
   dye: est(20, 'bottle', 'Rockler / Woodcraft', 'TransTint liquid dye concentrate, Golden Brown, 2 oz bottle (Homestead Finishing), about $20'),
   varnish: found(53.99, 'qt', 'TotalBoat', 'https://www.totalboat.com/products/lust-marine-spar-varnish', 'TotalBoat Lust Rapid Recoat marine spar varnish, quart (heavily fortified with UV stabilizers)'),
-  // D-83: the lid legend is filled with a black oil-based paint marker, not a half pint of enamel.
-  enamel: foundCP(4.9, 'ea', 'Walmart (Sharpie)', 'https://www.walmart.com/ip/seort/5468037669', 'Sharpie oil-based paint marker, fine point, black (Rust-Oleum gloss black half pint is $9.99), for the lid legend grooves', true),
+  // D-106: the lid legend is filled with black epoxy (pigment in a little mixed epoxy), not a paint marker or a half pint of enamel.
+  pigment: est(5, 'ea', 'U.S. Composites or an art-supply store', 'ESTIMATE, no source: a small tube of black epoxy pigment (a pinch fills the lid legend grooves); not in any price research'),
   // D-79: shop stock. The thinner is mineral spirits Eric already has; the sandpaper and the supplies lot (brushes, rollers, cups, gloves) too.
   thinner: owned('pt', 'mineral spirits for the urethane (coat 1 thinning and brush cleaning)'),
   sandpaper: { ...owned('lot', 'sandpaper, the discs and sheets 80 to 320 grit for the finishing schedule'), packQty: 1, packUsd: 0 },
@@ -450,7 +453,7 @@ export const FINISH_PRICE: Record<string, Price> = {
  * Researched container prices (the real products), keyed like `FINISH_PRICE`; a container without one is priced as the base per-quart price times `FINISH_CONTAINER_FACTOR`.
  */
 export const FINISH_CONTAINER_PRICE: Record<string, Partial<Record<'pt' | 'qt' | 'gal', Price>>> = {
-  enamel: { pt: FINISH_PRICE.enamel },
+  pigment: { pt: FINISH_PRICE.pigment },
   varnish: {
     pt: found(32.99, 'pt', 'TotalBoat', 'https://www.totalboat.com/products/lust-marine-spar-varnish', 'TotalBoat Lust Rapid Recoat marine spar varnish, pint'),
     qt: withAlts(found(53.99, 'qt', 'TotalBoat', 'https://www.totalboat.com/products/lust-marine-spar-varnish', 'TotalBoat Lust Rapid Recoat marine spar varnish, quart (heavily fortified with UV stabilizers)'),
@@ -540,7 +543,7 @@ export const FASTENER_PRICE_STANDARD: Array<{ match: RegExp; price: Price }> = [
   { match: /cotter pin/i, price: withAlts(
     bd18(14571, 'ea', '18-8 cotter pin 5/32" x 1-1/2" (#14571)', 0.32, 100, 22.64, 'Bolts and Nuts extended-prong $0.65 each'),
     [gap(bd18(14570, 'ea', '18-8 cotter pin 5/32" x 1-1/4" (#14570)', 0.27, 100, 19.43), 'the pin is 1-1/4" long, not 1-1/2"')]) },
-  { match: /shaft collar/i, price: foundCP(4.52, 'ea', 'Penn Tool Co.', 'https://www.penntoolco.com/87986402', 'Climax C-062 one-piece set-screw collar, 5/8" bore, 1-1/8" OD x 1/2", zinc plated: the Standard weather spec (garage-kept). PartsSource GSC-062-Z zinc is $4.99; 316 (Climax CRC-062-S) is $19.89 at Newegg/Zoro (the Extreme spec)') },
+  { match: /shaft collar/i, price: amazonEst(4.52, 'ea', 'Luyostk SC-62-Z zinc-plated carbon-steel set-screw collar, 5/8" bore, 1-1/8" OD x 1/2", 5/16-18 set screw; 4-piece pack with set screws and a hex wrench; the Standard weather spec (garage-kept). The figure is the Penn Tool price it replaces; the same listing offers a stainless one (SC-62-S, grade not stated) for the Extreme spec', AM + 'Shaft-Collar-Plated-Set-Screw-Collars/dp/B0FK4S8MCF/') },
   { match: /stainless rod/i, price: est(2.5, 'ea', FAST_STD, 'cut from a 1/4" x 12" 304 rod (about $10 or less): five pins per rod. ESTIMATE, scaled from the 316 estimate; not in the Standard research') },
   { match: /screw eye/, price: withAlts(
     { ...packed(2, 1.57, 'ea', 'Home Depot (Everbilt)', 'ESTIMATE (Standard spec): Everbilt 1/4" x 2" stainless screw eye, 2-piece pack at $1.57 (model 824351; 4 packs for the 8). The size is eye diameter x length, not a #10 shank, and the grade is not stated: check the package for 304 and that the eye takes the brake cord tie'), url: 'https://www.homedepot.com/s/stainless%20steel%20screw%20eye' },
@@ -580,11 +583,11 @@ export interface StdPurchasedEntry extends PurchasedPriceEntry { describe?: stri
 export const PURCHASED_PRICE_STANDARD: StdPurchasedEntry[] = [
   { match: /^steer-eye$/, price: withAlts(EYE_GALV.steerEye, [EYE_316.steerEye], EYE_DECISION) },
   { match: /^steer-anchor$/, price: withAlts(EYE_GALV.steerAnchor, [EYE_316.steerAnchor], EYE_DECISION) },
-  { match: /^steer-chain$/, override: true, price: found(Math.round(((CHAIN_CUT_IN / 12) * 2.12 + 2 * 1.99) * 100) / 100, 'ea', 'Home Depot (Everbilt) / Ace (Campbell)', 'https://homedepot.com/p/Everbilt-3-16-in-x-1-ft-Grade-30-Zinc-Plated-Steel-Proof-Coil-Twist-Link-Chain-811646/303285928',
-    `3/16" Grade 30 zinc proof coil chain at $2.12/ft (${CHAIN_CUT_IN} in; WLL 750 lb; the page showed 0 in stock; KingChain 15 ft tub $15.59, about $1.04/ft) plus two Campbell 3/16" zinc quick links at $1.99 each (Ace Hardware item 52604; WLL 660 lb)`, true), describe: 'Steering check chain (3/16" zinc chain, zinc quick links)' },
+  { match: /^steer-chain$/, override: true, price: found(Math.round(((CHAIN_CUT_IN / 12) * 2.12 + 2 * 3.96) * 100) / 100, 'ea', 'Home Depot (Everbilt)', 'https://homedepot.com/p/Everbilt-3-16-in-x-1-ft-Grade-30-Zinc-Plated-Steel-Proof-Coil-Twist-Link-Chain-811646/303285928',
+    `3/16" Grade 30 zinc proof coil chain at $2.12/ft (${CHAIN_CUT_IN} in; WLL 750 lb; the page showed 0 in stock; KingChain 15 ft tub $15.59, about $1.04/ft) plus two Everbilt 3/16" zinc quick links at $3.96 each (42714, read via search ${AMAZON_DATE}; its working load is not on the listing, so check the package against the 660 lb of the Campbell link it replaces)`, true), describe: 'Steering check chain (3/16" zinc chain, zinc quick links)' },
   // D-83: the cheap stainless hinge pairs. The stainless grade is not printed on either listing: check the package for 304 (a magnet test: 304 is barely magnetic) before using them on wet oak.
   { match: /^seat-hinge$/, override: true, price: withAlts(
-    foundCP(6.495, 'ea', 'Ace Hardware', 'https://www.acehardware.com/departments/hardware/door-hardware/door-hinges/5006016', 'Ace 2" stainless narrow tight-pin hinge, pack of 2 at $12.99, shown as half each. A narrow utility hinge: check its leaf width and screw holes against the three-insert pattern before buying. The grade is not stated: check the package for 304', true),
+    searchEst(2.735, 'ea', 'Home Depot (Everbilt)', 'Everbilt 2" stainless non-removable-pin narrow utility hinge (29197), 2-pack at $5.47, shown as half each (the Ace hinge it replaces was $12.99 a pair). A narrow utility hinge: check its leaf width and screw holes against the three-insert pattern when it is in hand. The grade is not stated: check the package for 304', 'https://www.homedepot.com/p/Everbilt-2-in-Stainless-Steel-Non-Removable-Pin-Narrow-Utility-Hinge-2-Pack-29197/314151585'),
     [foundCP(11.005, 'ea', 'MarineEngine.com (Sea-Dog)', 'https://www.marineengine.com/boat-accessories/hardware/201582-1', 'Sea-Dog 201582-1 stainless butt hinge 2" x 2", described as 304 stamped stainless, pack of 2 at $22.01, shown as half each (fasteners not included)', true)]) },
   { match: /^storage-hinge$/, override: true, price: withAlts(
     foundCP(2.735, 'ea', 'Home Depot (Everbilt)', 'https://homedepot.com/p/Everbilt-2-1-2-in-Stainless-Steel-Non-Removable-Pin-Narrow-Utility-Hinge-2-Pack-29207/314151807', 'Everbilt 2-1/2" stainless non-removable-pin narrow utility hinge (29207), 2-pack at $5.47, shown as half each. A narrow utility hinge, not a mortise hinge, and the grade is not stated: check the package for 304. D-89: the model asks for 2-1/2" x 1-1/2" open (3/4" leaves), which this narrow hinge is about: check the leaf against the 3/4" lid frame face', true),
@@ -646,7 +649,7 @@ export const URETHANE_CONTAINER_PRICE: Partial<Record<'pt' | 'qt' | 'gal', Price
   qt: withAlts(found(22.88, 'qt', 'Walmart', URETHANE_QT_URL, 'Minwax Helmsman Spar Urethane, oil-based, gloss, quart (63200444): about 100 ft² a quart on the can; Lowe\'s 29.98, Ace 31.99; street prices 22-32', true),
     [found(29.98, 'qt', 'Home Depot', 'https://www.homedepot.com/p/Varathane-1-Quart-Clear-Gloss-Oil-Based-Exterior-Spar-Urethane-9241H/100209410', 'Varathane Ultimate oil-based exterior spar urethane, quart (9241H)', true),
      found(29.99, 'qt', 'Ace Hardware', 'https://www.acehardware.com/departments/paint-and-supplies/stains-and-finishes/varnish/1372952', 'Minwax Helmsman WATER-based spar urethane, quart: low odor, less amber, builds thinner', true)]),
-  gal: found(59.99, 'gal', 'Ace Hardware', 'https://www.acehardware.com/departments/paint-and-supplies/stains-and-finishes/varnish/11844', 'Minwax Helmsman spar urethane, oil-based, gloss, gallon (13200000): cheaper than three quarts ($68.64); Walmart and Anderson Lumber 67.99', true),
+  gal: searchEst(59.99, 'gal', 'Home Depot (Varathane)', 'Varathane oil-based exterior spar urethane, clear gloss, 1 gal (9231). The price was not seen (Minwax Helmsman was $59.99 at Ace; Home Depot sells Helmsman only as a 2-pack, $80 to $100); the Varathane quart is $29.98. A different brand from the Helmsman the schedule was written for, but also an oil-based spar urethane', 'https://www.homedepot.com/p/Varathane-1-Gal-Clear-Gloss-Oil-Based-Exterior-Spar-Urethane-9231/100158335'),
 };
 
 /** Standard 304 estimate for a stainless metal-stock price that the research found (or estimated) in 316: 304 is not researched, so 85 % of the 316 price, flagged as an estimate. */

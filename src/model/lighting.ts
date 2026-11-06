@@ -18,11 +18,11 @@ const unit = (x: number, y: number, z: number): Vec3 => {
 };
 
 // ── Estimates / placeholders (D-41) ──
-/** D-83: Giant Recon 600 headlight, 87 g (0.19 lb). */
+/** D-83: the front light of the WORKPRO set (5.6 oz for the pair; the front is taken as 0.19 lb: re-weigh). */
 const FRONT_LIGHT_MASS_LB = 0.19;
 /** 3c visual round 2: 1.25x across and tall (was 3 x 2.2 x 1.8; the reviewer found it small against the 21 in bulkhead). Same length (no longer overall), the top at about 4.75 in over the deck, still under the 4 7/8 in bulkhead corners. */
 const FRONT_LIGHT_SIZE = [3, 2.75, 2.25] as const;
-/** D-83: Planet Bike Spok tail light, about 0.06 lb (estimate). */
+/** D-83: the tail light of the WORKPRO set, about 0.06 lb (estimate: re-weigh). */
 const REAR_LIGHT_MASS_LB = 0.06;
 /** The lamp clip (3c-5): print clearance per side in the slot, and how far the plug stands proud of the bulkhead's front face (the lamp's seat). */
 export const LAMP_CLIP = { clearIn: 0.02, lipIn: 0.5 } as const;
@@ -34,7 +34,8 @@ const REAR_LIGHT_SIZE = [0.75, 2, 1.5] as const;
  */
 export const REAR_LAMP_CLIP = { outerLipIn: 0.5, innerLipIn: 0.25, boxClearIn: 0.125 } as const;
 const REFLECTOR_MASS_LB = 0.05;
-export const REFLECTOR_SIZE = [2, 0.25, 1] as const;
+/** The Runseaway oval reflector (3.78" x 0.94" x 0.33"), red, self-adhesive. It fits the 1-1/2" gunwale band with 1/4" to spare. */
+export const REFLECTOR_SIZE = [3.78, 0.33, 0.94] as const;
 /**
  * Fastener allowance (Phase 3 integration). The old flat 2.5 lb lump predated the itemized hinges, latches, lash plates, U-bolts,
  * eye bolts, kingpin, pins and clamp plates, so it is now a REMAINDER computed from the model's own joints: every fastener that is
@@ -107,12 +108,12 @@ export function buildLighting(ctx: Ctx): Part[] {
     }));
     const lampW = FRONT_LIGHT_SIZE[0];
     parts.push(box(ctx, {
-      ...common, id: 'front-light', name: 'Front LED headlight', mat: 'fixed', massLb: FRONT_LIGHT_MASS_LB, kind: 'purchased', material: 'LED headlight (Giant Recon 600)', fab: 'buy',
+      ...common, id: 'front-light', name: 'Front LED headlight', mat: 'fixed', massLb: FRONT_LIGHT_MASS_LB, kind: 'purchased', material: 'LED headlight (WORKPRO set)', fab: 'buy',
       removable: true, explode: unit(0.8, 0, 0.2), size: [...FRONT_LIGHT_SIZE],
       center: [lampX0 + lampW / 2, 0, L.hold.zMid],
-      sourcing: { vendor: 'Bicycle Warehouse (Giant Recon 600 rechargeable LED headlight, 87 g, flat mount)', costUsd: 41.95 },
+      sourcing: { vendor: 'Amazon (WORKPRO bike light set, one front and one rear, USB-C, IP65; the light twists into a base plate on a silicone strap)', costUsd: 8.5 },
       joints: [{ type: 'screw', to: 'lamp-clip', count: 2, size: 'M4 stainless, into heat-set inserts in the lip' }],
-      notes: 'D-83: Giant Recon 600 (87 g); the printed clip was drawn for a different light, so RE-MEASURE the clip and its two screw inserts to the real light before printing. Faces forward from the front lip of the lamp clip, which sits in the bow bulkhead\'s hand-hold (3c-5). Warm-white lens.',
+      notes: 'D-83: the front light of a WORKPRO set. It twists off a base plate on a silicone strap (for charging); the printed clip was drawn for a different light, so measure the real light and its base, then RE-MEASURE the clip (the strap round a post on the lip, or the base plate screwed to it) before printing. Faces forward from the front lip of the lamp clip, which sits in the bow bulkhead\'s hand-hold (3c-5). Warm-white lens.',
     }));
   }
 
@@ -179,15 +180,15 @@ export function buildLighting(ctx: Ctx): Part[] {
       notes: `D-64: printed ASA plug, ${len.toFixed(2)}" × ${h.toFixed(2)}" (the ${p.liftSlotLengthIn}" × ${p.liftSlotHeightIn}" rear hand-hold less ${LAMP_CLIP.clearIn}" a side), ${depth.toFixed(2)}" long: through the ${L.transom}" transom, ${outer}" proud of the outer face (the lip that carries the tail light) and ${inner.toFixed(2)}" past the inner face, which leaves ${(gap - inner).toFixed(2)}" to the storage box end (at least ${REAR_LAMP_CLIP.boxClearIn}"). The same stadium extrusion as the front clip (outline in y-z, depth along x): print it lying on one long face, 4+ perimeters (P4). Two 0.04" detent ribs make the push fit firm; the light's flat mount screws to two M3 heat-set inserts in the outer lip. Pop it out before lifting: the rear lifter's hands need the slot, so both lamps come out (D-37, D-64). It is not on a load path; it is removable. VERIFY ON THE REAL PARTS: only ${LAMP_CLIP.clearIn}" of clearance a side in a Shaper-cut, epoxy-sealed slot in a ${L.transom}" transom whose slot edges are eased; print a 1" test slice at 0.04 to 0.05" a side with 0.05" ribs and try it in the real hand-hold before printing the whole clip.`,
     }));
     parts.push(box(ctx, {
-      ...common, id: 'rear-light', name: 'Rear red light', mat: 'fixed', massLb: REAR_LIGHT_MASS_LB, kind: 'purchased', material: 'LED tail light (Planet Bike Spok)', fab: 'buy',
+      ...common, id: 'rear-light', name: 'Rear red light', mat: 'fixed', massLb: REAR_LIGHT_MASS_LB, kind: 'purchased', material: 'LED tail light (WORKPRO set)', fab: 'buy',
       removable: true, size: [...REAR_LIGHT_SIZE], center: [clipX0 - REAR_LIGHT_SIZE[0] / 2, 0, zMid],
-      sourcing: { vendor: 'Bicycle Warehouse (Planet Bike Spok rear LED light)', costUsd: 21.99 },
+      sourcing: { vendor: 'Amazon (WORKPRO bike light set, the rear light: the same twist-lock base on a silicone strap)', costUsd: 8.5 },
       joints: [{ type: 'screw', to: 'rear-lamp-clip', count: 2, size: 'M3 × 8 stainless, into heat-set inserts in the outer lip' }],
-      explode: unit(-1, 0, 0.5), notes: 'D-64, D-83: Planet Bike Spok (mass about 0.06 lb: VERIFY); the printed clip must be RE-MEASURED to the real light before printing. Faces aft from the outer lip of the rear lamp clip, centered on the transom\'s hand-hold. Red lens. Pops out with the clip before lifting.',
+      explode: unit(-1, 0, 0.5), notes: 'D-64, D-83: the rear light of the WORKPRO set (mass about 0.06 lb: VERIFY); measure the real light and its base, then RE-MEASURE the printed clip before printing. Faces aft from the outer lip of the rear lamp clip, centered on the transom\'s hand-hold. Red lens. Pops out with the clip before lifting.',
     }));
   }
 
-  // ── Side reflectors (DOT-C2 adhesive-backed), forward and aft on each side: on the outside face of the gunwale, turned to the sled slope ──
+  // ── Side reflectors (adhesive-backed), forward and aft on each side: on the outside face of the gunwale, turned to the sled slope ──
   const { p } = ctx;
   const reach = L.xSideEnd - L.xRear;
   const washers = sideRibStations(p, L).map(ribWasherSpan);
@@ -200,7 +201,7 @@ export function buildLighting(ctx: Ctx): Part[] {
       // D-76: and it stays 1/4 in clear of the outside fender washers of the side-rib D-ring bolts (D-83) (the box rib's station is set so the rear one does not have to move).
       for (const [wa, wb] of washers) if (x + REFLECTOR_SIZE[0] / 2 + 0.25 > wa && x - REFLECTOR_SIZE[0] / 2 - 0.25 < wb) x = wb + REFLECTOR_SIZE[0] / 2 + 0.25;
       if (x + REFLECTOR_SIZE[0] / 2 + 0.1 > stripX0 && x - REFLECTOR_SIZE[0] / 2 - 0.1 < stripX1) x = stripX1 + REFLECTOR_SIZE[0] / 2 + 0.3;
-      const color = i === 0 ? 'red' : 'amber'; // 3c-5: red at the rear, amber at the front (DOT-C2 side marker colors)
+      const color = 'red'; // red all round: nothing requires amber at the front of a sled used off the road
       // D-66: the side draws in toward the bow (L.turnIn), so the reflector sits on the tapered outer face and turns with it in plan.
       const outerHalf = L.hwC + L.side - L.turnIn(x);
       const dTurn = (L.turnIn(x + 0.25) - L.turnIn(x - 0.25)) / 0.5;
@@ -208,7 +209,7 @@ export function buildLighting(ctx: Ctx): Part[] {
         id: `reflector-${tag}${i + 1}`, partNo: 'reflector', name: `Side reflector ${tag}${i + 1} (${color}, ${i === 0 ? 'rear' : 'front'})`, group: 'lighting', mat: 'fixed', massLb: REFLECTOR_MASS_LB,
         kind: 'purchased', material: 'reflector', fab: 'buy', step: STEP.finish, size: [...REFLECTOR_SIZE],
         center: [x, s * (outerHalf + REFLECTOR_SIZE[1] / 2), sideTopAt(L, x) - L.railBand / 2], rot: { y: sideSlopeAt(L, x), z: -s * Math.atan(dTurn) },
-        sourcing: { vendor: `Generic 2" × 1" adhesive-backed prismatic side reflector, ${color} (DOT-C2 class: amber at the front, red at the rear)`, costUsd: 2 },
+        sourcing: { vendor: `Amazon (Runseaway 3-3/4" × 15/16" oval self-adhesive reflector, ${color}, 4-pack)`, costUsd: 1.65 },
         notes: `Stick-on ${color} prismatic reflector on the gunwale's outer face; wipe the varnish clean and press for 60 s (D-41, 3c-5).`,
       }));
     });

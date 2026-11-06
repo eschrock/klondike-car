@@ -198,7 +198,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       title: 'Lamp clips: measure the real lights, then fit the clips',
       how: [
         it('Measure the real lights before anything is printed.', [
-          'The front light is a Giant Recon 600, the rear a Planet Bike Spok.',
+          'The lights are a WORKPRO front and rear set.',
           'Measure each light\'s mount: the distance between its two screw holes and the hole size.',
         ]),
         it(`Print a 1" test slice of the clip and push it into a ${handHold} test slot cut in an offcut of the bulkhead stock.`),

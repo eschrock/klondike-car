@@ -47,7 +47,7 @@ export const SECTION_BLURB: Record<BomSection['id'], string> = {
   metal: 'Steel rod for the axles, stainless bar and angle for the axle clamps and brake straps, and aluminum tube for the handlebow sockets. Bought as stock and cut and drilled in the shop: no welding.',
   purchased: 'Ready-made parts: four 10" air-filled wheels, the steering pivot and check chains, seat-back hinges and pins, the storage-box lid hinges and gasket, brake pads, the pull rope and a flag holder.',
   fasteners: `Stainless screws, bolts, nuts and washers, threaded inserts for the parts that come off, the axle collars and plugs. The joinery tenons come from ${DONOR}'s shop at no cost.`,
-  consumables: `Epoxy, a golden-brown wood dye, exterior spar urethane, marine sealant and edge banding. Wood glue, sandpaper, brushes and thinner come from ${DONOR}'s shop at no cost.`,
+  consumables: `Epoxy, a golden-brown wood dye, exterior spar urethane and edge banding. Wood glue, sandpaper, brushes and thinner come from ${DONOR}'s shop at no cost.`,
   touches: 'Priced as their own group: a front headlight, a rear red light and reflectors for the night start, seat and back cushions, and tie-down points for hauling gear.',
 };
 

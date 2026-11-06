@@ -162,7 +162,7 @@ export function buildPivot(ctx: Ctx): Part[] {
     parts.push(mk({
       id: 'king-thrust', partNo: 'king-thrust', name: 'Kingpin thrust disc (UHMW)', group: 'front-end', kind: 'purchased', material: 'UHMW polyethylene disc',
       geometry: { type: 'cylinder', radius: od / 2, length: t }, transform: translation(kx, 0, z), massLb: (vol / 1728) * UHMW_PCF, body: 'chassis', fab: 'buy', step: STEP.gear, explode: [0, 0, 0.6],
-      sourcing: { vendor: `McMaster-Carr (UHMW-PE sheet ${frac(t)}" thick, cut a ${f2(od)}" disc with a ${f2(kd + 0.06)}" bore; or a bought ${f2(od)}" UHMW thrust washer). Screwed to the underside of the king beam, the axle beam turns under it. Check the bearing pressure at the supplier's PV limit (king-bearing row)` },
+      sourcing: { vendor: `Amazon (UHMW-PE sheet ${frac(t)}" thick, about 12" x 12"; cut a ${f2(od)}" disc with a ${f2(kd + 0.06)}" bore on the Shaper). Screwed to the underside of the king beam, the axle beam turns under it. Check the bearing pressure at the supplier's PV limit (king-bearing row)` },
       notes: `The thrust bearing (D-56, D-58): the king beam bears down through this ${f2(od)}" × ${frac(t)}" disc onto the TOP of the axle beam, which turns under it. It carries the static front load and the tilt of the tow pull; the one-wheel roll of a bump goes through the roll pads instead. UHMW against oak, no grease needed (wipe off sand). Its top face is the king beam bottom (z ${f2(L.king.bot)}"); the clamp plates on the beam top (to z ${f2(b.top + p.axleProudIn + p.clampPlateThickIn)}") pass under the king beam with ${f2(L.king.bot - b.top - p.axleProudIn - p.clampPlateThickIn)}" to spare.`,
     }));
   }
@@ -249,13 +249,13 @@ export function buildPivot(ctx: Ctx): Part[] {
       { type: 'bolt', to: 'kingpin', count: 1, diaIn: kd, size: `${frac(kd)}" kingpin hole through the beam center`, at: [[0, 0, 0]] }];
 
     // Bridle sleeve (D-62): bronze sleeve bearing across the stem, with a fender washer each side, so the rope does not wear the oak. The rope (no shackle) runs through its bore.
-    const sl = p.tongueWidthIn + 0.25;
+    const sl = p.tongueWidthIn; // the 1-1/4" sintered bushing is as long as the stem is wide: flush with both faces, the fender washers over its ends
     const sleeveId = p.tongueSleeveBoreIn;
     const svol = Math.PI * (holeR ** 2 - (sleeveId / 2) ** 2) * sl;
     parts.push(mk({
       id: 'bridle-sleeve', partNo: 'bridle-sleeve', name: 'Bridle sleeve (bronze)', group: 'front-end', kind: 'purchased', material: 'bronze sleeve bushing',
       geometry: { type: 'cylinder', radius: holeR, length: sl }, transform: compose([L.tongue.holeX, 0, zMid], { x: Math.PI / 2 }), massLb: (svol / 1728) * BRONZE_PCF + 0.05, body: 'front-axle', fab: 'buy', step: STEP.spindles, explode: [1, 0, 0.3],
-      sourcing: { vendor: `McMaster-Carr (oil-embedded bronze sleeve bearing, ${f2(sleeveId)}" ID x ${f2(p.tongueHoleDiaIn)}" OD x ${f2(sl)}" long; 2 fender washers ${f2(1.5)}" OD, one each side, epoxied in the ${f2(p.tongueHoleDiaIn)}" hole)` },
+      sourcing: { vendor: `Amazon (SpinCo oil-embedded sintered bronze sleeve bushing, ${f2(sleeveId)}" ID x ${f2(p.tongueHoleDiaIn)}" OD x ${frac(sl)}" long, 2-piece pack; 2 fender washers ${f2(1.5)}" OD, one each side, epoxied in the ${f2(p.tongueHoleDiaIn)}" hole)` },
       joints: [{ type: 'pin', to: 'bridle', count: 1, diaIn: p.bridleRopeDiaIn, size: `${f2(p.bridleRopeDiaIn)}" nylon bridle rope through the ${f2(sleeveId)}" bore`, at: [[0, 0, 0]] }, { type: 'pin', to: 'bridle-tongue', count: 1, diaIn: p.tongueHoleDiaIn, size: `${f2(p.tongueHoleDiaIn)}" hole across the stem`, at: [[0, 0, 0]] }],
       notes: `Sleeve (D-58): a ${f2(p.tongueHoleDiaIn)}" bronze sleeve bearing epoxied in the hole across the stem, ${f2(p.tongueTipEdgeIn)}" from the tip. The bridle rope (${f2(p.bridleRopeDiaIn)}" nylon, one strand) runs through its ${f2(sleeveId)}" bore, so the oak is not worn by the rope and the hole does not go oval: ease (flare or radius) both ends of the bore so the rope bears on a round edge. There is no shackle (D-62); the rope is the weak link.`,
     }));

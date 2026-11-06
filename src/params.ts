@@ -1256,8 +1256,8 @@ const defs = {
   },
   tongueSleeveBoreIn: {
     label: 'Bridle sleeve bore (bronze sleeve bearing ID)', group: 'steering', unit: 'in',
-    default: 0.625, min: 0.5, max: 0.875, step: 0.0625, status: 'assumed', ref: 'D-62',
-    note: 'The bridle rope runs through this bore (a single strand, so it needs only a little over the rope diameter). 5/8 in ID x 1 in OD oil-embedded bronze sleeve bearings are a stocked McMaster size (confirm). Round (flare or ease) both ends of the bore so the rope does not bear on a sharp edge.',
+    default: 0.75, min: 0.5, max: 0.875, step: 0.0625, status: 'assumed', ref: 'D-62',
+    note: 'The bridle rope runs through this bore (a single strand, so it needs only a little over the rope diameter). 3/4 in ID x 1 in OD x 1-1/4 in sintered bronze (SAE 841) sleeve bushings are a stock size (D-106). Round (flare or ease) both ends of the bore so the rope does not bear on a sharp edge.',
   },
   bridleTieOverloadFactor: {
     label: 'Bridle tie overload factor on the design pull', group: 'loads', unit: '×',
