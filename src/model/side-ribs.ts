@@ -35,8 +35,8 @@ export const LASH_BOLTS = 2;
 export const LASH_BOLT_DIA_IN = 0.25;
 export const LASH_BOLT_AT_IN2 = 0.0318;
 export const LASH_BOLT_AR_IN2 = 0.0269;
-/** 1/4 fender washer, 3/4 in OD (OD, hole, thickness) under the bolt head on the outer band; the 1/4-20 nylock nut's height; threads to show past it. */
-export const LASH_WASHER = { od: 0.75, id: 0.281, t: 0.063 } as const;
+/** 1/4 fender washer, 1 in OD (OD, hole, thickness) under the bolt head on the outer band (D-109: 1 in, the size Bolt Depot stocks; the two bolts of a D-ring are 1-1/4 in apart, so the washers stay 1/4 in clear of each other); the 1/4-20 nylock nut's height; threads to show past it. */
+export const LASH_WASHER = { od: 1, id: 0.281, t: 0.063 } as const;
 export const LASH_NYLOCK_IN = 0.3125;
 const LASH_THREADS_PAST_IN = 2 / 32;
 /** Stock lengths of 1/4-20 button-head bolts (in). */
