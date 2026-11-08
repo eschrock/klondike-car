@@ -467,7 +467,7 @@ describe('links (Eric, 2026-10-12)', () => {
   const research3 = Object.values(import.meta.glob('../../docs/price-research/price-research-cost-pass-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string; // the cost pass (2026-10-14): Peach State, U.S. Composites, Speedy Metals, Harbor Freight...
   const ERIC_HOSTS = /^https:\/\/(www\.thewoodyard\.com|www\.aircraftspruce\.com|clinelumber\.com|www\.amazon\.com)\//; // the Amazon listings are Eric's own links (D-106)
   // Home Depot pages found by search on 2026-11-05 (D-106): real links, not in the research files
-  const SEARCH_LINKS = ['https://www.homedepot.com/p/Everbilt-2-in-Stainless-Steel-Non-Removable-Pin-Narrow-Utility-Hinge-2-Pack-29197/314151585', 'https://www.homedepot.com/p/Everbilt-3-8-in-x-100-ft-White-Twisted-Nylon-Rope-73215/206094352', 'https://www.homedepot.com/p/Varathane-1-Gal-Clear-Gloss-Oil-Based-Exterior-Spar-Urethane-9231/100158335'];
+  const SEARCH_LINKS = ['https://boltdepot.com/Product-Details?product=2933', 'https://boltdepot.com/Product-Details?product=2931', 'https://www.boltdepot.com/Flat_washers_Stainless_steel_18-8.aspx', 'https://www.homedepot.com/p/Everbilt-2-in-Stainless-Steel-Non-Removable-Pin-Narrow-Utility-Hinge-2-Pack-29197/314151585', 'https://www.homedepot.com/p/Everbilt-3-8-in-x-100-ft-White-Twisted-Nylon-Rope-73215/206094352', 'https://www.homedepot.com/p/Varathane-1-Gal-Clear-Gloss-Oil-Based-Exterior-Spar-Urethane-9231/100158335'];
 
   it('carries only links Eric gave or the research lists, and invents none', () => {
     expect(research.length).toBeGreaterThan(1000);
@@ -636,7 +636,7 @@ describe('price research applied (2026-10-12)', () => {
     expect([w.qty, w.unitUsd]).toEqual([8, 0.46]); // the nut-side washers of the hold-down and clamp bolts, by the piece under the $27.26 bag of 100
     // The grab boards name their washers (D-84): one a bolt on the inside of the board, 1-1/2" OD under the upper three and 7/8" under the lower two; the head bears on the strip
     expect(line('316 fender washer 1/4" (1-1/2" OD)').qty).toBe(6);
-    expect(line('316 fender washer 1/4" (7/8" OD)').qty).toBe(4);
+    expect(line('316 fender washer 1/4" (1" OD)').qty).toBe(4); // D-109: 1" under the lower row
     const n = line('316 nylon-insert lock nut 1/4-20');
     expect([n.qty, n.unitUsd]).toEqual([18, 0.25]); // 24 before the hanger bolts were counted once
     // a length the research did not read keeps its estimate and says so

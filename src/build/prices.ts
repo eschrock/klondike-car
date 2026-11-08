@@ -529,6 +529,10 @@ export const FASTENER_PRICE_STANDARD: Array<{ match: RegExp; price: Price }> = [
     [bd18(2556, 'ea', 'Bolt Depot 18-8 nylon-insert lock nut 3/8-16 (#2556)', 0.36, 50, 12.07, '26 by the piece is 9.36')]) },
   { match: /narrow flat washer 3\/8/, price: withEach(packed(100, 12, 'ea', FAST_STD, `ESTIMATE (Standard spec): 18-8 narrow flat washer 3/8" x 7/8" OD, under each brake-knee bolt head (not in the Standard research); pack of 100`), 0.15) },
   { match: /fender washer #8/, price: withEach(packed(100, 14, 'ea', FAST_STD, 'ESTIMATE (Standard spec): 18-8 fender washer for #8, 3/4" OD (not in the Standard research); pack of 100'), 0.2) },
+  // D-109: the washers Bolt Depot stocks, read via search (2026-11-08): the grab-board 1-1/2" and 1" washers and the 3/8" brake-knee flat washer.
+  { match: /^18-8 fender washer 1\/4" \(1-1\/2" OD\)/, price: searchEst(0.38, 'ea', 'Bolt Depot', 'Fender washers, stainless 18-8, 1/4" x 1-1/2" (#2933), $0.38 each', `${BD_PRODUCT}2933`) },
+  { match: /^18-8 fender washer 1\/4" \(1" OD\)/, price: searchEst(0.16, 'ea', 'Bolt Depot', 'Fender washers, stainless 18-8, 1/4" x 1" (#2931, 9/32" hole), $0.16 each', `${BD_PRODUCT}2931`) },
+  { match: /^18-8 narrow flat washer 3\/8" \(7\/8" OD\)/, price: searchEst(0.15, 'ea', 'Bolt Depot', 'Flat washers, stainless 18-8, 3/8" (the standard SAE size, about 7/8" OD: confirm the OD on the page); the price is an estimate', 'https://www.boltdepot.com/Flat_washers_Stainless_steel_18-8.aspx') },
   // A joint that names its washer's outside diameter (the grab boards, the D-rings): an estimate, since the quoted pack is the 1-1/4" OD washer.
   { match: /fender washer 1\/4" \(\S+" OD\)/, price: est(0.35, 'ea', 'Hardware store (bin, sold each)', 'ESTIMATE: 1/4" stainless fender or flat washer of the outside diameter named, bought by the piece') },
   { match: /fender washer 1\/4/, price: bd18(BD_FENDER_18_8, 'ea', '18-8 fender washer 1/4" x 1-1/4"', 0.28, 100, 18.81, '48 by the piece is cheaper than the bag; Home Depot Everbilt 20-pack 5.97 (0 in stock)') },
