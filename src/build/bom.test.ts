@@ -84,7 +84,7 @@ describe('bom', () => {
     expect(purchased.find((l) => l.key === 'wheel')!.basis).toBe('quoted');
     expect(purchased.find((l) => l.key === 'wheel')!.qty).toBe(4);
     expect(purchased.find((l) => l.key === 'roll-pad')!.basis).toBe('estimate');
-    expect(purchased.find((l) => l.key === 'roll-pad')!.notes).toMatch(/not found in the 2026-10-12 research/);
+    expect(purchased.find((l) => l.key === 'roll-pad')!.notes).toMatch(/leftover UHMW|spare 1\/2" UHMW/); // cut from the king-thrust sheet: no purchase
     // Table prices carry their own basis: Eric's vendor quotes (the plywood, 4/4, 8/4, 12/4 oak) and the researched prices are quoted, the rest estimates
     expect(b.sections.find((x) => x.id === 'plywood')!.lines.every((l) => l.basis === 'quoted')).toBe(true);
     const metal = b.sections.find((x) => x.id === 'metal')!.lines;
@@ -467,7 +467,7 @@ describe('links (Eric, 2026-10-12)', () => {
   const research3 = Object.values(import.meta.glob('../../docs/price-research/price-research-cost-pass-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string; // the cost pass (2026-10-14): Peach State, U.S. Composites, Speedy Metals, Harbor Freight...
   const ERIC_HOSTS = /^https:\/\/(www\.thewoodyard\.com|www\.aircraftspruce\.com|clinelumber\.com|www\.amazon\.com)\//; // the Amazon listings are Eric's own links (D-106)
   // Home Depot pages found by search on 2026-11-05 (D-106): real links, not in the research files
-  const SEARCH_LINKS = ['https://boltdepot.com/Product-Details?product=2933', 'https://boltdepot.com/Product-Details?product=2931', 'https://www.boltdepot.com/Flat_washers_Stainless_steel_18-8.aspx', 'https://www.homedepot.com/p/Everbilt-2-in-Stainless-Steel-Non-Removable-Pin-Narrow-Utility-Hinge-2-Pack-29197/314151585', 'https://www.homedepot.com/p/Everbilt-3-8-in-x-100-ft-White-Twisted-Nylon-Rope-73215/206094352', 'https://www.homedepot.com/p/Varathane-1-Gal-Clear-Gloss-Oil-Based-Exterior-Spar-Urethane-9231/100158335'];
+  const SEARCH_LINKS = ['https://boltdepot.com/Product-Details?product=673', 'https://boltdepot.com/Product-Details?product=18203', 'https://boltdepot.com/Product-Details?product=4273', 'https://boltdepot.com/Product-Details?product=2933', 'https://boltdepot.com/Product-Details?product=2931', 'https://www.boltdepot.com/Flat_washers_Stainless_steel_18-8.aspx', 'https://www.homedepot.com/p/Everbilt-2-in-Stainless-Steel-Non-Removable-Pin-Narrow-Utility-Hinge-2-Pack-29197/314151585', 'https://www.homedepot.com/p/Everbilt-3-8-in-x-100-ft-White-Twisted-Nylon-Rope-73215/206094352', 'https://www.homedepot.com/p/Varathane-1-Gal-Clear-Gloss-Oil-Based-Exterior-Spar-Urethane-9231/100158335'];
 
   it('carries only links Eric gave or the research lists, and invents none', () => {
     expect(research.length).toBeGreaterThan(1000);

@@ -445,7 +445,7 @@ export function buildStorage(ctx: Ctx): Part[] {
   // ── Gasket: closed-cell bulb strip on the wall tops, under the frame ──
   const gz: [number, number] = [zWallTop, zWallTop + g.gasket];
   const gasketSpec = { ...common, mat: 'fixed', kind: 'purchased', material: 'EPDM bulb seal', fab: 'buy', group: 'storage', step: STEP.finish,
-    sourcing: { vendor: 'McMaster-Carr (EPDM bulb gasket, adhesive back)', costUsd: 12 } } as const;
+    sourcing: { vendor: 'Amazon (Frost King V25WA EPDM D-profile weatherseal, adhesive back)', costUsd: 12 } } as const;
   for (const [tag, y] of [['L', hw - pl / 2], ['R', -(hw - pl / 2)]] as const) {
     parts.push(box(ctx, { ...gasketSpec, id: `storage-gasket-side-${tag}`, partNo: 'storage-gasket-side', name: `Lid gasket side ${tag}`,
       massLb: GASKET_LB_PER_IN * (lidX1 - lidX0), ...span([lidX0, lidX1], [y - pl / 2, y + pl / 2], gz), notes: 'Compresses 25% under the frame; no gap at the miters (continuous strip, spliced at a corner).' }));
@@ -495,7 +495,7 @@ export function buildStorage(ctx: Ctx): Part[] {
     // An under-seat box has the seat cushion on its lid: no hinges there (the cushion holds the lid; it lifts off, a known gap, D-89).
     if (rear) parts.push(box(ctx, { ...common, id: `storage-hinge-${tag}`, partNo: 'storage-hinge', name: `Lid hinge ${tag}`, mat: 'fixed', massLb: HINGE_MASS_LB,
       kind: 'purchased', material: `${stainless(p)} butt hinge`, fab: 'buy', step: STEP.seatStorage, ...span([hingeMid - HINGE_H_IN / 2, hingeMid + HINGE_H_IN / 2], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [zTop, zTop + 2 * HINGE_PIN_ABOVE_IN]),
-      sourcing: { vendor: `McMaster-Carr (${stainless(p)} surface-mount butt hinge, 2½" × 1½" open, ¾" leaves)`, costUsd: 9 },
+      sourcing: { vendor: `Home Depot (Everbilt 2-1/2" ${stainless(p)} narrow utility hinge, 2-pack; check the leaf against the lid frame)`, costUsd: 9 },
       joints: [{ type: 'screw', to: 'storage-rim-end-fore', count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeRimFit, size: `${screwText(hingeRimFit)} stainless, down into the top of the lid frame's fore end` }, { type: 'screw', to: 'storage-strip', count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeStripFit, size: `${screwText(hingeStripFit)} stainless, down into the top of the strip's hinge leg` }],
       notes: 'D-89: lies flat on top of the joint between the fixed strip and the lid, the knuckle over the gasket gap (ease both top edges at the joint so it beds down). The lid swings up and aft about it, past upright, and rests on the upright seat back; with the back flipped flat it folds right over and lies open on the strip\'s bumpers.' }));
     // D-89: with the back flipped flat the lid folds right over; folded shut the two leaves hold it a leaf stack above the strip, so a bumper that tall near the strip's fore

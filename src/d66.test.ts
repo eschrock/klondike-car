@@ -117,7 +117,7 @@ describe('D-66 the numbers that moved', () => {
       expect(row(id).statusCargo ?? 'pass', id).not.toBe('fail');
     }
     expect(row('king-bearing').util!).toBeLessThan(0.9);
-    expect(row('steer-stops').util!).toBeLessThan(0.6);
+    expect(row('steer-stops').util!).toBeLessThan(0.7); // the 1-1/2" eye-bolt washers (D-109) carry 0.64 of the hard-hit bearing limit
     expect(defaults.rollPadRadiusIn).toBe(9.75); // D-83: 1/4 in further out for the 2 in clamp plates (was 9.5)
     expect(defaults.steerChainBeamYIn).toBe(8);
   });

@@ -250,7 +250,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         massLb: tl * tw * tt * RUBBER_LB_PER_IN3, material: `${f2(tt)}" ribbed rubber sheet (stair tread or neoprene)`, size: [tl, tw, tt], removable: true,
         center: [c[0] + co * dx + si * dz, yc, c[1] - si * dx + co * dz], rot: { y: ang }, explode: [-0.4, sgn * 0.5, 1.2],
         joints: [{ type: 'glue', to: `brake-flap-${tag}`, count: 1, note: 'contact cement over the full face, edges sealed' }],
-        sourcing: { vendor: `McMaster-Carr (${f2(tt)}" ribbed rubber stair-tread or smooth neoprene sheet, cut ${f2(tl)}" x ${f2(tw)}")`, costUsd: 3 },
+        sourcing: { vendor: `Cut from the leftover neoprene sheet (${f2(tt)}" rubber tread, cut ${f2(tl)}" x ${f2(tw)}")`, costUsd: 3 },
         notes: `A ${f2(tl)}" x ${f2(tw)}" x ${f2(tt)}" strip of ribbed rubber on the flap's foot end (the last ${f2(p.brakeFootPadLengthIn)}"; it ends AT the rear transom face with the flap, D-65), glued with contact cement, corners rounded to the flap's. It gives a boot grip on a wet or snowy flap and finishes the end so it reads as a pedal. A few ounces. It comes off with the flap. ${REMOVE_NOTE}`,
       });
       tread.finish = { surface: 'rubber', roundoverIn: 0.03 };
@@ -336,7 +336,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         id: `brake-stop-snap-${tag}`, partNo: 'brake-snap', name: `Brake stop cord snap hook ${tag} (${stainlessName(p)})`, group: 'brake', mat: 'fixed', kind: 'purchased', step: STEP.brake, fab: 'buy', removable: true,
         massLb: SNAP_LB, material: `${stainless(p)} snap hook, about 1-1/4" overall`, size: SNAP_SIZE_IN, center: [S[0], S[1], S[2] + SNAP_SIZE_IN[2] / 2 - 0.15], explode: [-1, 0, 0.2],
         joints: [{ type: 'pin', to: 'transom-rear', count: 1, note: 'clips to the low #10 stainless screw eye in the aft face of the rear transom' }],
-        sourcing: { vendor: `McMaster-Carr (${stainless(p)} steel snap hook, about 1-1/4" long, tied into the stop cord end)`, costUsd: 3 },
+        sourcing: { vendor: `Amazon (4-pack of 304 stainless M4 flagpole snap clips, about 1-1/2" long; test one on a #10 screw eye first, tied into the stop cord end)`, costUsd: 3 },
         notes: `Stainless snap hook tied into the transom end of the stop cord. Unclip it with the return cord to take the flap off. ${REMOVE_NOTE}`,
       }));
       // the snap hook at the transom end (it stays put with the transom eye, so it is not part of the swept moving group)
@@ -344,7 +344,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         id: `brake-snap-${tag}`, partNo: 'brake-snap', name: `Brake cord snap hook ${tag} (${stainlessName(p)})`, group: 'brake', mat: 'fixed', kind: 'purchased', step: STEP.brake, fab: 'buy', removable: true,
         massLb: SNAP_LB, material: `${stainless(p)} snap hook, about 1-1/4" overall`, size: SNAP_SIZE_IN, center: [b[0], b[1], b[2] - SNAP_SIZE_IN[2] / 2 + 0.15], explode: [-1, 0, 0.2],
         joints: [{ type: 'pin', to: 'transom-rear', count: 1, note: 'clips to the #10 stainless screw eye in the aft face of the rear transom (a clip, not a thumb-knob screw: build review MUST-11)' }],
-        sourcing: { vendor: `McMaster-Carr (${stainless(p)} steel snap hook, about 1-1/4" long, tied or swaged into the cord end)`, costUsd: 3 },
+        sourcing: { vendor: `Amazon (4-pack of 304 stainless M4 flagpole snap clips, about 1-1/2" long; test one on a #10 screw eye first, tied into the cord end)`, costUsd: 3 },
         notes: `Stainless snap hook spliced into the transom end of the return cord (the end by the handle sockets). Clip it onto the transom eye, or unclip it to take the flap off. ${REMOVE_NOTE}`,
       }));
     }
@@ -364,7 +364,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
           { type: 'pin', to: `brake-knee-${tag}`, count: 1, diaIn: pv.dia, size: `through the ${frac32(g.strap.pinHole)}" hole in the strap (brake-strap-${tag}) and ${f2(pv.blind)}" blind into the knee's inboard ear` },
           { type: 'pin', to: `brake-flap-${tag}`, count: 1, diaIn: pv.dia, size: `through the flap tongue and the pivot block (${f2(g.plan.wTongue)}" across), DOUBLE SHEAR between the strap and the knee's inboard ear (D-77)` },
         ],
-        sourcing: { vendor: `McMaster-Carr (${stainless(p)} steel clevis pin or cross-drilled rod, ${f2(pv.dia)}" diameter, ${f2(pv.len)}" long; cross hole ${f2(0.15)}" from the end for the clip)`, costUsd: 3 },
+        sourcing: { vendor: `Amazon (MOKOVI 304 stainless rod, 3/8" × 12", cut ${f2(pv.len)}" long on the metal bandsaw; cross hole ${f2(0.15)}" from the end for the clip)`, costUsd: 3 },
         notes: `Pivot of the flap (D-65): a ${f2(pv.dia)}" stainless pin along the sled's y axis at x = ${f2(g.H[0])}", ${f2(g.H[1])}" off the ground, in through the stainless strap on the knee's outboard face (D-77: it replaces the oak outboard ear), the flap tongue and pivot block (${f2(g.plan.wTongue)}" across, with ${f2(p.brakePivotSlotClearIn)}" pocket clearance each side) and ${f2(pv.blind)}" blind into the knee's inboard ear: it is held in double shear (two shear planes, one each side of the tongue). The hitch-pin clip through the cross hole outboard of the strap keeps it in. Hold it in the holes with a drop of grease. ${REMOVE_NOTE}`,
       }));
       add1(cylinder(ctx, {

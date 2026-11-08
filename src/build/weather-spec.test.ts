@@ -220,7 +220,7 @@ describe('Standard hardware', () => {
     expect(ring.basis).toBe('quoted');
     expect(byKey('steer-eye').unitUsd).toBe(11.94);
     expect(byKey('steer-anchor').unitUsd).toBe(11.1);
-    expect(byKey('steer-chain').unitUsd).toBeCloseTo((10.89 / 12) * 2.12 + 2 * 3.96, 2); // D-106: Everbilt quick links, $3.96 each
+    expect(byKey('steer-chain').unitUsd).toBeCloseTo(12.49 / 2 + 2 * 3.96, 1); // HarborCraft 5 ft chain (Amazon, $12.49) shared by both chains, plus Everbilt quick links at $3.96 each (Home Depot)
     const collar = lines(bStd).find((l) => /shaft collar/.test(l.key))!;
     expect(collar.key).toMatch(/^zinc-plated/);
     expect([collar.unitUsd, collar.packQty]).toEqual([6.95, 4]); // D-106: the Luyostik 4-pack, $6.95 (was Penn Tool, $4.52 each)

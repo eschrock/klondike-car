@@ -137,7 +137,7 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(nut(lr).needed ?? nut(lr).qty).toBe(34);
     expect(nut(lf).needed ?? nut(lf).qty).toBe(26);
     expect(JSON.stringify(nut(lr))).not.toMatch(/26 by the piece/);
-    if (spec === WEATHER_SPEC.standard) expect(JSON.stringify(nut(lr))).toMatch(/34 by the piece is 12\.24/);
+    if (spec === WEATHER_SPEC.standard) expect(JSON.stringify(nut(lr))).toMatch(/34 singly is 12\.24/);
     expect(br.totalUsd).toBeGreaterThan(bf.totalUsd + 33); // pouch $30 + anti-seize $3.97 (+ spare nuts: already inside a bag under Standard)
     expect(br.totalUsd).toBeLessThan(bf.totalUsd + 43);
     expect(br.unpriced).toEqual([]);

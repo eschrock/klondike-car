@@ -1113,7 +1113,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       const fit = txt(get('final-fit'));
       expect(fit).not.toMatch(/Drill all \d holes|drill all the layers/i);
       expect(fit).toContain(`drilled at step ${list.map((q) => q.id).indexOf('side-holes')}, before the finish`);
-      expect(fit).toMatch(/two 1\/4-20 × 2" (?:stainless )?button-head bolts each, pushed in from OUTSIDE with a 3\/4" fender washer/);
+      expect(fit).toMatch(/two 1\/4-20 × 2" (?:stainless )?button-head bolts each, pushed in from OUTSIDE with a 1" fender washer/);
       expect(fit).toMatch(/Nylock nuts on the bracket/);
       expect(rib).toMatch(/Check its two holes first: /);
       expect(fit).toContain(`${p.lashLoadLbf} lbf pull at ${p.lashPullAngleDeg}°`);
@@ -1401,7 +1401,7 @@ describe('D-79..D-83: the cost-pass build text', () => {
 
   it('the D-ring bolts take one fender washer a bolt (under the head), and the clamp plates are drilled with stainless advice', () => {
     const fit = stepText(std, 'final-fit');
-    expect(fit).toMatch(/3\/4" fender washer under each head/);
+    expect(fit).toMatch(/1" fender washer under each head/);
     expect(fit).toMatch(/no washer under them \(one fender washer a bolt, under the head\)/);
     const rear = stepText(std, 'rear-beam');
     expect(rear).toMatch(/Drill stainless as in step \d+/); // the how-to is printed once, in the frame step (the knee backing plates are the first stainless drilled)

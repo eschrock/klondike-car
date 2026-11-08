@@ -98,7 +98,7 @@ describe('seatChecks', () => {
   it('lash-load by hand (D-83): 233 lbf at 45° on a D-ring bracket through-bolted to a rib head with 2 1/4-20 button-head bolts', () => {
     // V = H = 233 sin 45° = 164.76 lbf; per bolt 82.38 lbf of tension and of shear.
     // Tension 82.38 / 0.0318 = 2,591 psi of 15,000 (30 ksi annealed stainless / 2); shear 82.38 / 0.0269 = 3,062 psi of 9,000 (0.6 x 30 ksi / 2): sqrt(0.1727² + 0.3403²) = 0.382.
-    // Head bearing 82.38 / (0.25 x 0.75) = 439.3 psi (of 1,700); fender washer 82.38 / (pi/4 (0.75² - 0.281²) = 0.3798) = 216.9 psi (of 1,070 x 0.67 / 2 = 358.5).
+    // Head bearing 82.38 / (0.25 x 0.75) = 439.3 psi (of 1,700); fender washer 82.38 / (pi/4 (1² - 0.281²) = 0.7234) = 113.9 psi (of 1,070 x 0.67 / 2 = 358.5).
     const k = lashLoads(ctx);
     expect(k.V).toBeCloseTo(164.76, 2);
     expect(k.T1).toBeCloseTo(82.38, 2);
@@ -106,8 +106,8 @@ describe('seatChecks', () => {
     expect(k.tau).toBeCloseTo(3062, 0);
     expect(k.interaction).toBeCloseTo(0.382, 3);
     expect(k.headBearing).toBeCloseTo(439.35, 1);
-    expect(k.washerArea).toBeCloseTo(0.3798, 4);
-    expect(k.washerBearing).toBeCloseTo(216.9, 1);
+    expect(k.washerArea).toBeCloseTo(0.7234, 4);
+    expect(k.washerBearing).toBeCloseTo(113.9, 1);
     expect(k.bolt.len).toBe(2); // 0.063 washer + 0.625 side + 0.75 head + 0.125 bracket + 0.3125 nylock + 2 threads = 1.94 in
     const c = byId['lash-load'];
     expect(c.status).toBe('pass');

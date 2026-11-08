@@ -132,7 +132,7 @@ export function buildLighting(ctx: Ctx): Part[] {
     parts.push(cylinder(ctx, {
       ...common, id: 'flag-tube', name: 'Flag tube (1" ID)', mat: 'fixed', massLb: FLAG_TUBE_LB_PER_IN * len, kind: 'purchased', material: '1" schedule 40 PVC tube (or 1" ID aluminum)', fab: 'buy', removable: false,
       axis: 'z', radius: od / 2, length: len, center: [xc, yTube, zBot + len / 2], explode: unit(0, 1, 0.5),
-      sourcing: { vendor: `McMaster-Carr (1" schedule 40 PVC pipe, ${od.toFixed(3)}" OD, ${id.toFixed(2)}" ID, cut ${len.toFixed(1)}" long)`, costUsd: 4 },
+      sourcing: { vendor: `Home Depot (1" schedule 40 PVC pipe, ${od.toFixed(3)}" OD, ${id.toFixed(2)}" ID, cut ${len.toFixed(1)}" long)`, costUsd: 4 },
       joints: [
         { type: 'glue', to: 'flag-block-top', count: 1, size: 'thickened epoxy (or 3M 5200) on the scuffed tube, in the cradle', note: 'D-72: no screws into the tube. A wood screw long enough to hold in the block would run through the 0.13 in tube wall into the bore the flag staff slides in.' },
         { type: 'glue', to: 'flag-block-bottom', count: 1, size: 'thickened epoxy (or 3M 5200) on the scuffed tube, in the cradle' },

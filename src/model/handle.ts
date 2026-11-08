@@ -240,7 +240,7 @@ export function buildHandle(ctx: Ctx): Part[] {
     parts.push(cylinder(ctx, {
       id: `handle-pin-${tag}`, partNo: 'handle-pin', name: `Push handle retaining pin ${tag}`, group: 'removable', mat: 'fixed', kind: 'purchased', material: 'clevis pin + lynch pin', massLb: 0.05,
       fab: 'buy', step: STEP.brake, center: [h.xBar, y, h.zPin], axis: 'y', radius: p.handlePinDiameterIn / 2, length: h.socketY + 0.3,
-      sourcing: { vendor: 'McMaster-Carr (clevis pin with lynch pin)' }, explode: [-1, s, 0.3],
+      sourcing: { vendor: 'Amazon (2-pack of 5/16" 304 stainless ball-lock quick-release pins, 2" usable length, with lanyard; drill the holes 21/64")' }, explode: [-1, s, 0.3],
     }));
   }
   // The handlebow (D-57): one white-oak board, bandsawn to the arc (grain along the bow, so the long grain runs out at most ~12° at the overhanging ends, where the load is small),
