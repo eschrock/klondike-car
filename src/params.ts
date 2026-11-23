@@ -299,20 +299,35 @@ const defs = {
     default: 0.04, min: 0, max: 0.08, step: 0.004, status: 'assumed', ref: 'D-45',
     note: 'The deck rabbet in the chine and the dado in each transom are cut this much taller than the (epoxy-sealed) deck so the sealed panel enters its own rabbet; thickened epoxy fills the gap (build review MUST-2).',
   },
-  bowWebGapDeckIn: {
-    label: 'Bow: measured gap between the web ends, at the deck', group: 'body', unit: 'in',
+  bowWebGapIn: {
+    label: 'Bow: measured gap between the web ends', group: 'body', unit: 'in',
     default: 17.375, min: 0, max: 22, step: 0.0156, status: 'locked', ref: 'D-106',
-    note: 'D-106 (Eric, 2026-11-23, measured on the glued hull): the inside gap between the two web ends at the bow, where they meet the deck. The bow bulkhead\'s web dados are cut to it (and to bowWebGapTopIn at the top of the sides) instead of the design spacing; the template is tried on the hull before the oak is cut. 0 = the design spacing.',
-  },
-  bowWebGapTopIn: {
-    label: 'Bow: measured gap between the web ends, at the top', group: 'body', unit: 'in',
-    default: 17.362, min: 0, max: 22, step: 0.0156, status: 'locked', ref: 'D-106',
-    note: 'D-106 (Eric, 2026-11-23): the same gap at the top of the sides, 44.1 cm (the webs lean in a hair toward the top). The web dados slant to follow it. 0 = the same as at the deck.',
+    note: 'D-106 (Eric, 2026-11-23, measured on the glued hull): the inside gap between the two web ends at the bow (17-3/8" at the deck, 44.1 cm at the top: the ends are pushed straight into the dados). The bow bulkhead\'s web dados are cut straight to it instead of the design spacing; its template is tried on the hull before the oak is cut. 0 = the design spacing.',
   },
   bowWebEndThickIn: {
     label: 'Bow: measured web end thickness', group: 'body', unit: 'in',
     default: 0.248, min: 0, max: 0.5, step: 0.001, status: 'locked', ref: 'D-106',
     note: 'D-106 (Eric, 2026-11-23): the web ends standing out at the bow caliper 6.3 mm (the 5 mm sheet with its glue and coating). The bulkhead\'s web dados are this plus grooveSlopIn. 0 = the thin sheet\'s thickness.',
+  },
+  bowDominoTopIn: {
+    label: 'Bow: Domino mortise top, below the deck underside', group: 'body', unit: 'in',
+    default: 0.394, min: 0, max: 2, step: 0.0156, status: 'locked', ref: 'D-106',
+    note: 'D-106 (Eric, 2026-11-23): the Dominos already cut in the rail ends sit 10 mm to 34 mm below the deck\'s underside (they differ a little side to side), in line with the webs. The bulkhead\'s two mortises are cut in its Shaper file over that whole range, on the web line. 0 = the design Domino places, marked through the template and cut with the Domino.',
+  },
+  bowDominoBottomIn: {
+    label: 'Bow: Domino mortise bottom, below the deck underside', group: 'body', unit: 'in',
+    default: 1.339, min: 0, max: 3, step: 0.0156, status: 'locked', ref: 'D-106',
+    note: 'D-106: 34 mm; see bowDominoTopIn. The 20 mm Domino has about 2 mm of play up and down in the 24 mm mortise.',
+  },
+  bowDominoSlotIn: {
+    label: 'Bow: Domino mortise width (across)', group: 'body', unit: 'in',
+    default: 0.25, min: 0.2, max: 0.4, step: 0.001, status: 'assumed', ref: 'D-106',
+    note: 'D-106: for the 6 mm Domino, 1/4" (6.35 mm): a hair over the tenon for the epoxy, one pass of the 1/8" bit\'s offset.',
+  },
+  bowDominoDepthIn: {
+    label: 'Bow: Domino mortise depth', group: 'body', unit: 'in',
+    default: 0.827, min: 0.25, max: 1, step: 0.001, status: 'assumed', ref: 'D-106',
+    note: 'D-106: 21 mm, half the 40 mm Domino plus 1 mm so it bottoms on the rail end, not the mortise.',
   },
   deckSideClearIn: {
     label: 'Deck side clearance to each web', group: 'body', unit: 'in',
@@ -2687,13 +2702,12 @@ export function thinSheet(p: Params): ThinSheet {
 
 /**
  * D-106: the bow web ends as measured on the glued hull, for the bow bulkhead's web dados. Null when nothing is measured (the dados follow the design).
- * `centerMidIn` is the web's center plane off the centerline at mid height; `leanIn` how far each web leans in from the deck to the top (+ = inward).
+ * `centerIn` is each web's center plane off the centerline.
  */
-export function bowWebAsBuilt(p: Params): { webIn: number; centerMidIn: number; leanIn: number } | null {
-  if (p.bowWebGapDeckIn <= 0) return null;
+export function bowWebAsBuilt(p: Params): { webIn: number; centerIn: number } | null {
+  if (p.bowWebGapIn <= 0) return null;
   const webIn = p.bowWebEndThickIn > 0 ? p.bowWebEndThickIn : thinSheet(p).thicknessIn;
-  const top = p.bowWebGapTopIn > 0 ? p.bowWebGapTopIn : p.bowWebGapDeckIn;
-  return { webIn, centerMidIn: (p.bowWebGapDeckIn + top) / 4 + webIn / 2, leanIn: (p.bowWebGapDeckIn - top) / 2 };
+  return { webIn, centerIn: p.bowWebGapIn / 2 + webIn / 2 };
 }
 
 /** Derived quantities that many modules need; no geometry here. */

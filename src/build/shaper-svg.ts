@@ -443,7 +443,9 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
     }
 
     // Face pockets (R6): dados and mortises.
-    if ((j.type === 'dado' || j.type === 'mortise-tenon') && pts.length && !fr.isWall) {
+    // A Domino joint is an edge joint (R7), unless its text says the mortise is "cut in the file" (D-106: the bow bulkhead's, set to the rail Dominos as cut): then a face pocket.
+    const filePocket = j.type === 'domino' && /cut in the file/.test(j.size ?? '');
+    if ((j.type === 'dado' || j.type === 'mortise-tenon' || filePocket) && pts.length && !fr.isWall) {
       const got = resolve(pts[0]);
       const face = got ? fr.faceOf(got.local) : null;
       if (got && face) {
@@ -607,7 +609,7 @@ function topOfOutline(outer: Vec2[], u0: number, u1: number): number {
 /** The pocket shape for a dado or mortise joint (rule R6), or null when it cannot be derived. */
 function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | undefined, got: { uv: Vec2; local: Vec3 }, outer: Vec2[]): PocketResult | null {
   const size = j.size ?? '';
-  if (j.type === 'mortise-tenon') {
+  if (j.type === 'mortise-tenon' || j.type === 'domino') {
     const mt = parseMortise(size);
     if (!mt) return null;
     // Thin across the rail (model Y), wide along the other pattern axis.
@@ -615,7 +617,7 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
     const thinOnU = Math.abs(dY[0]) >= Math.abs(dY[1]);
     const [c0, c1] = got.uv;
     const hu = (thinOnU ? mt.thin : mt.wide) / 2, hv = (thinOnU ? mt.wide : mt.thin) / 2;
-    return { loops: [rectLoop(c0 - hu, c1 - hv, c0 + hu, c1 + hv)], depth: mt.depth, desc: `${fmt(mt.thin)} x ${fmt(mt.wide)} x ${fmt(mt.depth)} deep loose-tenon mortise` };
+    return { loops: [rectLoop(c0 - hu, c1 - hv, c0 + hu, c1 + hv)], depth: mt.depth, desc: `${fmt(mt.thin)} x ${fmt(mt.wide)} x ${fmt(mt.depth)} deep ${j.type === 'domino' ? 'Domino mortise (thin across the hull, long up and down)' : 'loose-tenon mortise'}` };
   }
   const dd = parseDadoSize(size);
   if (!dd || !mate) return null;
@@ -630,19 +632,11 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
     const zs = mg.profile.filter((q) => Math.abs(q[0] - xEnd) < 1e-6).map((q) => q[1]);
     if (!zs.length) return null;
     const z0 = Math.min(...zs), z1 = Math.max(...zs);
-    // D-106 "leaning in X at the top": the joint point is the web's station at mid height; the dado slants X over the web's height, toward the centerline at the top.
-    const lm = new RegExp(String.raw`leaning in ${NUM}"? at the top`).exec(size);
-    const lean = lm ? parseInches(lm[1]) : 0;
-    const out = Math.sign(modelAt[1]) * (Number.isFinite(lean) ? lean : 0) / 2;
-    const a = fr.modelToPattern([modelAt[0], modelAt[1] + out, z0]);
-    let b = fr.modelToPattern([modelAt[0], modelAt[1] - out, z1]);
+    const a = fr.modelToPattern([modelAt[0], modelAt[1], z0]);
+    let b = fr.modelToPattern([modelAt[0], modelAt[1], z1]);
     // "out through the top edge": the dado is open at the top, so it runs 0.03 in past the outline there instead of stopping short of a thin wall at the rounded corner.
-    const runOut = /out through the top edge/.test(size) && Math.abs(b[0] - a[0]) < 0.25 * (b[1] - a[1]) && b[1] > a[1];
-    if (runOut) {
-      // Carry the line on at its own slant past the top of the outline.
-      const v1 = Math.max(b[1], topOfOutline(outer, Math.min(a[0], b[0]) - dd.width / 2, Math.max(a[0], b[0]) + dd.width / 2) + 0.03);
-      b = [a[0] + ((b[0] - a[0]) * (v1 - a[1])) / (b[1] - a[1]), v1];
-    }
+    const runOut = /out through the top edge/.test(size) && Math.abs(b[0] - a[0]) < 1e-6 && b[1] > a[1];
+    if (runOut) b = [b[0], Math.max(b[1], topOfOutline(outer, b[0] - dd.width / 2, b[0] + dd.width / 2) + 0.03)];
     return { loops: [rectAlong(a, b, dd.width)], depth: dd.depth, web: true, ...(runOut ? { runOut } : {}), desc: `${fmt(dd.width)} wide ${runOut ? 'dado open at the top (runs out through the top edge)' : 'stopped dado'}, ${fmt(Math.hypot(b[0] - a[0], b[1] - a[1]))} long (the ${mate.id} end, z ${fmt(z0)} to ${fmt(z1)})` };
   }
   if (mg.type === 'extrusion') {

@@ -1017,7 +1017,7 @@ const DOMINO_SLOT_IN: Vec2 = [6 / 25.4, 20 / 25.4];
 /** A play or clearance to the nearest 1/64 in, as the shop reads it (the template's 1/64 in play would print as 1/32 at the drawings' usual 1/32). */
 const inch64 = (v: number): string => `${fractionText(Math.round(v * 64) / 64, 64)}"`;
 
-interface EndTemplate { id: string; label: string; partId: string; outer: Vec2[]; part: Vec2[]; slots: Vec2[][]; score: Vec2[][]; marks: Array<{ c: Vec2; dia: number }>; w: number; h: number; slotText: string[] }
+interface EndTemplate { id: string; label: string; partId: string; outer: Vec2[]; part: Vec2[]; slots: Vec2[][]; score: Vec2[][]; marks: Array<{ c: Vec2; dia: number }>; w: number; h: number; slotText: string[]; filedDominos: boolean }
 
 function endTemplate(parts: Part[], p: Params, partId: string, id: string, label: string): EndTemplate | null {
   const part = parts.find((x) => x.id === partId);
@@ -1029,8 +1029,8 @@ function endTemplate(parts: Part[], p: Params, partId: string, id: string, label
   const pockets = d.items.filter((i): i is Extract<typeof i, { k: 'pocket' }> => i.k === 'pocket');
   const slotText: string[] = [];
   const slots: Vec2[][] = pockets.map((pk) => {
-    const isMortise = /^mortise/.test(pk.label);
-    if (isMortise) slotText.push(pk.label.replace(/^mortise-tenon for /, 'rail mortise '));
+    const isMortise = /^(mortise|domino)/.test(pk.label);
+    if (isMortise) slotText.push(pk.label.replace(/^mortise-tenon for /, 'rail mortise ').replace(/^domino for /, 'Domino mortise for '));
     return (isMortise ? grow(pk.loop, c) : pk.loop).map(shift);
   });
   // A Domino joint is an edge joint (not in the Shaper file): its slot comes from the rail's own joint, in the same pattern coordinates as the dados (the left web's dado tells which way u runs).
@@ -1038,7 +1038,9 @@ function endTemplate(parts: Part[], p: Params, partId: string, id: string, label
   const W = b.u1 - b.u0;
   const webL = pockets.find((pk) => /side-L-web/.test(pk.label));
   const sgn = webL ? (bbox(webL.loop).u0 > W / 2 ? 1 : -1) : 1;
-  for (const r of parts.filter((x) => /^rail-[LR]$/.test(x.id))) {
+  // D-106: when the Shaper file cuts the Domino mortises, they are already among the pockets above.
+  const filedDominos = pockets.some((pk) => /^domino/.test(pk.label));
+  for (const r of parts.filter((x) => !filedDominos && /^rail-[LR]$/.test(x.id))) {
     for (const j of (r.joints ?? []).filter((q) => q.type === 'domino' && q.to === partId)) {
       for (const a of j.at ?? []) {
         const w = transformPoint(r.transform, a);
@@ -1052,7 +1054,7 @@ function endTemplate(parts: Part[], p: Params, partId: string, id: string, label
   const score: Vec2[][] = [close(f.outer.map(shift)), ...d.items.flatMap((i) => (i.k === 'cutLoop' ? [close(i.loop.map(shift))] : []))];
   const marks = d.items.flatMap((i) => (i.k === 'drill' || i.k === 'cutHole' ? [{ c: shift(i.c), dia: Math.max(i.dia, 0.19) }] : []));
   const outer = rectLoop(0, 0, W + 2 * M, b.v1 - b.v0 + 2 * M);
-  return { id, label, partId, outer, part: f.outer.map(shift), slots, score, marks, w: W + 2 * M, h: b.v1 - b.v0 + 2 * M, slotText };
+  return { id, label, partId, outer, part: f.outer.map(shift), slots, score, marks, w: W + 2 * M, h: b.v1 - b.v0 + 2 * M, slotText, filedDominos };
 }
 
 function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
@@ -1074,7 +1076,7 @@ function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
     { step: `The laser cuts the dados and the rail mortises right through as slots (${ts.reduce((a, t) => a + t.slots.length, 0)} in all), and scores each end's outline, its hand hole and its drilled holes.` },
     {
       step: 'USE (at the ends step, after the hull is glued): push each template straight onto its end of the hull by hand.',
-      sub: ['Dry loose tenons in the rail rear mortises and dry Dominos in the bow ones first, half standing out.', 'Every web end, the deck end and every tenon must come through its slot; the template must lie flat on all the band ends, and the scored outline\'s sides lie on the outer bands\' faces.', 'Then lay the bulkhead template on the cut bulkhead, its slots over the dados, and mark the two Domino mortises through it.'],
+      sub: ['Dry loose tenons in the rail rear mortises and dry Dominos in the bow ones first, half standing out.', 'Every web end, the deck end and every tenon must come through its slot; the template must lie flat on all the band ends, and the scored outline\'s sides lie on the outer bands\' faces.', bh?.filedDominos ? 'The bulkhead\'s two Domino mortises are cut in its Shaper file, to the Dominos as cut in the rails: the Domino slots of the template show where.' : 'Then lay the bulkhead template on the cut bulkhead, its slots over the dados, and mark the two Domino mortises through it.'],
     },
     { step: 'No base, braces, clamps or spring-back: these are fit-check templates.' },
   ];
