@@ -328,7 +328,7 @@ const defs = {
   bowDominoSlotIn: {
     label: 'Bow: Domino mortise width (across)', group: 'body', unit: 'in',
     default: 0.25, min: 0.2, max: 0.4, step: 0.001, status: 'assumed', ref: 'D-106',
-    note: 'D-106: for the 6 mm Domino, 1/4" (6.35 mm): a hair over the tenon for the epoxy, one pass of the 1/8" bit\'s offset.',
+    note: 'D-106: for the 6 mm Domino, 1/4" (6.35 mm): 0.007" a side over the tenon, a good epoxy glue line, cut in one plunge of the 1/4" bit along the slot\'s centerline (no offset; the bit must reach the 21 mm depth).',
   },
   bowDominoDepthIn: {
     label: 'Bow: Domino mortise depth', group: 'body', unit: 'in',

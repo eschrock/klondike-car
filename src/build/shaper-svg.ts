@@ -464,7 +464,9 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
           }
           pocketFaces.push(face);
           const narrow = Math.min(...loops.loops.map((l) => Math.min(Math.hypot(l[1][0] - l[0][0], l[1][1] - l[0][1]), Math.hypot(l[2][0] - l[1][0], l[2][1] - l[1][1]))));
-          const pkFeature: ShaperFeature = { kind: 'pocket', label: `${j.type === 'dado' ? 'Dado' : 'Mortise'} for ${j.to}: ${loops.desc}`, count: loops.loops.length, depthIn: loops.depth, bit: bitForPocket(narrow), to: j.to, joint: j.type, at: loops.loops.map((l) => { const b = bbox(l); return [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2; }) };
+          // D-106: a Domino mortise in the file at least 1/4" wide is cut with the 1/4" bit (a 1/4" slot is one plunge along its centerline, no offset), not the 1/8" bit.
+          const wideDomino = filePocket && narrow >= 0.25 - 1e-6;
+          const pkFeature: ShaperFeature = { kind: 'pocket', label: `${j.type === 'dado' ? 'Dado' : 'Mortise'} for ${j.to}: ${loops.desc}${wideDomino && narrow < 0.25 + 1e-3 ? '; one plunge of the 1/4" bit along its centerline (no offset)' : ''}`, count: loops.loops.length, depthIn: loops.depth, bit: wideDomino ? BIT_LARGE : bitForPocket(narrow), to: j.to, joint: j.type, at: loops.loops.map((l) => { const b = bbox(l); return [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2; }) };
           features.push(pkFeature);
           if (loops.deckRun) deckRuns.push({ item: items[items.length - 1] as Extract<Item, { k: 'pocket' }>, feature: pkFeature });
           if (face !== fr.plainFace) { /* the face decides the mirror below */ }

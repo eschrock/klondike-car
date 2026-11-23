@@ -15,7 +15,9 @@ describe('D-106: the as-measured bow bulkhead is an extra file; the design stays
     expect(design.features.some((f) => /Domino/.test(f.label))).toBe(false); // the design's Dominos are marked through the template, not in the file
     const alt = d.shaper.find((f) => f.fileName === 'bow-bulkhead-as-measured.svg')!;
     expect(alt.alternate).toMatch(/as measured/);
-    expect(alt.features.filter((f) => /Domino mortise/.test(f.label)).length).toBe(2);
+    const doms = alt.features.filter((f) => /Domino mortise/.test(f.label));
+    expect(doms.length).toBe(2);
+    for (const m of doms) { expect(m.bit).toBe('1/4 in'); expect(m.label).toMatch(/one plunge of the 1\/4" bit/); }
     expect(alt.features.find((f) => /side-L-web/.test(f.label))!.label).toMatch(/0\.288 wide/);
     expect(d.shaper.filter((f) => f.alternate).length).toBe(1);
     expect(d.laser.find((f) => f.id === 'end-templates')).toBeDefined();
