@@ -352,3 +352,44 @@ describe('Shaper SVG files', () => {
     expect(w2.features.filter((x) => /drain/i.test(x.label)).reduce((n, x) => n + x.count, 0)).toBe(2);
   });
 });
+
+describe('D-106: the bow bulkhead cut to the hull as measured (bowAsMeasured on)', () => {
+  const box = (l: Array<[number, number]>) => ({ u0: Math.min(...l.map((q) => q[0])), u1: Math.max(...l.map((q) => q[0])), v0: Math.min(...l.map((q) => q[1])), v1: Math.max(...l.map((q) => q[1])) });
+  const pockets = (q: ReturnType<typeof defaultParams>) => {
+    const parts = buildModel(q);
+    const d = analyzeShaperPart(parts.find((x) => x.id === 'bow-bulkhead')!, parts, q)!;
+    return { W: d.f.widthIn, pk: d.items.flatMap((i) => (i.k === 'pocket' ? [{ label: i.label, depth: i.depth, ...box(i.loop as Array<[number, number]>) }] : [])) };
+  };
+  it('straight web dados at the measured gap and web, the deck dado joining them, the Domino mortises on the web line', () => {
+    const p = { ...defaultParams(), bowAsMeasured: 1 };
+    const { W, pk } = pockets(p);
+    const webs = pk.filter((x) => /web/.test(x.label));
+    expect(webs.length).toBe(2);
+    for (const w of webs) {
+      expect(w.u1 - w.u0).toBeCloseTo(p.bowWebEndThickIn + p.grooveSlopIn, 4); // straight: as wide at the top as at the deck
+      expect(Math.abs((w.u0 + w.u1) / 2 - W / 2)).toBeCloseTo(p.bowWebGapIn / 2 + p.bowWebEndThickIn / 2, 4);
+    }
+    const deck = pk.find((x) => /deck/.test(x.label))!;
+    expect(deck.u0).toBeCloseTo(Math.min(...webs.map((w) => w.u0)), 4);
+    expect(deck.u1).toBeCloseTo(Math.max(...webs.map((w) => w.u1)), 4);
+    const deckUnder = Math.min(...webs.map((w) => w.v0)); // the web dados start at the deck's underside
+    const doms = pk.filter((x) => /^domino/.test(x.label));
+    expect(doms.length).toBe(2);
+    for (const m of doms) {
+      expect(m.u1 - m.u0).toBeCloseTo(p.bowDominoSlotIn, 4);
+      expect(deckUnder - m.v1).toBeCloseTo(p.bowDominoTopIn, 4);
+      expect(deckUnder - m.v0).toBeCloseTo(p.bowDominoBottomIn, 4);
+      expect(m.depth).toBeCloseTo(p.bowDominoDepthIn, 4);
+      expect(Math.abs((m.u0 + m.u1) / 2 - W / 2)).toBeCloseTo(p.bowWebGapIn / 2 + p.bowWebEndThickIn / 2, 4);
+    }
+  });
+  it('by default (and with the measurements at 0) it is the design: web dados on the design spacing, the Dominos marked through the template', () => {
+    const q = defaultParams();
+    const { pk } = pockets(q);
+    expect(pk.filter((x) => /^domino/.test(x.label)).length).toBe(0);
+    const webs = pk.filter((x) => /web/.test(x.label)), deck = pk.find((x) => /deck/.test(x.label))!;
+    expect(webs.length).toBe(2);
+    expect(deck.u0).toBeCloseTo(Math.min(...webs.map((w) => w.u0)), 4);
+    expect(deck.u1).toBeCloseTo(Math.max(...webs.map((w) => w.u1)), 4);
+  });
+});

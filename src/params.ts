@@ -299,10 +299,16 @@ const defs = {
     default: 0.04, min: 0, max: 0.08, step: 0.004, status: 'assumed', ref: 'D-45',
     note: 'The deck rabbet in the chine and the dado in each transom are cut this much taller than the (epoxy-sealed) deck so the sealed panel enters its own rabbet; thickened epoxy fills the gap (build review MUST-2).',
   },
+  bowAsMeasured: {
+    label: 'Bow bulkhead: cut to the hull as measured', group: 'body', unit: '',
+    default: 0, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-106',
+    options: [{ value: 0, label: 'Design (the as-measured file is an extra download)' }, { value: 1, label: 'As measured' }],
+    note: 'D-106: at Design the model and the build book keep the design bulkhead, and the Shaper and Laser tabs carry an extra bulkhead file and template cut to the measurements below. As measured puts them in the model itself.',
+  },
   bowWebGapIn: {
     label: 'Bow: measured gap between the web ends', group: 'body', unit: 'in',
     default: 17.375, min: 0, max: 22, step: 0.0156, status: 'locked', ref: 'D-106',
-    note: 'D-106 (Eric, 2026-11-23, measured on the glued hull): the inside gap between the two web ends at the bow (17-3/8" at the deck, 44.1 cm at the top: the ends are pushed straight into the dados). The bow bulkhead\'s web dados are cut straight to it instead of the design spacing; its template is tried on the hull before the oak is cut. 0 = the design spacing.',
+    note: 'D-106 (Eric, 2026-11-23, measured on the glued hull): the inside gap between the two web ends at the bow (17-3/8" at the deck, 44.1 cm at the top: the ends are pushed straight into the dados). The as-measured bulkhead\'s web dados are cut straight to it (bowAsMeasured); its template is tried on the hull before the oak is cut. 0 = no as-measured file.',
   },
   bowWebEndThickIn: {
     label: 'Bow: measured web end thickness', group: 'body', unit: 'in',
@@ -312,7 +318,7 @@ const defs = {
   bowDominoTopIn: {
     label: 'Bow: Domino mortise top, below the deck underside', group: 'body', unit: 'in',
     default: 0.394, min: 0, max: 2, step: 0.0156, status: 'locked', ref: 'D-106',
-    note: 'D-106 (Eric, 2026-11-23): the Dominos already cut in the rail ends sit 10 mm to 34 mm below the deck\'s underside (they differ a little side to side), in line with the webs. The bulkhead\'s two mortises are cut in its Shaper file over that whole range, on the web line. 0 = the design Domino places, marked through the template and cut with the Domino.',
+    note: 'D-106 (Eric, 2026-11-23): the Dominos already cut in the rail ends sit 10 mm to 34 mm below the deck\'s underside (they differ a little side to side), in line with the webs. The as-measured bulkhead\'s two mortises are cut in its Shaper file over that whole range, on the web line. 0 = the design Domino places, marked through the template and cut with the Domino.',
   },
   bowDominoBottomIn: {
     label: 'Bow: Domino mortise bottom, below the deck underside', group: 'body', unit: 'in',
@@ -2701,11 +2707,11 @@ export function thinSheet(p: Params): ThinSheet {
 }
 
 /**
- * D-106: the bow web ends as measured on the glued hull, for the bow bulkhead's web dados. Null when nothing is measured (the dados follow the design).
+ * D-106: the bow web ends as measured on the glued hull, for the bow bulkhead's web dados. Null unless bowAsMeasured is on and a gap is measured (the dados follow the design).
  * `centerIn` is each web's center plane off the centerline.
  */
 export function bowWebAsBuilt(p: Params): { webIn: number; centerIn: number } | null {
-  if (p.bowWebGapIn <= 0) return null;
+  if (p.bowAsMeasured !== 1 || p.bowWebGapIn <= 0) return null;
   const webIn = p.bowWebEndThickIn > 0 ? p.bowWebEndThickIn : thinSheet(p).thicknessIn;
   return { webIn, centerIn: p.bowWebGapIn / 2 + webIn / 2 };
 }

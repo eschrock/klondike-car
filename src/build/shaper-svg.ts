@@ -110,6 +110,8 @@ export interface ShaperFile {
   bits: string[];
   /** The file has a cut deeper than SHAPER_MAX_DEPTH_IN. */
   deepCut: boolean;
+  /** An extra file that stands in for the design one (D-106), in plain words; absent for the design files. */
+  alternate?: string;
 }
 
 // ── Internal drawing items (pattern coordinates: u right, v up, before any mirroring) ──
@@ -518,7 +520,7 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
     }
     if (joined) {
       dr.item.loop = alongU ? rectLoop(a0, c0, a1, c1) : rectLoop(c0, a0, c1, a1);
-      dr.feature.label += `; runs into the web dado at ${joined === 2 ? 'both ends' : 'one end'} (one continuous pocket at the corner)`;
+      dr.feature.label = dr.feature.label.replace(/, [\d.]+ long$/, `, ${fmt(a1 - a0)} long`) + `; runs into the web dado at ${joined === 2 ? 'both ends' : 'one end'} (one continuous pocket at the corner)`;
       dr.feature.at = [alongU ? [(a0 + a1) / 2, (c0 + c1) / 2] : [(c0 + c1) / 2, (a0 + a1) / 2]];
     }
   }
