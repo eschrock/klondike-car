@@ -511,7 +511,8 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
       const [b0, b1] = alongU ? [B.u0, B.u1] : [B.v0, B.v1];
       const [e0, e1] = alongU ? [B.v0, B.v1] : [B.u0, B.u1];
       if (Math.min(c1, e1) - Math.max(c0, e0) <= 0) continue; // no overlap across
-      if (b0 >= a1 - 1e-9 && b0 - a1 < THIN_WALL_IN * 4) { a1 = Math.max(a1, b1); joined++; } else if (b1 <= a0 + 1e-9 && a0 - b1 < THIN_WALL_IN * 4) { a0 = Math.min(a0, b0); joined++; }
+      // The web dado is past the deck dado's end, or overlaps it there (a web set in as built, D-106): run the deck dado to the web dado's far wall.
+      if (b1 > a1 + 1e-9 && b0 > a0 && b0 - a1 < THIN_WALL_IN * 4) { a1 = Math.max(a1, b1); joined++; } else if (b0 < a0 - 1e-9 && b1 < a1 && a0 - b1 < THIN_WALL_IN * 4) { a0 = Math.min(a0, b0); joined++; }
     }
     if (joined) {
       dr.item.loop = alongU ? rectLoop(a0, c0, a1, c1) : rectLoop(c0, a0, c1, a1);
@@ -629,11 +630,19 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
     const zs = mg.profile.filter((q) => Math.abs(q[0] - xEnd) < 1e-6).map((q) => q[1]);
     if (!zs.length) return null;
     const z0 = Math.min(...zs), z1 = Math.max(...zs);
-    const a = fr.modelToPattern([modelAt[0], modelAt[1], z0]);
-    let b = fr.modelToPattern([modelAt[0], modelAt[1], z1]);
+    // D-106 "leaning in X at the top": the joint point is the web's station at mid height; the dado slants X over the web's height, toward the centerline at the top.
+    const lm = new RegExp(String.raw`leaning in ${NUM}"? at the top`).exec(size);
+    const lean = lm ? parseInches(lm[1]) : 0;
+    const out = Math.sign(modelAt[1]) * (Number.isFinite(lean) ? lean : 0) / 2;
+    const a = fr.modelToPattern([modelAt[0], modelAt[1] + out, z0]);
+    let b = fr.modelToPattern([modelAt[0], modelAt[1] - out, z1]);
     // "out through the top edge": the dado is open at the top, so it runs 0.03 in past the outline there instead of stopping short of a thin wall at the rounded corner.
-    const runOut = /out through the top edge/.test(size) && Math.abs(b[0] - a[0]) < 1e-6 && b[1] > a[1];
-    if (runOut) b = [b[0], Math.max(b[1], topOfOutline(outer, b[0] - dd.width / 2, b[0] + dd.width / 2) + 0.03)];
+    const runOut = /out through the top edge/.test(size) && Math.abs(b[0] - a[0]) < 0.25 * (b[1] - a[1]) && b[1] > a[1];
+    if (runOut) {
+      // Carry the line on at its own slant past the top of the outline.
+      const v1 = Math.max(b[1], topOfOutline(outer, Math.min(a[0], b[0]) - dd.width / 2, Math.max(a[0], b[0]) + dd.width / 2) + 0.03);
+      b = [a[0] + ((b[0] - a[0]) * (v1 - a[1])) / (b[1] - a[1]), v1];
+    }
     return { loops: [rectAlong(a, b, dd.width)], depth: dd.depth, web: true, ...(runOut ? { runOut } : {}), desc: `${fmt(dd.width)} wide ${runOut ? 'dado open at the top (runs out through the top edge)' : 'stopped dado'}, ${fmt(Math.hypot(b[0] - a[0], b[1] - a[1]))} long (the ${mate.id} end, z ${fmt(z0)} to ${fmt(z1)})` };
   }
   if (mg.type === 'extrusion') {

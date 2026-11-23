@@ -8,7 +8,7 @@
  * and threaded inserts + knobs for everything that comes off (D-9).
  */
 import { joistId } from './frame';
-import { thinSheet, WEATHER_SPEC, type Params } from '../params';
+import { bowWebAsBuilt, thinSheet, WEATHER_SPEC, type Params } from '../params';
 import { frac64, SIDES, type Ctx, stainless, insertMat, INSERT_DRILL_IN } from './build-utils';
 export { frac64 };
 import { sideTopAt } from './layout';
@@ -217,8 +217,11 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     // The forward ends meet the rear face of the bow bulkhead (D-57): the web in a dado, the bands butt-glued with a fillet. As in the transom, the dado runs out through the top edge (its stopped top
     // would come within 0.02 in of the rounded corner, D-69).
     {
-      const xe = L.xSideEnd, ye = s * (hwAt(xe) + L.side / 2);
-      add({ a: web1, b: 'bow-bulkhead', typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" dado in the bulkhead's rear face, up from the chine and out through the top edge (open at the top: no thin wall at the rounded corner; the epoxy fillet fills the run-out)`, pts: [[xe + dd / 2, ye, webZMid(xe)]], noteA: 'End of the web, captured (front); the bulkhead goes on after the rear transom (close one end first, S1).', noteB: 'Dado for the web end, open at the top. The deck dado runs into it at the corner.' });
+      // D-106: the bulkhead is cut to the hull as built: the measured web end thickness and spacing (a slant when the webs lean), the design where a measurement is 0.
+      const ab = bowWebAsBuilt(p);
+      const xe = L.xSideEnd, ye = ab ? s * ab.centerMidIn : s * (hwAt(xe) + L.side / 2);
+      const lean = ab && Math.abs(ab.leanIn) > 1e-6 ? `, set to the hull as built: leaning in ${ab.leanIn.toFixed(3)}" at the top` : '';
+      add({ a: web1, b: 'bow-bulkhead', typeA: 'dado', size: `${((ab?.webIn ?? pl) + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" dado in the bulkhead's rear face, up from the chine and out through the top edge (open at the top: no thin wall at the rounded corner; the epoxy fillet fills the run-out)${lean}`, pts: [[xe + dd / 2, ye, webZMid(xe)]], noteA: 'End of the web, captured (front); the bulkhead goes on after the rear transom (close one end first, S1).', noteB: 'Dado for the web end, open at the top. The deck dado runs into it at the corner.' });
       const yb = (face: 'out' | 'in') => s * (hwAt(xe) + (face === 'out' ? L.side - bandT / 2 : bandT / 2));
       const fwdEnds: [string, number, number][] = [
         [`${id}-chine`, cBot + L.chineH / 2, yb('out')], [`${id}-chine-in`, cBot + rabbetZ + (L.chineH - rabbetZ) / 2, yb('in')],

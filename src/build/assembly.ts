@@ -32,7 +32,7 @@
 import { HULL_STEP, insertMat, STEP } from '../model/build-utils';
 import { computeLayout, outerHalfWidth, samples, sideTopAt } from '../model/layout';
 import type { AssemblyStep, Joint, Part } from '../model/types';
-import { axleGrooveDepthIn, bowTaper, KNEE_MOUNT, PARAM_DEFS, thinSheet, WEATHER_SPEC, type Params } from '../params';
+import { axleGrooveDepthIn, bowTaper, bowWebAsBuilt, KNEE_MOUNT, PARAM_DEFS, thinSheet, WEATHER_SPEC, type Params } from '../params';
 import { beamSeat, screwText } from '../model/rear-mount';
 import { KING_NUT_BELOW_DECK_IN, kingHeadRelief, kingNutSlot } from '../model/frame';
 import { TONGUE_SHOULDER_FILLET_IN, tongueSeatHalfWidth } from '../model/pivot';
@@ -2106,6 +2106,7 @@ const TEMPLATES_2: Template[] = [
       const web = c.by('side-L-web'), band = c.by('side-L-chine');
       const standOut = web && band ? worldAABB(band).min[0] - worldAABB(web).min[0] : c.p.deckCaptureDepthIn;
       const spare = c.p.deckSlopIn / 2;
+      const bowAB = bowWebAsBuilt(c.p);
       const deep = shaperFeaturesOf(c, 'bow-bulkhead').some((q) => q.deep);
       const dj = rail?.joints?.find((q) => q.to === 'bow-bulkhead' && q.type === 'domino');
       const tj = rail?.joints?.find((q) => q.type === 'mortise-tenon' && q.to === 'transom-rear');
@@ -2125,6 +2126,7 @@ const TEMPLATES_2: Template[] = [
             `Rear: push the transom template straight on by hand. Both web ends, the deck end and both tenons must come through their slots (the web and deck ends stand ${fin(standOut)} past the band and rail ends), and the template must lie flat on all eight band ends: no gap a 1/32" feeler enters.`,
             'Bow: the same with the bulkhead template, its face on the pencil line from the dry fit.',
             wRear !== undefined && wBow !== undefined ? `Measure at each end, at the deck and at the gunwale: ${fin(wRear)} over the outer bands at the rear and ${fin(wBow)} at the bow, within 1/32" overall (the dados have about ${fin(spare)} to spare a side). The scored outline's sides lie on the outer bands' faces. A hull 1/32" wider than the template at one end is more than its dados can take: use the fallback below.` : false,
+            bowAB ? `The bulkhead's web dados are already set to the bow as measured on this hull: the web ends ${fin(c.p.bowWebGapDeckIn)} apart inside at the deck and ${fin(c.p.bowWebGapTopIn > 0 ? c.p.bowWebGapTopIn : c.p.bowWebGapDeckIn)} at the top, each ${fin(bowAB.webIn)} thick; each dado is ${fin(bowAB.webIn + c.p.grooveSlopIn)} wide${Math.abs(bowAB.leanIn) > 1e-6 ? ' and slants with its web' : ''}. Its outline stays at the design width: if it stands past the outer bands, plane it flush after the glue-up.` : false,
             'Each web end stands square to the deck, within 1/32" over its height: the hull is inverted, so hold the square\'s stock up against the deck\'s top face (facing down now) at the open end, its blade along the web end.',
             at(tJ) && at(bJ) ? `Rail ends: the tenons sit ${at(tJ)} at the rear; the Dominos ${at(bJ)} at the bow.` : false,
             'The laser\'s kerf leaves the template slots a hair looser than the Shaper\'s dados: a template that goes on is the first check, the oak dry fit (below) is the last.',

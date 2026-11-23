@@ -299,6 +299,21 @@ const defs = {
     default: 0.04, min: 0, max: 0.08, step: 0.004, status: 'assumed', ref: 'D-45',
     note: 'The deck rabbet in the chine and the dado in each transom are cut this much taller than the (epoxy-sealed) deck so the sealed panel enters its own rabbet; thickened epoxy fills the gap (build review MUST-2).',
   },
+  bowWebGapDeckIn: {
+    label: 'Bow: measured gap between the web ends, at the deck', group: 'body', unit: 'in',
+    default: 17.375, min: 0, max: 22, step: 0.0156, status: 'locked', ref: 'D-106',
+    note: 'D-106 (Eric, 2026-11-23, measured on the glued hull): the inside gap between the two web ends at the bow, where they meet the deck. The bow bulkhead\'s web dados are cut to it (and to bowWebGapTopIn at the top of the sides) instead of the design spacing; the template is tried on the hull before the oak is cut. 0 = the design spacing.',
+  },
+  bowWebGapTopIn: {
+    label: 'Bow: measured gap between the web ends, at the top', group: 'body', unit: 'in',
+    default: 17.362, min: 0, max: 22, step: 0.0156, status: 'locked', ref: 'D-106',
+    note: 'D-106 (Eric, 2026-11-23): the same gap at the top of the sides, 44.1 cm (the webs lean in a hair toward the top). The web dados slant to follow it. 0 = the same as at the deck.',
+  },
+  bowWebEndThickIn: {
+    label: 'Bow: measured web end thickness', group: 'body', unit: 'in',
+    default: 0.248, min: 0, max: 0.5, step: 0.001, status: 'locked', ref: 'D-106',
+    note: 'D-106 (Eric, 2026-11-23): the web ends standing out at the bow caliper 6.3 mm (the 5 mm sheet with its glue and coating). The bulkhead\'s web dados are this plus grooveSlopIn. 0 = the thin sheet\'s thickness.',
+  },
   deckSideClearIn: {
     label: 'Deck side clearance to each web', group: 'body', unit: 'in',
     default: 0.0625, min: 0, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-63',
@@ -2668,6 +2683,17 @@ export function thinSheet(p: Params): ThinSheet {
   if (key === THIN_SHEET.balticBirch6mm)
     return { key, name: '6 mm Baltic birch', material: '6 mm Baltic birch plywood', nominal: '1/4 in (6 mm)', thicknessIn: p.balticSixThickIn, densityPcf: p.birchDensityPcf, moePsi: p.birchMoePsi, morPsi: p.birchMorPsi, moePerpPsi: p.balticSixMoePerpPsi, morPerpPsi: p.balticSixMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'baltic-6mm', glue: 'interior, verify with the yard' };
   return { key: THIN_SHEET.okoumeMarine, name: p.panelPlyIn < 0.2 ? '4 mm okoume' : '6 mm okoume', material: 'okoume marine plywood', nominal: p.panelPlyIn < 0.2 ? '4 mm' : '6 mm', thicknessIn: p.panelPlyIn, densityPcf: p.okoumeDensityPcf, moePsi: p.okoumeMoePsi, morPsi: p.okoumeMorPsi, moePerpPsi: p.okoumeMoePerpPsi, morPerpPsi: p.okoumeMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'okoume-6mm', glue: 'marine (BS 1088)' };
+}
+
+/**
+ * D-106: the bow web ends as measured on the glued hull, for the bow bulkhead's web dados. Null when nothing is measured (the dados follow the design).
+ * `centerMidIn` is the web's center plane off the centerline at mid height; `leanIn` how far each web leans in from the deck to the top (+ = inward).
+ */
+export function bowWebAsBuilt(p: Params): { webIn: number; centerMidIn: number; leanIn: number } | null {
+  if (p.bowWebGapDeckIn <= 0) return null;
+  const webIn = p.bowWebEndThickIn > 0 ? p.bowWebEndThickIn : thinSheet(p).thicknessIn;
+  const top = p.bowWebGapTopIn > 0 ? p.bowWebGapTopIn : p.bowWebGapDeckIn;
+  return { webIn, centerMidIn: (p.bowWebGapDeckIn + top) / 4 + webIn / 2, leanIn: (p.bowWebGapDeckIn - top) / 2 };
 }
 
 /** Derived quantities that many modules need; no geometry here. */
