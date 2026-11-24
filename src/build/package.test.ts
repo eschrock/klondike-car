@@ -16,16 +16,18 @@ const totalMs = performance.now() - t0;
 const names = pkg.files.map((f) => f.name);
 
 describe('buildPackage', () => {
-  it('has one SVG per Shaper file', () => {
+  it('has one cut-only SVG per Shaper file in shaper/, and its guide version in shaper/with-guides/', () => {
     const shaper = pkg.data.shaper;
     expect(shaper.length).toBeGreaterThan(5);
     for (const s of shaper) {
       const f = pkg.files.find((q) => q.name === `shaper/${s.fileName}`);
       expect(f, s.fileName).toBeDefined();
       expect(f!.mime).toBe('image/svg+xml');
-      expect(f!.data).toBe(s.svg);
+      expect(f!.data).toBe(s.cutSvg);
+      expect(pkg.files.find((q) => q.name === `shaper/with-guides/${s.fileName}`)!.data).toBe(s.svg);
     }
-    expect(names.filter((n) => n.startsWith('shaper/')).length).toBe(shaper.length);
+    expect(names.filter((n) => n.startsWith('shaper/') && !n.startsWith('shaper/with-guides/')).length).toBe(shaper.length);
+    expect(names.filter((n) => n.startsWith('shaper/with-guides/')).length).toBe(shaper.length);
   });
 
   it('has the full-size forms and their Letter tiles', () => {

@@ -63,18 +63,19 @@ export const SHAPER_CONVENTIONS: { swatch: 'outside' | 'inside' | 'pocket' | 'gu
   { swatch: 'outside', name: 'Black fill', meaning: 'outside cut (the part outline; the bit stays outside the line)' },
   { swatch: 'inside', name: 'White fill, black stroke', meaning: 'inside cut (holes and hand holes; the bit stays inside the line)' },
   { swatch: 'pocket', name: 'Gray fill', meaning: 'pocket (dado, mortise or recess to the stated depth)' },
-  { swatch: 'guide', name: 'Blue stroke', meaning: 'guide line (not cut: drill marks, glue footprints, edge notes)' },
+  { swatch: 'guide', name: 'Blue stroke', meaning: 'guide line, in the preview and the "with guides" file only (not cut: drill marks, glue footprints, edge notes)' },
 ];
 
 /** Notes Eric needs next to the Shaper files (also in the README). */
 export const SHAPER_NOTES: string[] = [
+  'Each Shaper file comes two ways: the download (and shaper/ in the zip) has only the cut paths, so Origin shows nothing else; "With guides" (shaper/with-guides/ in the zip) adds the drill marks, glue footprints, tags and notes, for reference.',
   'Every path carries shaper:cutDepth in inches (part thickness plus a breakthrough allowance of about 1/50 in for outside and inside cuts).',
-  'Drill marks are blue circles and crosses, not cuts: drill them by hand or on the drill press. A dashed mark is on the face you are NOT cutting.',
+  'Drill marks (in the guide version) are blue circles and crosses, not cuts: drill them by hand or on the drill press, located from the guide file or the part drawing. A dashed mark is on the face you are NOT cutting.',
   'Edge joints (rabbets, edge dados, bevels, glue faces) are notes under each drawing and in the file description; they are not cut by the Shaper.',
   'Each file is drawn as seen from the face you cut, and says which face goes UP (the bow bulkhead: REAR face up, so its drawing is the mirror image of the part seen from the front; the shared left/right files: either face, do not mirror).',
   'Every pocket, hole and engraving names its bit in the file and the book: 1/8 in straight bit for the narrow web dados, mortises and 17/64 in holes and for the on-line lettering, 1/4 in for the wide deck dados and the 13/32 in holes. Use a bit no wider than the feature.',
   `DEEP CUT parts (the bow bulkhead, the thickest solid): the stock is deeper than a Shaper bit reaches, so the file cuts the outline and hand hole ${SHAPER_MAX_DEPTH_IN} in deep from one face (verify YOUR bit's flute length), then you bandsaw the rest and finish with a flush-trim (pattern) bit riding the wall the Shaper cut.`,
-  'All text in these files (titles, tags, notes, dimension labels) is annotation only: stroke-only blue text inside a group marked as a guide, outside the cut area, never a cut path. Origin should ignore it; if it shows glyph outlines they are guides, not cuts. Before the first real cut, import transom-rear.svg once and confirm that only the outline, dados, mortises and holes show as cuts.',
+  'All text in the guide files (titles, tags, notes, dimension labels) is annotation only: stroke-only blue text inside a group marked as a guide, outside the cut area, never a cut path. Origin should ignore it; if it shows glyph outlines they are guides, not cuts. Before the first real cut, import transom-rear.svg once and confirm that only the outline, dados, mortises and holes show as cuts.',
   'VERIFY the insert drill: the six insert holes in the seat-back panel are drawn at 5/16 in (assumed) by 19/32 in deep from the front face: they go through the 13 mm panel and into the oak insert pads, which are glued to its back face first. Check the insert maker\'s drill chart for the exact bit, and test in a scrap of 13 mm okoume with an oak pad glued behind, before drilling the panel.',
   'Check the 1:1 scale before cutting: a file is exactly as large as its part (width and height in inches).',
 ];
@@ -171,7 +172,7 @@ export class BuildData {
   get files(): PackageFile[] {
     return this.memo('files', () => {
       const files: PackageFile[] = [];
-      for (const s of this.shaper) files.push({ name: `shaper/${s.fileName}`, mime: SVG_MIME, data: s.svg });
+      for (const s of this.shaper) files.push({ name: `shaper/${s.fileName}`, mime: SVG_MIME, data: s.cutSvg }, { name: `shaper/with-guides/${s.fileName}`, mime: SVG_MIME, data: s.svg });
       for (const f of this.forms) files.push({ name: `forms/${f.fileName}`, mime: SVG_MIME, data: f.svg });
       for (const l of this.laser) files.push({ name: `laser/${l.fileName}`, mime: SVG_MIME, data: l.svg });
       for (const sh of this.partDrawings) files.push({ name: drawingFileName(sh), mime: SVG_MIME, data: sh.svg });

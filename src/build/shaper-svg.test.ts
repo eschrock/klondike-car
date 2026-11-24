@@ -422,3 +422,18 @@ describe('D-107, D-108: the web ends are notched at both ends, so the bulkhead\'
     expect(d.items.filter((i) => i.k === 'pocket' && i.runOut).length).toBe(2);
   });
 });
+
+describe('cut-only Shaper files (Eric, 2026-11-24: just what needs to be cut)', () => {
+  const p = defaultParams();
+  const parts = buildModel(p);
+  const files = shaperFiles(parts, p);
+  const cutPaths = (svg: string) => [...svg.matchAll(/<path [^>]*shaper:cutType="(outside|inside|pocket|online)"[^>]*>/g)].map((m) => m[0]).sort();
+  it('every file has a cut-only version with exactly the same cut paths and no guides, drill marks or text', () => {
+    for (const f of files) {
+      expect(wellFormed(f.cutSvg), f.fileName).toBeNull();
+      expect(cutPaths(f.cutSvg), f.fileName).toEqual(cutPaths(f.svg));
+      expect(f.cutSvg, f.fileName).not.toMatch(/<text|shaper:cutType="guide"|id="guides"|id="annotations"|id="tags"/);
+      expect(f.cutSvg).toMatch(/<svg[^>]*\swidth="[\d.]+in"/);
+    }
+  });
+});

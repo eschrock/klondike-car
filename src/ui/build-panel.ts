@@ -781,7 +781,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
         h('div', { class: 'small' }, featureSummary(f.features)),
         h('details', {}, h('summary', {}, 'Features and notes'),
           h('ul', { class: 'bp-plain small' }, ...f.features.map((x) => h('li', {}, `${x.kind}${x.count > 1 ? ` ×${x.count}` : ''}: ${x.label}${x.diaIn ? ` Ø${fracInch64(x.diaIn)}` : ''}${x.depthIn ? `, ${fracInch64(x.depthIn)} deep` : ''}`)))),
-        h('div', { class: 'bp-actions' }, btn('Download SVG', () => download(f.fileName, SVG_MIME, f.svg), `Save ${f.fileName}`))));
+        h('div', { class: 'bp-actions' }, btn('Download SVG', () => download(f.fileName, SVG_MIME, f.cutSvg), `Save ${f.fileName} (cut paths only)`), btn('With guides', () => download(f.fileName.replace(/\.svg$/, '-guides.svg'), SVG_MIME, f.svg), `Save ${f.fileName} with its drill marks, glue lines and notes`))));
     }
     out.push(h('div', { class: 'bp-grid' }, ...cards));
     return out;
