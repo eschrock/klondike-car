@@ -308,9 +308,11 @@ export function bulkheadCornerRadius(p: Params): number {
 export function bulkheadOutline(ctx: Pick<Ctx, 'p' | 'L'>): { outline: Vec2[]; halfW: number } {
   const { p, L } = ctx;
   const b = L.bulkhead;
+  // D-111: the as-measured bulkhead is cut to the hull's measured width at the bow.
+  const hw = bowWebAsBuilt(p) && p.bowOutsideWidthIn > 0 ? (p.bowOutsideWidthIn + p.asMeasuredWidthOverIn) / 2 : b.halfW;
   const crown = Math.max(0, b.zCenter - b.zCorner);
-  const topR = transomTopOutline(b.halfW, b.zCorner, crown, Math.min(bulkheadCornerRadius(p), (b.zCorner - b.bot) / 2));
-  return { outline: ccw([[b.halfW, b.bot], ...topR, [-b.halfW, b.bot]]), halfW: b.halfW };
+  const topR = transomTopOutline(hw, b.zCorner, crown, Math.min(bulkheadCornerRadius(p), (b.zCorner - b.bot) / 2));
+  return { outline: ccw([[hw, b.bot], ...topR, [-hw, b.bot]]), halfW: hw };
 }
 
 
@@ -539,7 +541,7 @@ export function buildBody(ctx: Ctx): Part[] {
   const vent = (y: number, z: number): Vec2[] => cw(circleLoop(y, z, ventR, 8));
   {
     const rs = liftSlot(ctx);
-    const w0 = L.hwC + L.side;
+    const w0 = abR && p.rearOutsideWidthIn > 0 ? (p.rearOutsideWidthIn + p.asMeasuredWidthOverIn) / 2 : L.hwC + L.side; // D-111: the as-measured transom to the hull's measured width, plus the sanding allowance
     // D-110 (Eric, 2026-11-24): the transom reaches down to the bottom of the rails, so the rail ends do not show below it (it hung only the joist depth below the deck before).
     const zb = L.railTop - p.railDepthIn, zt = rs.transomTop;
     const topR = transomTopOutline(w0, zt, p.transomCrownIn, Math.min(abR ? p.asMeasuredCornerRadiusIn : p.transomCornerRadiusIn, (zt - zb) / 2)); // D-108
