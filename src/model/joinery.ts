@@ -214,13 +214,14 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       [`${id}-gunwale`, topAt(rearTx) - L.railBand / 2, yOutBand], [`${id}-gunwale-in`, topAt(rearTx) - L.railBand / 2, yInBand],
     ];
     for (const [bandId, z, yb] of bandEnds) add({ a: bandId, b: 'transom-rear', typeA: 'glue', size: 'epoxy + fillet (butt joint; the web in its dado locks the corner)', pts: [[rearTx, yb, z]], noteA: 'End of the band against the transom face; thickened-epoxy fillet inside.' });
-    // The forward ends meet the rear face of the bow bulkhead (D-57): the web in a dado, the bands butt-glued with a fillet. As in the transom, the dado runs out through the top edge (its stopped top
-    // would come within 0.02 in of the rounded corner, D-69).
+    // The forward ends meet the rear face of the bow bulkhead (D-57): the web in a dado, the bands butt-glued with a fillet. D-107: the bulkhead stands bowBulkheadRaiseIn above the side tops,
+    // so the dado stops bowWebDadoOverIn above the web's top, inside the oak; with no raise it runs out through the top edge as in the transom (its stopped top would come within 0.02 in of the
+    // rounded corner, D-69).
     {
       // D-106: the bulkhead is cut to the hull as built (the measured web end thickness and spacing), the design where a measurement is 0.
       const ab = bowWebAsBuilt(p);
       const xe = L.xSideEnd, ye = ab ? s * ab.centerIn : s * (hwAt(xe) + L.side / 2);
-      add({ a: web1, b: 'bow-bulkhead', typeA: 'dado', size: `${((ab?.webIn ?? pl) + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" dado in the bulkhead's rear face, up from the chine and out through the top edge (open at the top: no thin wall at the rounded corner; the epoxy fillet fills the run-out)`, pts: [[xe + dd / 2, ye, webZMid(xe)]], noteA: 'End of the web, captured (front); the bulkhead goes on after the rear transom (close one end first, S1).', noteB: 'Dado for the web end, open at the top. The deck dado runs into it at the corner.' });
+      add({ a: web1, b: 'bow-bulkhead', typeA: 'dado', size: `${((ab?.webIn ?? pl) + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" dado in the bulkhead's rear face, up from the chine and ${p.bowBulkheadRaiseIn > 0 ? `stopped ${p.bowWebDadoOverIn.toFixed(3)}" above the web's top (the bulkhead stands ${frac(p.bowBulkheadRaiseIn)}" above the side tops, so the top edge is whole; thickened epoxy fills the end)` : 'out through the top edge (open at the top: no thin wall at the rounded corner; the epoxy fillet fills the run-out)'}`, pts: [[xe + dd / 2, ye, webZMid(xe)]], noteA: 'End of the web, captured (front); the bulkhead goes on after the rear transom (close one end first, S1).', noteB: 'Dado for the web end, open at the top. The deck dado runs into it at the corner.' });
       const yb = (face: 'out' | 'in') => s * (hwAt(xe) + (face === 'out' ? L.side - bandT / 2 : bandT / 2));
       const fwdEnds: [string, number, number][] = [
         [`${id}-chine`, cBot + L.chineH / 2, yb('out')], [`${id}-chine-in`, cBot + rabbetZ + (L.chineH - rabbetZ) / 2, yb('in')],

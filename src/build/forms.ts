@@ -790,7 +790,7 @@ function crownPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const b = L.bulkhead;
   if (!barFlat) return null;
   const crown = Math.max(0, b.zCenter - b.zCorner);
-  const rc = Math.min(p.transomCornerRadiusIn, (b.zCorner - b.bot) / 2);
+  const rc = Math.min(p.bowBulkheadCornerRadiusIn, (b.zCorner - b.bot) / 2);
   // Bulkhead top: right corner foot, over the crown, to the left corner foot (y, z). Template = the top chain with a band under it.
   const chain = transomTopOutline(b.halfW, b.zCorner, crown, rc);
   const zLow = Math.min(...chain.map((q) => q[1])) - CROWN_BAND_IN;

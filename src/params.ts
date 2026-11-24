@@ -278,6 +278,21 @@ const defs = {
     default: 0.125, min: 0, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-66',
     note: 'The taper is derived so the tire clears the body by steerClearIn PLUS this much through the whole +-lock sweep (the steer-clear row then reads 1/8 in better than its limit, not exactly at it).',
   },
+  bowBulkheadRaiseIn: {
+    label: 'Bow bulkhead stands above the side top', group: 'body', unit: 'in',
+    default: 0.25, min: 0, max: 0.75, step: 0.0625, status: 'explore', ref: 'D-107',
+    note: 'D-107 (Eric, 2026-11-24): the whole top of the bow bulkhead, corners and crown, stands this far above the side tops at the bow, so the web dados stop inside the oak instead of running out through the top edge. 0 = the corners at the side tops, the dados open at the top.',
+  },
+  bowBulkheadCornerRadiusIn: {
+    label: 'Bow bulkhead top corner radius', group: 'body', unit: 'in',
+    default: 0.375, min: 0, max: 2, step: 0.125, status: 'explore', ref: 'D-107',
+    note: 'D-107: the bulkhead\'s own rounded top corners (the transom keeps transomCornerRadiusIn). 3/8" keeps the top edge up over the web dados, which sit within about 1/2" of the outer edge.',
+  },
+  bowWebDadoOverIn: {
+    label: 'Bow web dado runs past the web top', group: 'body', unit: 'in',
+    default: 0.125, min: 0, max: 0.25, step: 0.0156, status: 'assumed', ref: 'D-107',
+    note: 'D-107: the stopped web dado in the bow bulkhead ends this far above the web\'s top, so the bit\'s round end clears the web\'s square corners; thickened epoxy fills the gap.',
+  },
   bowBulkheadThickIn: {
     label: 'Bow bulkhead thickness', group: 'body', unit: 'in',
     default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-57, D-60',
