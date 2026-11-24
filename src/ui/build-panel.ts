@@ -752,7 +752,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     const legend = h('ul', { class: 'bp-legend', 'aria-label': 'Shaper conventions' },
       ...SHAPER_CONVENTIONS.map((c) => h('li', {}, h('span', { class: `bp-swatch ${c.swatch}`, 'aria-hidden': 'true' }), h('span', {}, h('strong', {}, c.name), `: ${c.meaning}`))));
     out.push(h('div', { class: 'bp-intro' },
-      h('div', {}, h('h3', { class: 'bp-group' }, 'How to read the drawings'), legend, note(`${files.length} files, one per part (identical parts share a file). SVG only.`)),
+      h('div', {}, h('h3', { class: 'bp-group' }, 'How to read the drawings'), legend, note(`${files.length} files, one per part (identical parts share a file)${files.some((f) => f.alternate) ? ', plus the alternates marked below' : ''}. SVG only.`)),
       h('details', { class: 'bp-card' }, h('summary', {}, `Shaper notes (${SHAPER_NOTES.length})`), h('ul', { class: 'bp-plain muted small' }, ...SHAPER_NOTES.map((x) => h('li', {}, x))))));
     const cards: Node[] = [];
     const partsById = new Map((design?.parts ?? []).map((x) => [x.id, x]));
@@ -769,6 +769,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       cards.push(h('article', { class: 'bp-file', 'aria-label': f.fileName },
         svgBox(previewSvg(f.svg, `${f.partNo} Shaper file preview`)),
         h('div', { class: 'bp-file-head' }, h('strong', {}, f.partNo), h('span', { class: 'muted small' }, f.fileName)),
+        ...(f.alternate ? [h('p', { class: 'small' }, h('strong', {}, 'Alternate: '), f.alternate.replace(/^Alternate: /, ''))] : []),
         h('dl', { class: 'bp-facts' },
           h('dt', {}, 'Stock'), h('dd', {}, stockOf(f.partId)),
           h('dt', {}, 'Size'), h('dd', {}, `${fracDim(f.widthIn)} × ${fracDim(f.heightIn)} in`),

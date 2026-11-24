@@ -138,11 +138,11 @@ describe('sign knobs and dado text', () => {
       expect(j.size).not.toMatch(/3\/16 clearance/);
     }
   });
-  it('the deck dado runs into the web dados and the web dados run out through the top edge, in both the transom and the bulkhead', () => {
+  it('the deck dado runs into the web dados in both ends; the web dados stop above the notched webs in both (D-107, D-108)', () => {
     for (const id of ['transom-rear', 'bow-bulkhead']) {
       const dados = get(id).joints!.filter((j) => j.type === 'dado');
       expect(dados.find((j) => j.to === 'deck')!.size, id).toMatch(/into the web dados/);
-      for (const j of dados.filter((q) => /web/.test(q.to))) expect(j.size, `${id} ${j.to}`).toMatch(/out through the top edge/);
+      for (const j of dados.filter((q) => /web/.test(q.to))) expect(j.size, `${id} ${j.to}`).toMatch(id === 'transom-rear' ? /stopped 0\.125" above the web's top after its 0\.500" notch/ : /stopped 0\.125" above the web's top after its 0\.250" notch/);
     }
   });
 });

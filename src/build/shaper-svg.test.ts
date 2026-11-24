@@ -3,6 +3,7 @@ import { buildModel } from '../model';
 import { THIN_SHEET, defaultParams } from '../params';
 import { SHAPER_MAX_DEPTH_IN, analyzeShaperPart, grainWords, shaperCutDepth, shaperFiles } from './shaper-svg';
 import { flatPattern } from './flat';
+import { distToPoly } from './svg-util';
 
 const p = defaultParams();
 // D-86: the signs, storage walls and lid panel are sawn by default; they go back on the Shaper here so its drill marks, mirror sharing and engraving stay covered.
@@ -137,7 +138,7 @@ describe('Shaper SVG files', () => {
     }
   });
 
-  it('runs the deck dado into the web dados (one pocket at each corner) and the web dados out through the top edge: no thin walls left', () => {
+  it('runs the deck dado into the web dados (one pocket at each corner) and stops the web dados inside the oak over the notched webs: no thin walls left', () => {
     for (const id of ['transom-rear', 'bow-bulkhead']) {
       const d = analyzeShaperPart(parts.find((x) => x.id === id)!, parts, p)!;
       const pk = d.items.filter((i): i is Extract<typeof i, { k: 'pocket' }> => i.k === 'pocket');
@@ -150,9 +151,10 @@ describe('Shaper SVG files', () => {
         // the deck pocket spans the whole width of the web pocket at its end, and shares its rows: one continuous pocket
         expect(deck.u0 <= b.u0 + 1e-9 && deck.u1 >= b.u1 - 1e-9 || deck.u0 <= b.u0 + 1e-9 || deck.u1 >= b.u1 - 1e-9, `${id} ${w.label}`).toBe(true);
         expect(Math.max(deck.v0, b.v0) < Math.min(deck.v1, b.v1), `${id} ${w.label} rows overlap`).toBe(true);
-        // open at the top: the pocket ends above the outline there
+        // D-107, D-108: stopped inside the oak, over the notched web: the pocket's top is under the outline by about the notch, less the 1/8 in bit clearance, plus the web's cap
         const top = Math.max(...d.f.outer.filter((q) => q[0] >= b.u0 - 1e-6 && q[0] <= b.u1 + 1e-6).map((q) => q[1]));
-        expect(b.v1, `${id} ${w.label} top`).toBeGreaterThanOrEqual(top - 0.5);
+        expect(b.v1, `${id} ${w.label} top`).toBeGreaterThanOrEqual(top - 0.875);
+        expect(b.v1, `${id} ${w.label} top`).toBeLessThan(top);
         expect(b.v1).toBeGreaterThan(Math.min(...d.f.outer.map((q) => q[1]))); // sanity
       }
       const deckSpan = [deck.u0, deck.u1], webSpan = [Math.min(...webs.map((w) => bb(w.loop).u0)), Math.max(...webs.map((w) => bb(w.loop).u1))];
@@ -350,5 +352,73 @@ describe('Shaper SVG files', () => {
     const ext = { ...p, weatherSpec: 1 };
     const w2 = shaperFiles(buildModel(ext), ext).find((f) => f.partIds.includes('side-L-web'))!;
     expect(w2.features.filter((x) => /drain/i.test(x.label)).reduce((n, x) => n + x.count, 0)).toBe(2);
+  });
+});
+
+describe('D-106: the bow bulkhead cut to the hull as measured (bowAsMeasured on)', () => {
+  const box = (l: Array<[number, number]>) => ({ u0: Math.min(...l.map((q) => q[0])), u1: Math.max(...l.map((q) => q[0])), v0: Math.min(...l.map((q) => q[1])), v1: Math.max(...l.map((q) => q[1])) });
+  const pockets = (q: ReturnType<typeof defaultParams>) => {
+    const parts = buildModel(q);
+    const d = analyzeShaperPart(parts.find((x) => x.id === 'bow-bulkhead')!, parts, q)!;
+    return { W: d.f.widthIn, pk: d.items.flatMap((i) => (i.k === 'pocket' ? [{ label: i.label, depth: i.depth, ...box(i.loop as Array<[number, number]>) }] : [])) };
+  };
+  it('straight web dados at the measured gap and web, the deck dado joining them, the Domino mortises on the web line', () => {
+    const p = { ...defaultParams(), bowAsMeasured: 1 };
+    const { W, pk } = pockets(p);
+    const webs = pk.filter((x) => /web/.test(x.label));
+    expect(webs.length).toBe(2);
+    for (const w of webs) {
+      expect(w.u1 - w.u0).toBeCloseTo(p.bowWebEndThickIn + p.grooveSlopIn, 4); // straight: as wide at the top as at the deck
+      expect(Math.abs((w.u0 + w.u1) / 2 - W / 2)).toBeCloseTo(p.bowWebGapIn / 2 + p.bowWebEndThickIn / 2, 4);
+    }
+    const deck = pk.find((x) => /deck/.test(x.label))!;
+    expect(deck.u0).toBeCloseTo(Math.min(...webs.map((w) => w.u0)), 4);
+    expect(deck.u1).toBeCloseTo(Math.max(...webs.map((w) => w.u1)), 4);
+    const deckUnder = Math.min(...webs.map((w) => w.v0)); // the web dados start at the deck's underside
+    const doms = pk.filter((x) => /^domino/.test(x.label));
+    expect(doms.length).toBe(2);
+    for (const m of doms) {
+      expect(m.u1 - m.u0).toBeCloseTo(p.bowDominoSlotIn, 4);
+      expect(deckUnder - m.v1).toBeCloseTo(p.bowDominoTopIn, 4);
+      expect(deckUnder - m.v0).toBeCloseTo(p.bowDominoBottomIn, 4);
+      expect(m.depth).toBeCloseTo(p.bowDominoDepthIn, 3); // the joint text carries 3 decimals
+      expect(Math.abs((m.u0 + m.u1) / 2 - W / 2)).toBeCloseTo(p.bowWebGapIn / 2 + p.bowWebEndThickIn / 2, 4);
+    }
+  });
+  it('by default (and with the measurements at 0) it is the design: web dados on the design spacing, the Dominos marked through the template', () => {
+    const q = defaultParams();
+    const { pk } = pockets(q);
+    expect(pk.filter((x) => /^domino/.test(x.label)).length).toBe(0);
+    const webs = pk.filter((x) => /web/.test(x.label)), deck = pk.find((x) => /deck/.test(x.label))!;
+    expect(webs.length).toBe(2);
+    expect(deck.u0).toBeCloseTo(Math.min(...webs.map((w) => w.u0)), 4);
+    expect(deck.u1).toBeCloseTo(Math.max(...webs.map((w) => w.u1)), 4);
+  });
+});
+
+describe('D-107, D-108: the web ends are notched at both ends, so the bulkhead\'s and the transom\'s web dados stop inside the oak', () => {
+  for (const [name, q, id] of [['bulkhead, design', defaultParams(), 'bow-bulkhead'], ['bulkhead, as measured', { ...defaultParams(), bowAsMeasured: 1 }, 'bow-bulkhead'], ['transom, design', defaultParams(), 'transom-rear'], ['transom, as measured', { ...defaultParams(), rearAsMeasured: 1 }, 'transom-rear']] as const) {
+    it(`${name}: each web dado stops 1/8" above the notched web, with at least 3/16" of oak straight over it and 1/8" at the thinnest`, () => {
+      const parts = buildModel(q);
+      const d = analyzeShaperPart(parts.find((x) => x.id === id)!, parts, q)!;
+      const webs = d.items.filter((i): i is Extract<typeof i, { k: 'pocket' }> => i.k === 'pocket' && /web/.test(i.label));
+      expect(webs.length).toBe(2);
+      for (const w of webs) {
+        expect(w.runOut).toBeFalsy();
+        const o = d.f.outer;
+        const topAt = (u: number) => Math.max(...o.flatMap((a, k) => { const c = o[(k + 1) % o.length]; return (a[0] - u) * (c[0] - u) <= 0 && a[0] !== c[0] ? [a[1] + ((c[1] - a[1]) * (u - a[0])) / (c[0] - a[0])] : []; }));
+        const vTop = Math.max(...w.loop.map((pt) => pt[1]));
+        const us = w.loop.map((pt) => pt[0]);
+        expect(Math.min(topAt(Math.min(...us)), topAt(Math.max(...us))) - vTop).toBeGreaterThanOrEqual(3 / 16);
+        expect(Math.min(...w.loop.map((pt) => distToPoly(pt, o)))).toBeGreaterThanOrEqual(1 / 8);
+      }
+      expect(d.notes.some((n) => /pocket comes within|outside the outline/.test(n))).toBe(false);
+    });
+  }
+  it('with no notch the bow dados run out through the top edge again', () => {
+    const q = { ...defaultParams(), bowWebNotchIn: 0 };
+    const parts = buildModel(q);
+    const d = analyzeShaperPart(parts.find((x) => x.id === 'bow-bulkhead')!, parts, q)!;
+    expect(d.items.filter((i) => i.k === 'pocket' && i.runOut).length).toBe(2);
   });
 });

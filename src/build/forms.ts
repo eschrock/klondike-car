@@ -15,7 +15,7 @@
 import type { Params } from '../params';
 import { computeLayout, outerHalfWidth, samples, sideTopAt, type Layout } from '../model/layout';
 import { bowGeometry } from '../model/handle';
-import { sheerBlank, transomTopOutline } from '../model/body';
+import { bulkheadCornerRadius, sheerBlank, transomTopOutline } from '../model/body';
 import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
 import { epoxyTimeFactor } from './finishing';
@@ -24,7 +24,7 @@ import { brakeOf, cutListFor } from './part-drawings';
 import { analyzeShaperPart } from './shaper-svg';
 import { LASER_MAX_WIDTH_IN, clipShape, emptyShape, fitToBed, type LaserItem, type LaserShape } from './laser-svg';
 import {
-  ANNOTATION_ATTRS, bbox, checkSquareEls, circleD, dimensionEls, esc, fmt, frac, guideEl, hash6, pathEl, polyD, rectLoop, svgDocument, textEl, type Xf,
+  ANNOTATION_ATTRS, bbox, checkSquareEls, circleD, dimensionEls, distToPoly, esc, fmt, frac, guideEl, hash6, pathEl, pointInPoly, polyD, rectLoop, roundEndSlot, svgDocument, textEl, type Xf,
 } from './svg-util';
 import { transformPoint, worldAABB } from '../model/bounds';
 
@@ -790,7 +790,7 @@ function crownPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const b = L.bulkhead;
   if (!barFlat) return null;
   const crown = Math.max(0, b.zCenter - b.zCorner);
-  const rc = Math.min(p.transomCornerRadiusIn, (b.zCorner - b.bot) / 2);
+  const rc = Math.min(bulkheadCornerRadius(p), (b.zCorner - b.bot) / 2);
   // Bulkhead top: right corner foot, over the crown, to the left corner foot (y, z). Template = the top chain with a band under it.
   const chain = transomTopOutline(b.halfW, b.zCorner, crown, rc);
   const zLow = Math.min(...chain.map((q) => q[1])) - CROWN_BAND_IN;
@@ -1008,8 +1008,13 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
 }
 
 // ── (f) The end templates: the transom and the bow bulkhead in 1/4 in plywood, tried on the hull before the oak is cut (D-94) ──
-/** The end templates are the end's outline grown this much all round (in), so the dados that run out through the end's top edge stay closed slots and the template is one piece. */
+/**
+ * The end templates are cut to the end's own outline at the sides and the bottom, with a strip this tall (in) across the top. The web dados run out through the end's top edge and the deck
+ * dado runs between them, so a template cut to the bare outline would fall in two; the strip closes the slots and holds it in one piece.
+ */
 export const END_TEMPLATE_MARGIN_IN = 0.75;
+/** The least plywood (in) between a slot and the template's edge for a template cut to the end's own outline (no strip). */
+export const END_TEMPLATE_MIN_BRIDGE_IN = 0.125;
 /** Play of a tenon or Domino slot in the end template, a side (in): about the dados' own play, so a tenon that enters its slot enters the real mortise. */
 export const END_TEMPLATE_SLOT_CLEAR_IN = 1 / 64;
 /** A 6 mm Domino tenon's section (in): its 6 mm thickness across the rail, its 20 mm width up and down. The template slot adds the slot play all round. */
@@ -1017,42 +1022,96 @@ const DOMINO_SLOT_IN: Vec2 = [6 / 25.4, 20 / 25.4];
 /** A play or clearance to the nearest 1/64 in, as the shop reads it (the template's 1/64 in play would print as 1/32 at the drawings' usual 1/32). */
 const inch64 = (v: number): string => `${fractionText(Math.round(v * 64) / 64, 64)}"`;
 
-interface EndTemplate { id: string; label: string; partId: string; outer: Vec2[]; part: Vec2[]; slots: Vec2[][]; score: Vec2[][]; marks: Array<{ c: Vec2; dia: number }>; w: number; h: number; slotText: string[] }
+type Box = { u0: number; v0: number; u1: number; v1: number };
+const axisRect = (l: Vec2[]): boolean => l.length === 4 && l.every((q, k) => { const r = l[(k + 1) % 4]; return Math.abs(q[0] - r[0]) < 1e-9 || Math.abs(q[1] - r[1]) < 1e-9; });
+
+/** The union of axis-aligned rectangles that touch or overlap, as outline loops (counter-clockwise), so one slot is one cut. */
+export function unionRects(boxes: Box[]): Vec2[][] {
+  const uniq = (xs: number[]) => xs.sort((a, b) => a - b).filter((x, k, a) => k === 0 || x - a[k - 1] > 1e-7);
+  const us = uniq(boxes.flatMap((b) => [b.u0, b.u1])), vs = uniq(boxes.flatMap((b) => [b.v0, b.v1]));
+  const inside = (i: number, j: number) => {
+    if (i < 0 || j < 0 || i >= us.length - 1 || j >= vs.length - 1) return false;
+    const cu = (us[i] + us[i + 1]) / 2, cv = (vs[j] + vs[j + 1]) / 2;
+    return boxes.some((b) => cu > b.u0 && cu < b.u1 && cv > b.v0 && cv < b.v1);
+  };
+  const key = (i: number, j: number) => `${i},${j}`;
+  const next = new Map<string, [number, number][]>();
+  const edge = (a: [number, number], b: [number, number]) => { const k = key(...a); next.set(k, [...(next.get(k) ?? []), b]); };
+  for (let i = 0; i < us.length - 1; i++) for (let j = 0; j < vs.length - 1; j++) {
+    if (!inside(i, j)) continue;
+    if (!inside(i, j - 1)) edge([i, j], [i + 1, j]);
+    if (!inside(i + 1, j)) edge([i + 1, j], [i + 1, j + 1]);
+    if (!inside(i, j + 1)) edge([i + 1, j + 1], [i, j + 1]);
+    if (!inside(i - 1, j)) edge([i, j + 1], [i, j]);
+  }
+  const loops: Vec2[][] = [];
+  for (const k0 of [...next.keys()]) {
+    while (next.get(k0)?.length) {
+      const pts: [number, number][] = [k0.split(',').map(Number) as [number, number]];
+      let k = k0;
+      for (let guard = 0; guard < 10000; guard++) {
+        const n = next.get(k)!.shift()!;
+        k = key(...n);
+        if (k === k0) break;
+        pts.push(n);
+      }
+      // keep the corners only
+      const corners = pts.filter((q, m) => { const a = pts[(m + pts.length - 1) % pts.length], b = pts[(m + 1) % pts.length]; return !((a[0] === q[0] && q[0] === b[0]) || (a[1] === q[1] && q[1] === b[1])); });
+      loops.push(corners.map(([i, j]): Vec2 => [us[i], vs[j]]));
+    }
+  }
+  return loops;
+}
+
+interface EndTemplate { id: string; label: string; partId: string; outer: Vec2[]; part: Vec2[]; slots: Vec2[][]; marks: Array<{ c: Vec2; dia: number }>; w: number; h: number; slotText: string[]; filedDominos: boolean; closed: boolean }
 
 function endTemplate(parts: Part[], p: Params, partId: string, id: string, label: string): EndTemplate | null {
   const part = parts.find((x) => x.id === partId);
   const d = part && analyzeShaperPart(part, parts, p);
   if (!part || !d) return null;
   const f = d.f, b = bbox(f.outer), M = END_TEMPLATE_MARGIN_IN, c = END_TEMPLATE_SLOT_CLEAR_IN;
-  const shift = ([u, v]: Vec2): Vec2 => [u - b.u0 + M, v - b.v0 + M];
-  const grow = (loop: Vec2[], by: number): Vec2[] => { const q = bbox(loop); return rectLoop(q.u0 - by, q.v0 - by, q.u1 + by, q.v1 + by); };
+  const shift = ([u, v]: Vec2): Vec2 => [u - b.u0, v - b.v0];
+  const grow = (q: Box, by: number): Box => ({ u0: q.u0 - by, v0: q.v0 - by, u1: q.u1 + by, v1: q.v1 + by });
   const pockets = d.items.filter((i): i is Extract<typeof i, { k: 'pocket' }> => i.k === 'pocket');
   const slotText: string[] = [];
-  const slots: Vec2[][] = pockets.map((pk) => {
-    const isMortise = /^mortise/.test(pk.label);
-    if (isMortise) slotText.push(pk.label.replace(/^mortise-tenon for /, 'rail mortise '));
-    return (isMortise ? grow(pk.loop, c) : pk.loop).map(shift);
-  });
+  // Mortises and Dominos: round-ended slots with the play all round. Dados: their union, one slot per run of dados that meet (the web dados and the deck dado at each end).
+  const slots: Vec2[][] = [];
+  const dados: Box[] = [];
+  for (const pk of pockets) {
+    const isMortise = /^(mortise|domino)/.test(pk.label);
+    if (isMortise) {
+      slotText.push(pk.label.replace(/^mortise-tenon for /, 'rail mortise ').replace(/^domino for /, 'Domino mortise for '));
+      slots.push(roundEndSlot(grow(bbox(pk.loop), c)).map(shift));
+    } else if (axisRect(pk.loop)) dados.push(bbox(pk.loop));
+    else slots.push(pk.loop.map(shift));
+  }
+  if (dados.length) slots.unshift(...unionRects(dados).map((l) => l.map(shift)));
   // A Domino joint is an edge joint (not in the Shaper file): its slot comes from the rail's own joint, in the same pattern coordinates as the dados (the left web's dado tells which way u runs).
   const ab = worldAABB(part);
   const W = b.u1 - b.u0;
   const webL = pockets.find((pk) => /side-L-web/.test(pk.label));
   const sgn = webL ? (bbox(webL.loop).u0 > W / 2 ? 1 : -1) : 1;
-  for (const r of parts.filter((x) => /^rail-[LR]$/.test(x.id))) {
+  // D-106: when the Shaper file cuts the Domino mortises, they are already among the pockets above.
+  const filedDominos = pockets.some((pk) => /^domino/.test(pk.label));
+  for (const r of parts.filter((x) => !filedDominos && /^rail-[LR]$/.test(x.id))) {
     for (const j of (r.joints ?? []).filter((q) => q.type === 'domino' && q.to === partId)) {
       for (const a of j.at ?? []) {
         const w = transformPoint(r.transform, a);
         const uc = W / 2 + sgn * w[1], vc = w[2] - ab.min[2];
-        slots.push(rectLoop(uc - DOMINO_SLOT_IN[0] / 2 - c, vc - DOMINO_SLOT_IN[1] / 2 - c, uc + DOMINO_SLOT_IN[0] / 2 + c, vc + DOMINO_SLOT_IN[1] / 2 + c).map(shift));
+        slots.push(roundEndSlot({ u0: uc - DOMINO_SLOT_IN[0] / 2 - c, v0: vc - DOMINO_SLOT_IN[1] / 2 - c, u1: uc + DOMINO_SLOT_IN[0] / 2 + c, v1: vc + DOMINO_SLOT_IN[1] / 2 + c }).map(shift));
         slotText.push(`Domino place for ${r.id}`);
       }
     }
   }
-  const close = (l: Vec2[]): Vec2[] => [...l, l[0]];
-  const score: Vec2[][] = [close(f.outer.map(shift)), ...d.items.flatMap((i) => (i.k === 'cutLoop' ? [close(i.loop.map(shift))] : []))];
+  // The hand hole is cut through like the real one; drilled holes are only marked.
+  for (const i of d.items) if (i.k === 'cutLoop') slots.push(i.loop.map(shift));
   const marks = d.items.flatMap((i) => (i.k === 'drill' || i.k === 'cutHole' ? [{ c: shift(i.c), dia: Math.max(i.dia, 0.19) }] : []));
-  const outer = rectLoop(0, 0, W + 2 * M, b.v1 - b.v0 + 2 * M);
-  return { id, label, partId, outer, part: f.outer.map(shift), slots, score, marks, w: W + 2 * M, h: b.v1 - b.v0 + 2 * M, slotText };
+  const H = b.v1 - b.v0;
+  // Where every slot stops inside the end's outline (the bow's stopped dados, D-107), the template is the end's own outline; where a dado runs out through the top edge, a strip across the top.
+  const own = f.outer.map(shift);
+  const closed = slots.every((l) => l.every((q) => pointInPoly(q, own) && distToPoly(q, own) >= END_TEMPLATE_MIN_BRIDGE_IN));
+  const outer = closed ? own : rectLoop(0, 0, W, H + M);
+  return { id, label, partId, outer, part: own, slots, marks, w: W, h: closed ? H : H + M, slotText, filedDominos, closed };
 }
 
 function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
@@ -1065,16 +1124,16 @@ function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
   const M = END_TEMPLATE_MARGIN_IN;
   const dims: FormDim[] = ts.flatMap((t) => [lenDim(`${t.id}-width`, `${t.label}: width`, t.w), lenDim(`${t.id}-height`, `${t.label}: height`, t.h), countDim(`${t.id}-slots`, `${t.label}: slots cut through`, t.slots.length, 'slot')]);
   const notes = [
-    `Fit-check templates, not routing templates: each is the end's outline grown ${inch(M)} all round, with its web dados, deck dado and rail mortises (and at the bow the two Domino places) cut right through as slots, and the end's own outline scored on it.`,
+    `Fit-check templates, not routing templates. ${ts.map((t) => t.closed ? `The ${t.label.toLowerCase()} is cut to the end's own outline (its web dados stop inside the oak).` : `The ${t.label.toLowerCase()} is cut to the end's own sides and bottom, with a ${inch(M)} strip across the top that holds it in one piece (its web dados run out through the top edge, so without the strip the slots would cut it in two).`).join(' ')} The web dados and the deck dado are one slot; the rail mortises (and at the bow the two Domino places) are round-ended slots; the hand hole is cut through.`,
     `The tenon and Domino slots are ${inch64(END_TEMPLATE_SLOT_CLEAR_IN)} over a side, about the play of the dados (the laser's kerf adds a hair): a template that goes on by hand is the first check; the oak end's dry fit is the last.`,
     'Push each straight onto its end of the built hull, by hand, with dry tenons and Dominos in the rail ends. If a slot binds, measure how far it is off and move that dado or mortise in the file, then cut a new template: plywood is cheap, the glued oak panels are not.',
   ];
   const build: FormBuildStep[] = [
     { step: `TEMPLATES (laser): cut ${ts.length === 2 ? 'TWO templates' : 'the template'} in ${frac(TEMPLATE_STOCK_IN)} plywood from the laser file for this drawing, one piece each: ${ts.map((t) => `the ${t.label.toLowerCase()} (${frac(t.w)} × ${frac(t.h)})`).join(' and ')}.` },
-    { step: `The laser cuts the dados and the rail mortises right through as slots (${ts.reduce((a, t) => a + t.slots.length, 0)} in all), and scores each end's outline, its hand hole and its drilled holes.` },
+    { step: `The laser cuts the outline, the dados, the mortises and the hand holes right through (${ts.reduce((a, t) => a + t.slots.length, 0)} openings in all)${ts.some((t) => t.marks.length) ? ', and marks the drilled holes' : ''}.` },
     {
       step: 'USE (at the ends step, after the hull is glued): push each template straight onto its end of the hull by hand.',
-      sub: ['Dry loose tenons in the rail rear mortises and dry Dominos in the bow ones first, half standing out.', 'Every web end, the deck end and every tenon must come through its slot; the template must lie flat on all the band ends, and the scored outline\'s sides lie on the outer bands\' faces.', 'Then lay the bulkhead template on the cut bulkhead, its slots over the dados, and mark the two Domino mortises through it.'],
+      sub: ['Dry loose tenons in the rail rear mortises and dry Dominos in the bow ones first, half standing out.', 'Every web end, the deck end and every tenon must come through its slot; the template must lie flat on all the band ends, its sides flush with the outer bands\' faces.', bh?.filedDominos ? 'The bulkhead\'s two Domino mortises are cut in its Shaper file, to the Dominos as cut in the rails: the Domino slots of the template show where.' : 'Then lay the bulkhead template on the cut bulkhead, its slots over the dados, and mark the two Domino mortises through it.'],
     },
     { step: 'No base, braces, clamps or spring-back: these are fit-check templates.' },
   ];
@@ -1086,19 +1145,19 @@ function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
     id: 'end-templates', title: 'End templates: rear transom and bow bulkhead', w, h, dims, notes, build, materials,
     laser: [{
       id: 'end-templates', title: 'End templates: rear transom and bow bulkhead', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
-      items: ts.map((t) => ({ shape: { ...emptyShape(t.id, t.label, t.outer), holes: t.slots, score: t.score, marks: t.marks }, qty: 1 })),
-      notes: ['Slots (red) are cut through: the web dados, the deck dado, the rail mortises and the bulkhead\'s Domino places. The end\'s own outline, hand hole and holes are scored (blue).'],
+      items: ts.map((t) => ({ shape: { ...emptyShape(t.id, t.label, t.outer), holes: t.slots, marks: t.marks }, qty: 1 })),
+      notes: [`Everything red is cut through: the outline (${ts.map((t) => `the ${t.label.toLowerCase()}: ${t.closed ? 'the end\'s own outline' : `the end's own sides and bottom, a ${inch(M)} strip across the top`}`).join('; ')}), the dados as one slot, the round-ended mortise and Domino slots, and the hand hole.${ts.some((t) => t.marks.length) ? ' Drilled holes are marked (blue), not cut.' : ''}`],
     }],
-    subtitle: [`Each end's outline grown ${inch(M)} all round; dados and mortises cut through; ${ts.map((t) => `${t.label.toLowerCase()} ${inch(t.w)} × ${inch(t.h)}`).join(', ')}.`],
+    subtitle: [`${ts.map((t) => `${t.label}: ${t.closed ? 'the end\'s own outline' : `its sides and bottom, a ${inch(M)} strip across the top`}`).join('; ')}; dados, mortises and hand hole cut through; ${ts.map((t) => `${t.label.toLowerCase()} ${inch(t.w)} × ${inch(t.h)}`).join(', ')}.`],
     draw: (place) => {
       const out: string[] = [];
       const g: string[] = [];
       ts.forEach((t, i) => {
         const T: Xf = ([u, v]) => place([u, v + yOf(i)]);
         out.push(`<g id="${t.id}">${outsideCut(t.outer, T, TEMPLATE_STOCK_IN, `${t.label} (outline)`)}${t.slots.map((sl) => pathEl({ cutType: 'inside', d: polyD(sl, T), depthIn: TEMPLATE_STOCK_IN + BREAKTHROUGH_IN })).join('')}</g>`);
-        g.push(guideEl(polyD(t.part, T), { dashed: true, label: `${t.label}: the end's outline (scored)` }));
+        if (!t.closed) g.push(guideEl(polyD(t.part, T), { dashed: true, label: `${t.label}: the end's own outline (the strip above its top edge holds the template together)` }));
         for (const m of t.marks) g.push(guideEl(circleD(m.c, m.dia, T)));
-        g.push(label(T, [0, t.h + 0.2], `${t.label.toUpperCase()} (scored dashed line: the end itself)`, 0.2));
+        g.push(label(T, [0, t.h + 0.2], `${t.label.toUpperCase()} (dashed line: the end itself)`, 0.2));
         g.push(dimTo(T, [0, 0], [t.w, 0], `width ${inch(t.w)}`, -0.5), dimTo(T, [t.w, 0], [t.w, t.h], `height ${inch(t.h)}`, 0.5));
       });
       out.push(`<g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`);

@@ -5,6 +5,7 @@
  * Everything is a pure function of `(parts, params)`; the only clock is the `date` the caller passes (shown in the
  * form title blocks and the README). The params hash is the same revision stamp the form drawings print.
  */
+import { bowAsMeasuredFiles } from './as-measured';
 import type { Part } from '../model/types';
 import type { Params } from '../params';
 import { cutList, stepMapOf, type CutList } from './cutlist';
@@ -132,8 +133,11 @@ export class BuildData {
   get nest(): NestResult { return this.memo('nest', () => nestPlywood(this.parts, this.p)); }
   get oak(): OakPlan { return this.memo('oak', () => oakBoardFeet(this.parts, this.p)); }
   get bom(): Bom { return this.memo('bom', () => bom(this.parts, this.p)); }
-  get shaper(): ShaperFile[] { return this.memo('shaper', () => shaperFiles(this.parts, this.p)); }
-  get laser(): LaserFile[] { return this.memo('laser', () => laserFiles(this.parts, this.p, this.shaper, this.forms)); }
+  /** The design's Shaper files, then the as-measured bulkhead (D-106) when there is one. */
+  get shaper(): ShaperFile[] { return this.memo('shaper', () => [...this.designShaper, ...this.asMeasured.shaper]); }
+  get laser(): LaserFile[] { return this.memo('laser', () => [...laserFiles(this.parts, this.p, this.designShaper, this.forms), ...this.asMeasured.laser]); }
+  private get designShaper(): ShaperFile[] { return this.memo('designShaper', () => shaperFiles(this.parts, this.p)); }
+  private get asMeasured(): { shaper: ShaperFile[]; laser: LaserFile[] } { return this.memo('asMeasured', () => bowAsMeasuredFiles(this.p)); }
   get forms(): FormDrawing[] { return this.memo('forms', () => formDrawings(this.parts, this.p, { date: this.opts.date })); }
   /** Letter tiles of every form drawing. */
   get tiles(): FormTiles[] {

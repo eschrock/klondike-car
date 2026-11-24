@@ -192,7 +192,7 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     expect(L.side).toBe(0.625);
     // The corners are at the rear gunwale height (deck + 14 in); the crown arcs above them at the center (D-44).
     expect(r.max[2]).toBeCloseTo(8 + defaults.sideHeightRearIn + defaults.transomCrownIn, 6);
-    expect(r.min[2]).toBeCloseTo(8 - defaults.crossmemberDepthIn, 6); // it hangs as far below the deck as the joists
+    expect(r.min[2]).toBeCloseTo(8 - defaults.deckPlyIn - defaults.railDepthIn, 6); // D-110: it reaches down to the bottom of the rails
     const side = worldAABB(get(parts, 'side-L-chine'));
     expect(side.min[0]).toBeCloseTo(rearTx, 6); // the sides butt the transom's inner face
   });
@@ -518,7 +518,7 @@ describe('signs (D-9, D-35, D-57)', () => {
 });
 
 describe('mass bookkeeping (D-35…D-37, D-54)', () => {
-  const BODY_LB = 37.9;
+  const BODY_LB = 36.1; // D-109: the 1 in bulkhead, -1.8 lb (37.9 before)
   it('the body and frame groups stay near the build numbers (body about 36 lb and frame about 13.4 lb after the D-60 weight package: 4 mm ply, 1/2 in transom, 1-1/2 in bulkhead, 5/8 in joists, no foot-block cleats; pinned from the build)', () => {
     const parts = buildModel(defaults);
     const sum = (g: string) => parts.filter((x) => x.group === g && !x.payload).reduce((m, x) => m + x.massLb, 0);

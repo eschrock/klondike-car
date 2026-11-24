@@ -245,7 +245,7 @@ export function computeLayout(input: Params): Layout {
 
   // ── Bow bulkhead and its lift hand-hold (D-57) ──
   const bulkhead = {
-    x0: bh.xFlatEnd, x1: bh.xTip, thick: bh.thick, bot: deckTop - ply - steer.railDepthFront, // D-69: bottom at the bottom of the stepped front rail (the visible bottom of the side), corners at the side top at the bow, crown = the handlebow's
+    x0: bh.xFlatEnd, x1: bh.xFace, thick: bh.thick, bot: deckTop - ply - steer.railDepthFront, // D-69: bottom at the bottom of the stepped front rail (the visible bottom of the side), corners at the side top at the bow, crown = the handlebow's
     zCorner: deckTop + p.sideHeightBowIn, zCenter: deckTop + p.sideHeightBowIn + p.handleBowCrownIn, halfW: p.bodyWidthIn / 2 - turnIn(bh.xFlatEnd),
   };
   // D-69: the hand-hold hangs under the crown with `liftBarMinIn` of oak above it; the bow has no box behind it, so the hand room is whatever is left above the deck (bowHoldMinClearIn is the floor).

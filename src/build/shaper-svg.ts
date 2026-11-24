@@ -14,7 +14,7 @@
  *  R6  Dados and mortises on a face (the normal coordinate is in the outer part of the thickness) are pockets of the parsed width and depth. A web's stopped dado follows the web's
  *      end (its lateral station and its z range at the end x, from the web mesh); a deck dado runs the deck's width at that end; a mortise is thin across the rail (model Y). The face
  *      they are on is the face that is cut (the part is drawn from that face, mirrored in u when it is the back of the pattern's plain view).
- *      Two joint-text flags change the pocket shape: a web dado "out through the top edge" is open at the top (the pocket runs out through the rounded corner, no thin wall), and a deck
+ *      Three joint-text flags change the pocket shape: a web dado "stopped X above the web's top after its N notch" ends X above the notched web (D-107); a web dado "out through the top edge" is open at the top (the pocket runs out through the rounded corner, no thin wall), and a deck
  *      dado "into the web dados" is extended at each end across the neighboring web dado, so the two make one continuous pocket at the corner.
  *  R7  Edge joints (glue, Domino, scarf, bevel, rabbet, half-lap, dado cut in the mate, anything at mid-thickness) are not Shaper features. Glue footprints of lumber / sheet mates are
  *      dashed guides; the rest become text notes (below the part and in <desc>).
@@ -31,7 +31,7 @@ import type { Part, Vec2, Vec3 } from '../model/types';
 import { worldAABB } from '../model/bounds';
 import { flatPattern, type FlatPattern } from './flat';
 import {
-  ANNOTATION_ATTRS, bbox, circleD, distToPoly, fmt, guideEl, parseInches, pathEl, pointInPoly, polyD, rectAlong, rectLoop, strokeText, svgDocument, textEl, type Xf,
+  ANNOTATION_ATTRS, bbox, circleD, distToPoly, fmt, guideEl, parseInches, pathEl, pointInPoly, polyD, rectAlong, rectLoop, roundEndSlot, strokeText, svgDocument, textEl, type Xf,
 } from './svg-util';
 
 /** Cut this much deeper than the stock so the bit breaks through cleanly (in). */
@@ -110,6 +110,8 @@ export interface ShaperFile {
   bits: string[];
   /** The file has a cut deeper than SHAPER_MAX_DEPTH_IN. */
   deepCut: boolean;
+  /** An extra file that stands in for the design one (D-106), in plain words; absent for the design files. */
+  alternate?: string;
 }
 
 // ── Internal drawing items (pattern coordinates: u right, v up, before any mirroring) ──
@@ -443,7 +445,9 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
     }
 
     // Face pockets (R6): dados and mortises.
-    if ((j.type === 'dado' || j.type === 'mortise-tenon') && pts.length && !fr.isWall) {
+    // A Domino joint is an edge joint (R7), unless its text says the mortise is "cut in the file" (D-106: the bow bulkhead's, set to the rail Dominos as cut): then a face pocket.
+    const filePocket = j.type === 'domino' && /cut in the file/.test(j.size ?? '');
+    if ((j.type === 'dado' || j.type === 'mortise-tenon' || filePocket) && pts.length && !fr.isWall) {
       const got = resolve(pts[0]);
       const face = got ? fr.faceOf(got.local) : null;
       if (got && face) {
@@ -459,8 +463,10 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
             else if (wall < THIN_WALL_IN) notes.push(`${j.type} for ${j.to}: the pocket comes within ${fmt(wall)} in of the outline (a wall under ${THIN_WALL_IN} in); check it against the model.`);
           }
           pocketFaces.push(face);
-          const narrow = Math.min(...loops.loops.map((l) => Math.min(Math.hypot(l[1][0] - l[0][0], l[1][1] - l[0][1]), Math.hypot(l[2][0] - l[1][0], l[2][1] - l[1][1]))));
-          const pkFeature: ShaperFeature = { kind: 'pocket', label: `${j.type === 'dado' ? 'Dado' : 'Mortise'} for ${j.to}: ${loops.desc}`, count: loops.loops.length, depthIn: loops.depth, bit: bitForPocket(narrow), to: j.to, joint: j.type, at: loops.loops.map((l) => { const b = bbox(l); return [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2; }) };
+          const narrow = loops.narrow ?? Math.min(...loops.loops.map((l) => Math.min(Math.hypot(l[1][0] - l[0][0], l[1][1] - l[0][1]), Math.hypot(l[2][0] - l[1][0], l[2][1] - l[1][1]))));
+          // D-106: a Domino mortise in the file at least 1/4" wide is cut with the 1/4" bit (a 1/4" slot is one plunge along its centerline, no offset), not the 1/8" bit.
+          const wideDomino = filePocket && narrow >= 0.25 - 1e-6;
+          const pkFeature: ShaperFeature = { kind: 'pocket', label: `${j.type === 'dado' ? 'Dado' : 'Mortise'} for ${j.to}: ${loops.desc}${wideDomino && narrow < 0.25 + 1e-3 ? '; one plunge of the 1/4" bit along its centerline (no offset)' : ''}`, count: loops.loops.length, depthIn: loops.depth, bit: wideDomino ? BIT_LARGE : bitForPocket(narrow), to: j.to, joint: j.type, at: loops.loops.map((l) => { const b = bbox(l); return [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2; }) };
           features.push(pkFeature);
           if (loops.deckRun) deckRuns.push({ item: items[items.length - 1] as Extract<Item, { k: 'pocket' }>, feature: pkFeature });
           if (face !== fr.plainFace) { /* the face decides the mirror below */ }
@@ -511,11 +517,12 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
       const [b0, b1] = alongU ? [B.u0, B.u1] : [B.v0, B.v1];
       const [e0, e1] = alongU ? [B.v0, B.v1] : [B.u0, B.u1];
       if (Math.min(c1, e1) - Math.max(c0, e0) <= 0) continue; // no overlap across
-      if (b0 >= a1 - 1e-9 && b0 - a1 < THIN_WALL_IN * 4) { a1 = Math.max(a1, b1); joined++; } else if (b1 <= a0 + 1e-9 && a0 - b1 < THIN_WALL_IN * 4) { a0 = Math.min(a0, b0); joined++; }
+      // The web dado is past the deck dado's end, or overlaps it there (a web set in as built, D-106): run the deck dado to the web dado's far wall.
+      if (b1 > a1 + 1e-9 && b0 > a0 && b0 - a1 < THIN_WALL_IN * 4) { a1 = Math.max(a1, b1); joined++; } else if (b0 < a0 - 1e-9 && b1 < a1 && a0 - b1 < THIN_WALL_IN * 4) { a0 = Math.min(a0, b0); joined++; }
     }
     if (joined) {
       dr.item.loop = alongU ? rectLoop(a0, c0, a1, c1) : rectLoop(c0, a0, c1, a1);
-      dr.feature.label += `; runs into the web dado at ${joined === 2 ? 'both ends' : 'one end'} (one continuous pocket at the corner)`;
+      dr.feature.label = dr.feature.label.replace(/, [\d.]+ long$/, `, ${fmt(a1 - a0)} long`) + `; runs into the web dado at ${joined === 2 ? 'both ends' : 'one end'} (one continuous pocket at the corner)`;
       dr.feature.at = [alongU ? [(a0 + a1) / 2, (c0 + c1) / 2] : [(c0 + c1) / 2, (a0 + a1) / 2]];
     }
   }
@@ -588,7 +595,7 @@ function facingWords(part: Part, fr: Frame, face: '+' | '-'): string {
 
 const d_pockets = (items: Item[]): Array<Extract<Item, { k: 'pocket' }>> => items.filter((i): i is Extract<Item, { k: 'pocket' }> => i.k === 'pocket');
 
-interface PocketResult { loops: Vec2[][]; depth: number; desc: string; runOut?: boolean; deckRun?: boolean; web?: boolean }
+interface PocketResult { loops: Vec2[][]; depth: number; desc: string; runOut?: boolean; deckRun?: boolean; web?: boolean; narrow?: number }
 
 /** The highest v the outline reaches within u0..u1 (to run a vertical pocket out through the top edge). */
 function topOfOutline(outer: Vec2[], u0: number, u1: number): number {
@@ -606,7 +613,7 @@ function topOfOutline(outer: Vec2[], u0: number, u1: number): number {
 /** The pocket shape for a dado or mortise joint (rule R6), or null when it cannot be derived. */
 function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | undefined, got: { uv: Vec2; local: Vec3 }, outer: Vec2[]): PocketResult | null {
   const size = j.size ?? '';
-  if (j.type === 'mortise-tenon') {
+  if (j.type === 'mortise-tenon' || j.type === 'domino') {
     const mt = parseMortise(size);
     if (!mt) return null;
     // Thin across the rail (model Y), wide along the other pattern axis.
@@ -614,7 +621,9 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
     const thinOnU = Math.abs(dY[0]) >= Math.abs(dY[1]);
     const [c0, c1] = got.uv;
     const hu = (thinOnU ? mt.thin : mt.wide) / 2, hv = (thinOnU ? mt.wide : mt.thin) / 2;
-    return { loops: [rectLoop(c0 - hu, c1 - hv, c0 + hu, c1 + hv)], depth: mt.depth, desc: `${fmt(mt.thin)} x ${fmt(mt.wide)} x ${fmt(mt.depth)} deep loose-tenon mortise` };
+    // A Domino mortise has round ends (the cutter's radius, D-106); a loose-tenon mortise is drawn square (its tenon is rounded to it).
+    const box = { u0: c0 - hu, v0: c1 - hv, u1: c0 + hu, v1: c1 + hv };
+    return { loops: [j.type === 'domino' ? roundEndSlot(box) : rectLoop(box.u0, box.v0, box.u1, box.v1)], narrow: mt.thin, depth: mt.depth, desc: `${fmt(mt.thin)} x ${fmt(mt.wide)} x ${fmt(mt.depth)} deep ${j.type === 'domino' ? 'Domino mortise (thin across the hull, long up and down)' : 'loose-tenon mortise'}` };
   }
   const dd = parseDadoSize(size);
   if (!dd || !mate) return null;
@@ -629,8 +638,11 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
     const zs = mg.profile.filter((q) => Math.abs(q[0] - xEnd) < 1e-6).map((q) => q[1]);
     if (!zs.length) return null;
     const z0 = Math.min(...zs), z1 = Math.max(...zs);
+    // D-107 "stopped X above the web's top after its N notch": the web stub is sawn N down at its top, and the dado runs X past that, so the bit's round end clears the web's square corners.
+    const sm = new RegExp(String.raw`stopped ${NUM}"? above the web's top after its ${NUM}"? notch`).exec(size);
+    const over = sm ? parseInches(sm[1]) - parseInches(sm[2]) : 0;
     const a = fr.modelToPattern([modelAt[0], modelAt[1], z0]);
-    let b = fr.modelToPattern([modelAt[0], modelAt[1], z1]);
+    let b = fr.modelToPattern([modelAt[0], modelAt[1], z1 + (Number.isFinite(over) ? over : 0)]);
     // "out through the top edge": the dado is open at the top, so it runs 0.03 in past the outline there instead of stopping short of a thin wall at the rounded corner.
     const runOut = /out through the top edge/.test(size) && Math.abs(b[0] - a[0]) < 1e-6 && b[1] > a[1];
     if (runOut) b = [b[0], Math.max(b[1], topOfOutline(outer, b[0] - dd.width / 2, b[0] + dd.width / 2) + 0.03)];

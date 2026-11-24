@@ -176,6 +176,16 @@ export function rectAlong(a: Vec2, b: Vec2, width: number): Vec2[] {
 }
 
 export const rectLoop = (u0: number, v0: number, u1: number, v1: number): Vec2[] => [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
+/** A slot with round ends (a mortise or Domino cut by a round cutter): the box's short side is the diameter of each end. */
+export function roundEndSlot(b: { u0: number; v0: number; u1: number; v1: number }, seg = 8): Vec2[] {
+  const w = b.u1 - b.u0, h = b.v1 - b.v0, r = Math.min(w, h) / 2;
+  const out: Vec2[] = [];
+  const arc = (cx: number, cy: number, a0: number) => { for (let k = 0; k <= seg; k++) { const a = a0 + (Math.PI * k) / seg; out.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); } };
+  if (h >= w) { arc(b.u0 + r, b.v1 - r, 0); arc(b.u0 + r, b.v0 + r, Math.PI); } // up and down: the top end, then the bottom end
+  else { arc(b.u1 - r, b.v0 + r, -Math.PI / 2); arc(b.u0 + r, b.v0 + r, Math.PI / 2); }
+  return out;
+}
+
 
 /** A dimension line from a to b (drawing coordinates), offset `off` perpendicular, with ticks and the label centered; returns guide elements. `xf` maps to SVG. */
 export function dimensionEls(a: Vec2, b: Vec2, label: string, xf: Xf, off = 0.5, size = 0.18): string {

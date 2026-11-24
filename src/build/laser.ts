@@ -154,17 +154,20 @@ function engraveFiles(parts: Part[], p: Params): LaserFile[] {
 /** The form and template files, from the drawings' laser pieces. */
 function formFiles(forms: FormDrawing[]): LaserFile[] {
   const out: LaserFile[] = [];
-  for (const fd of forms) for (const l of fd.laser ?? []) {
-    const items = l.items;
-    const count = items.reduce((n, it) => n + it.qty, 0);
-    const doc = laserSvg({ title: `${l.title}, laser`, desc: [DESC_HEAD, `${l.material}, ${l.thicknessIn} in thick. ${count} piece${count === 1 ? '' : 's'}.`, ...l.notes].join('\n'), items });
-    out.push({
-      id: l.id, kind: 'form', title: l.title, fileName: `${l.id}.svg`, material: l.material, thicknessIn: l.thicknessIn, qty: 1,
-      widthIn: doc.widthIn, heightIn: doc.heightIn, pieces: doc.pieces, fits: doc.heightIn - 0.25 <= LASER_MAX_WIDTH_IN + 1e-6,
-      verdict: { ok: true, text: 'yes' }, notes: l.notes, svg: doc.svg, source: [fd.id],
-    });
-  }
+  for (const fd of forms) for (const l of fd.laser ?? []) out.push(formLaserFile(l, fd.id));
   return out;
+}
+
+/** One laser job of a form drawing as a file (`source` is the form drawing id). */
+export function formLaserFile(l: NonNullable<FormDrawing['laser']>[number], source: string): LaserFile {
+  const items = l.items;
+  const count = items.reduce((n, it) => n + it.qty, 0);
+  const doc = laserSvg({ title: `${l.title}, laser`, desc: [DESC_HEAD, `${l.material}, ${l.thicknessIn} in thick. ${count} piece${count === 1 ? '' : 's'}.`, ...l.notes].join('\n'), items });
+  return {
+    id: l.id, kind: 'form', title: l.title, fileName: `${l.id}.svg`, material: l.material, thicknessIn: l.thicknessIn, qty: 1,
+    widthIn: doc.widthIn, heightIn: doc.heightIn, pieces: doc.pieces, fits: doc.heightIn - 0.25 <= LASER_MAX_WIDTH_IN + 1e-6,
+    verdict: { ok: true, text: 'yes' }, notes: l.notes, svg: doc.svg, source: [source],
+  };
 }
 
 /** Every laser job for the design: parts first, then the forms and templates. */

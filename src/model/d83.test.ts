@@ -208,9 +208,9 @@ describe('D-83: lid support, seat pads, D-rings, clamp plates, lights', () => {
   });
   it('the empty sled stays near 123 lb in both specs (both use the 5 mm white oak plywood)', () => {
     // (2026-10-24: 13 mm deck, 5 mm combi-core white oak sides as bought; about 122.8 lb Standard and 123.1 lb Extreme. It was 122 / 120 lb on the 6 mm Baltic birch / okoume.)
-    expect(totalMass(buildModel(std))).toBeGreaterThan(121.5);
+    expect(totalMass(buildModel(std))).toBeGreaterThan(119.5); // D-109: the 1 in bulkhead, -1.75 lb
     expect(totalMass(buildModel(std))).toBeLessThan(123.5);
-    expect(totalMass(buildModel(ext))).toBeGreaterThan(122);
+    expect(totalMass(buildModel(ext))).toBeGreaterThan(120); // D-109: the 1 in bulkhead, -1.75 lb
     expect(totalMass(buildModel(ext))).toBeLessThan(124);
   });
 });

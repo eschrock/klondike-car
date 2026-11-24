@@ -48,24 +48,24 @@ const outerYAt = (x: Part, at: number): number => {
   return best;
 };
 
-// The same numbers by hand, from the defaults: rear transom outer face x = -10, 1/2 in thick (D-60); bow tip at 44 + 6.75 = 50.75, bulkhead 1.5 in thick (D-60) so the flat deck ends at 49.25.
+// The same numbers by hand, from the defaults: rear transom outer face x = -10, 1/2 in thick (D-60); bow reference at 44 + 6.75 = 50.75, the hull ends 1.5 in behind it at 49.25 (where it is built, D-109), and the 1 in bulkhead (D-109) runs to 50.25.
 const xRear = -defaults.rearOverhangIn;
 const xSideStart = xRear + defaults.transomThicknessIn; // -9.25
 const xTip = defaults.wheelbaseIn + defaults.frontOverhangIn; // 50.75
-const xFlatEnd = xTip - defaults.bowBulkheadThickIn; // 49.25
+const xFlatEnd = xTip - defaults.bowHullEndBackIn; // 49.25
 const xSideEnd = xFlatEnd;
 const hw = defaults.bodyWidthIn / 2 - defaults.sideThicknessIn; // inside half width 11.375
 
 describe('layout numbers (D-54, D-57)', () => {
-  it('the hand-derived flat deck end, side end and tip match the layout; the bulkhead is the last 1.5 in (D-60)', () => {
+  it('the hand-derived flat deck end, side end and tip match the layout; the hull ends 1.5 in behind the tip and the 1 in bulkhead stands on it (D-109)', () => {
     expect(L.xRear).toBe(xRear);
     expect(L.xSideStart).toBeCloseTo(xSideStart, 12);
     expect(L.xFront).toBeCloseTo(xTip, 12);
     expect(L.xFlatEnd).toBeCloseTo(xFlatEnd, 9);
     expect(L.xSideEnd).toBeCloseTo(xSideEnd, 9);
-    expect(bowBulkhead(defaults)).toEqual({ thick: 1.5, xTip: 50.75, xFlatEnd: 49.25 });
+    expect(bowBulkhead(defaults)).toEqual({ thick: 1, xTip: 50.75, xFlatEnd: 49.25, xFace: 50.25 });
     expect(L.bulkhead.x0).toBe(49.25);
-    expect(L.bulkhead.x1).toBe(50.75);
+    expect(L.bulkhead.x1).toBe(50.25); // D-109: the 1 in bulkhead's front face
     expect(L.hwC).toBeCloseTo(hw, 12);
     expect(L.deckTop).toBe(8); // D-56
     expect(L.sideRear).toBe(14);
@@ -238,10 +238,10 @@ describe('the bow bulkhead and its hand-hold (D-57)', () => {
     expect(b.material).toBe('white oak');
     expect(b.group).toBe('body');
   });
-  it('is 1.5 in thick (D-60; was 1.75) from the end of the flat deck to the bow tip, as wide as the narrowed hull, aligned with the sides (D-69): bottom at the bottom of the stepped front rail, corners 4 in over the deck (the side top at the bow), crown 7/8 in higher (the handlebow crown)', () => {
+  it('is 1 in thick (D-109; 1.5 at D-60, 1.75 before) from the end of the flat deck, its front face 1/2 in behind the bow reference, as wide as the narrowed hull, aligned with the sides (D-69): bottom at the bottom of the stepped front rail, corners 4 in over the deck (the side top at the bow), crown 7/8 in higher (the handlebow crown)', () => {
     const bb = worldAABB(b);
     expect(bb.min[0]).toBeCloseTo(49.25, 9);
-    expect(bb.max[0]).toBeCloseTo(50.75, 9);
+    expect(bb.max[0]).toBeCloseTo(50.25, 9);
     expect(bb.max[1]).toBeCloseTo(9.25, 9);
     expect(bb.min[1]).toBeCloseTo(-9.25, 9);
     expect(bb.max[2]).toBeCloseTo(L.deckTop + 4.875, 9);
@@ -276,13 +276,13 @@ describe('the bow bulkhead and its hand-hold (D-57)', () => {
     expect(Math.max(...ys)).toBeCloseTo(2.25, 9);
     expect(Math.min(...zs)).toBeCloseTo(L.deckTop + 2.875, 9);
     expect(Math.max(...zs)).toBeCloseTo(L.deckTop + 2.875 + 1.25, 9);
-    expect(L.hold).toMatchObject({ x0: 49.25, x1: 50.75, halfLen: 2.25 });
+    expect(L.hold).toMatchObject({ x0: 49.25, x1: 50.25, halfLen: 2.25 });
     expect(L.hold.zBot).toBeCloseTo(L.deckTop + 2.875, 9);
     expect(L.hold.zTop).toBeCloseTo(L.bulkhead.zCenter - defaults.liftBarMinIn, 9);
     expect(L.hold.zBot - L.deckTop).toBeGreaterThanOrEqual(defaults.bowHoldMinClearIn);
     const hs = bowHold(makeCtx(defaults));
     expect(hs.barIn).toBeCloseTo(defaults.liftBarMinIn, 9); // 3/4 in of oak above it at the center
-    expect(hs.thickIn).toBe(1.5);
+    expect(hs.thickIn).toBe(1); // D-109
     expect(liftBarStressPsi(hs, 100)).toBeGreaterThan(0);
   });
   it('is glued to the deck edge in a dado and to the rail ends, chine, gunwale and web ends; the front lamp clip plugs its hand-hold', () => {
