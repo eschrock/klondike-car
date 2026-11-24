@@ -9,7 +9,7 @@ import { formLaserFile, type LaserFile } from './laser';
 import { shaperFiles, type ShaperFile } from './shaper-svg';
 
 export const AS_MEASURED_NOTE = 'Alternate: the bow bulkhead cut to the hull as measured (the web ends, the deck and the Dominos as built). Use it in place of the design bulkhead file; try its template on the hull first.';
-export const REAR_AS_MEASURED_NOTE = 'Alternate: the rear transom cut to the hull as measured (the web ends and the rail Dominos as built, the 5/8" panel as made, reaching lower to cover the Dominos). Use it in place of the design transom file; try its template on the hull first.';
+export const REAR_AS_MEASURED_NOTE = 'Alternate: the rear transom cut to the hull as measured (the web ends and the rail Dominos as built, the 5/8" panel as made). Use it in place of the design transom file; try its template on the hull first.';
 
 /** One end cut as measured: its Shaper file renamed, and a template of it alone. */
 function endFiles(p: Params, q: Params, partId: string, templateId: string, fileName: string, title: string, note: string): { shaper: ShaperFile[]; laser: LaserFile[] } {

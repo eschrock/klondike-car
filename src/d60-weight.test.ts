@@ -105,7 +105,7 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
   it('the empty sled is 119.9 lb: the D-60 package gave 120.6 (the study predicted 120.7), 14 in sockets +0.46 = 121.1, the D-62 build fixes +0.1, D-64 the tail light clip -0.15, D-65 the pull-pin brake (shorter flaps, no hinges) -0.97; the package still saves about 20 lb against the PRE_D60 numbers rebuilt with the D-62 sandwich sides, bridle and clamps', () => {
     expect(totalMass(parts)).toBeGreaterThan(117); // D-109: 117.5 lb (the 1 in bulkhead, -1.75 lb); D-76: 119.3 lb (the side ribs, +0.96); D-74: 118.3 lb (the 2-1/8 in laminated beams, knees and chocks: -1.3 lb); was above 119.4
     expect(totalMass(parts)).toBeLessThan(120.95); // D-77: 120.31 lb (the pivot straps and the knee roofs, +0.87)
-    expect(totalMass(partsPre)).toBeCloseTo(138.4, 0); // (2026-10-24: D-96/97/98) 138.4: the transom backers are two cross-grain blocks a side (-1.3 lb, D-97) and the seat-back insert pads; D-85: 139.8 (the rear ribs and rings, the box rib moved, no sign strips: +0.74 lb on the new defaults); D-83: 138.7 (the EVA pads are lighter than the baseline's old foam and vinyl cover in this baseline too: -1.0 lb); D-77: 139.7 (the straps and knee roofs are in this baseline too); D-76: 138.8 (the ribs are in this baseline too); // D-74: 137.8 (the baseline takes the 2-1/8 in laminated parts too: -1.8 lb); 139.6 before D-74; 141.2 before D-65 (the pull-pin brake is lighter in this baseline too); the study's B0 was 143.0; the D-62 changes (sandwich sides, no shackle, frameless seat back, ...) are in this baseline too
+    expect(totalMass(partsPre)).toBeCloseTo(139.5, 0); // (2026-11-24: D-110) 139.5: the baseline's 3/4 in transom also reaches the rail bottoms; // (2026-10-24: D-96/97/98) 138.4: the transom backers are two cross-grain blocks a side (-1.3 lb, D-97) and the seat-back insert pads; D-85: 139.8 (the rear ribs and rings, the box rib moved, no sign strips: +0.74 lb on the new defaults); D-83: 138.7 (the EVA pads are lighter than the baseline's old foam and vinyl cover in this baseline too: -1.0 lb); D-77: 139.7 (the straps and knee roofs are in this baseline too); D-76: 138.8 (the ribs are in this baseline too); // D-74: 137.8 (the baseline takes the 2-1/8 in laminated parts too: -1.8 lb); 139.6 before D-74; 141.2 before D-65 (the pull-pin brake is lighter in this baseline too); the study's B0 was 143.0; the D-62 changes (sandwich sides, no shackle, frameless seat back, ...) are in this baseline too
     expect(totalMass(partsPre) - totalMass(parts)).toBeGreaterThan(18.9); // (2026-10-24: D-96/97/98) 18.98: the two-block backers save a little more on the 1/2 in transom than on the baseline's 3/4 in one; D-89: 19.14 (the fixed strip across the box top, three battens on the shorter lid); D-83: 19.29 (the lighter EVA seat pads and the 2 in clamp plates); D-77: 19.37; D-75: 19.47 (the square tongue seat trims the baseline's deeper tongue a little more)
     expect(totalMass(partsPre) - totalMass(parts)).toBeLessThan(21.5); // D-109: 21.15 (the 1 in bulkhead saves 1.75 lb more)
   });
@@ -117,7 +117,7 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
     // the same sled before the package (PRE_D60, rebuilt with the D-62 sandwich sides, bridle and clamps): running gear 26.1, front end 18.7, body 40.1
     expect(gp['running-gear']).toBeCloseTo(26.1, 0);
     expect(Math.abs(gp['front-end'] - 18.4)).toBeLessThan(0.5); // D-75: 18.0 (the square bolt seat on the tongue head); 18.7 before
-    expect(gp.body).toBeCloseTo(40.6, 0); // (2026-10-24: D-96/97/98) the two-block transom backers (D-97), 41.8 before; D-76: +1.0 (the side ribs, knees and box ties); 40.1 before D-65 moved the signs into the body group
+    expect(gp.body).toBeCloseTo(41.7, 0); // (2026-11-24: D-110) the transom down to the rail bottoms; // (2026-10-24: D-96/97/98) the two-block transom backers (D-97), 41.8 before; D-76: +1.0 (the side ribs, knees and box ties); 40.1 before D-65 moved the signs into the body group
   });
   it('the biggest single savings are where the study said: the hollow axles (3.5 lb), the wheels (4.8 lb), the 1/2 in transom (2.6 lb), the 4 mm side webs, box and lid', () => {
     const saved = (re: RegExp) => massOf(partsPre, re) - massOf(parts, re);
@@ -125,7 +125,7 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
     expect(saved(/^axle-(R|FL|FR)$/)).toBeLessThan(3.7);
     expect(saved(/^wheel-/)).toBeCloseTo(4 * (4 - 2.8), 9);
     expect(saved(/^transom-rear$/)).toBeGreaterThan(2.4);
-    expect(saved(/^transom-rear$/)).toBeLessThan(2.8);
+    expect(saved(/^transom-rear$/)).toBeLessThan(3.2); // D-110: 2.88 with the taller transom (2.6 before)
     expect(saved(/^bow-bulkhead$/)).toBeGreaterThan(0.8);
     expect(saved(/^side-[LR]-web$/)).toBeGreaterThan(0.9);
     expect(saved(/^(storage-(side|end|lid)|storage-lid$)/)).toBeGreaterThan(0.6);

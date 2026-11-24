@@ -192,7 +192,7 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     expect(L.side).toBe(0.625);
     // The corners are at the rear gunwale height (deck + 14 in); the crown arcs above them at the center (D-44).
     expect(r.max[2]).toBeCloseTo(8 + defaults.sideHeightRearIn + defaults.transomCrownIn, 6);
-    expect(r.min[2]).toBeCloseTo(8 - defaults.crossmemberDepthIn, 6); // it hangs as far below the deck as the joists
+    expect(r.min[2]).toBeCloseTo(8 - defaults.deckPlyIn - defaults.railDepthIn, 6); // D-110: it reaches down to the bottom of the rails
     const side = worldAABB(get(parts, 'side-L-chine'));
     expect(side.min[0]).toBeCloseTo(rearTx, 6); // the sides butt the transom's inner face
   });

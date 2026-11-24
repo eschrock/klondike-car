@@ -531,7 +531,7 @@ export function buildBody(ctx: Ctx): Part[] {
   }
 
   // ── Rear transom (full width, wrapping the side ends) with its lift hand-hold (M9, D-37) ──
-  // D-108: the as-measured transom is the panel as made (rearTransomThickIn), its front face still on the band ends (the extra thickness is outside), and reaches lower to cover the rail Dominos.
+  // D-108: the as-measured transom is the panel as made (rearTransomThickIn), its front face still on the band ends (the extra thickness is outside).
   const abR = rearWebAsBuilt(p);
   const tT = abR ? p.rearTransomThickIn : L.transom;
   const xT0 = L.xRear + L.transom - tT;
@@ -540,7 +540,8 @@ export function buildBody(ctx: Ctx): Part[] {
   {
     const rs = liftSlot(ctx);
     const w0 = L.hwC + L.side;
-    const zb = abR ? L.deckBot - p.rearTransomBottomIn : L.deckTop - p.crossmemberDepthIn, zt = rs.transomTop;
+    // D-110 (Eric, 2026-11-24): the transom reaches down to the bottom of the rails, so the rail ends do not show below it (it hung only the joist depth below the deck before).
+    const zb = L.railTop - p.railDepthIn, zt = rs.transomTop;
     const topR = transomTopOutline(w0, zt, p.transomCrownIn, Math.min(abR ? p.asMeasuredCornerRadiusIn : p.transomCornerRadiusIn, (zt - zb) / 2)); // D-108
     const outline = ccw([[w0, zb], ...topR, [-w0, zb]]);
     const dadoLb = oakLb(ctx, 2 * (L.hwC + dd) * (L.ply + ds) * dd) + 2 * oakLb(ctx, (pl + slop) * (sideTopAt(L, rearTx) - L.webCap - L.chineBot) * dd);

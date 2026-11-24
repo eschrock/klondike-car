@@ -297,12 +297,7 @@ const defs = {
   rearTransomThickIn: {
     label: 'Rear: transom panel thickness as made', group: 'body', unit: 'in',
     default: 0.625, min: 0.5, max: 1, step: 0.0625, status: 'locked', ref: 'D-108',
-    note: 'D-108 (Eric, 2026-11-24): the edge-glued panel is 5/8" and too wide for the planer, so the as-measured transom is 5/8" (its front face stays on the band ends; the extra is on the outside). It lets the Domino mortises go 3/8" deep with 1/4" of oak behind.',
-  },
-  rearTransomBottomIn: {
-    label: 'Rear: as-measured transom bottom, below the deck underside', group: 'body', unit: 'in',
-    default: 2.25, min: 1, max: 3, step: 0.0625, status: 'locked', ref: 'D-108',
-    note: 'D-108: the as-measured transom reaches this far below the deck\'s underside (the design 1-1/4"), so it covers the rail Dominos at 27 to 50 mm with about 1/4" of oak under them. About 17-3/8" tall, from Eric\'s 17-5/8" panel.',
+    note: 'D-108 (Eric, 2026-11-24): the edge-glued panel is 5/8" and too wide for the planer, so the as-measured transom is 5/8" (its front face stays on the band ends; the extra is on the outside). It lets the Domino mortises go 3/8" deep with 1/4" of oak behind. Like the design transom it reaches down to the bottom of the rails (D-110), about 18-1/8" tall from Eric\'s panel with its glued-on extension.',
   },
   rearDominoTopIn: {
     label: 'Rear: Domino mortise top, below the deck underside', group: 'body', unit: 'in',

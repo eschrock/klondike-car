@@ -254,10 +254,10 @@ describe('oakBoardFeet: the board plan uses the actual cuts (Eric 2026-10-12)', 
 
   it('plans the boards of an edge-glued panel as separate cuts, not the glued width', () => {
     const t = cuts.filter((c) => c.id === 'transom-rear');
-    expect(t).toHaveLength(3);
-    expect(t.map((c) => c.index).sort()).toEqual([1, 2, 3]);
-    for (const c of t) { expect(c.of).toBe(3); expect(c.piece).toBe('board'); expect(c.glueUp).toBe(true); expect(c.widthIn).toBeLessThanOrEqual(BOARD_WIDTH_IN); }
-    expect(t[0].widthIn).toBeCloseTo(5.875, 9); // 16-3/8 / 3 = 5.458 + 3/8, rounded up to 1/8
+    expect(t).toHaveLength(4); // D-110: the taller transom is four boards
+    expect(t.map((c) => c.index).sort()).toEqual([1, 2, 3, 4]);
+    for (const c of t) { expect(c.of).toBe(4); /* D-110 */ expect(c.piece).toBe('board'); expect(c.glueUp).toBe(true); expect(c.widthIn).toBeLessThanOrEqual(BOARD_WIDTH_IN); }
+    expect(t[0].widthIn).toBeCloseTo(5, 9); // D-110: 18-1/8 / 4 = 4.53 + 3/8, rounded up to 1/8
   });
 
   it('cuts every board and layer at a rough width and length rounded UP to 1/8', () => {

@@ -39,18 +39,18 @@ describe('D-106: the as-measured bow bulkhead is an extra file; the design stays
     expect(names({ ...p, rearWebGapIn: 0 })).toEqual(['bow-bulkhead-as-measured.svg']);
     expect(names({ ...p, rearAsMeasured: 1, bowAsMeasured: 1 })).toEqual([]);
   });
-  it('D-108: the as-measured transom is the 5/8" panel, reaching 2-1/4" below the deck, with the rail Domino mortises in its file and its own template', () => {
+  it('D-108, D-110: the as-measured transom is the 5/8" panel, down to the rail bottoms like the design, with the rail Domino mortises in its file and its own template', () => {
     const d = new BuildData(buildModel(p), p);
     const design = d.shaper.find((f) => f.fileName === 'transom-rear.svg')!;
     expect(design.features.some((f) => /Domino/.test(f.label))).toBe(false);
     const alt = d.shaper.find((f) => f.fileName === 'transom-rear-as-measured.svg')!;
     expect(alt.alternate).toMatch(/rear transom/);
-    expect(alt.heightIn).toBeCloseTo(design.heightIn + (p.rearTransomBottomIn - 1.238), 2);
+    expect(alt.heightIn).toBeCloseTo(design.heightIn, 6); // both reach the rail bottoms (D-110)
     const doms = alt.features.filter((f) => /Domino mortise/.test(f.label));
     expect(doms.length).toBe(2);
     for (const m of doms) { expect(m.depthIn).toBeCloseTo(p.rearDominoDepthIn, 4); expect(m.bit).toBe('1/4 in'); }
     expect(alt.features.find((f) => /side-L-web/.test(f.label))!.label).toMatch(/0\.288 wide/);
-    expect(alt.heightIn).toBeLessThan(17.625 - 0.125); // fits Eric's 17-5/8" panel
+    expect(alt.heightIn).toBeLessThan(18.5); // the short side fits the laser bed for the template
     const tpl = d.laser.find((f) => f.id === 'transom-template-as-measured')!;
     expect(tpl.pieces.length).toBe(1);
   });

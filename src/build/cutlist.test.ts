@@ -452,20 +452,20 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
 
   it('lists an edge-glued panel as its boards, each its share of the width plus the laminate allowance, and a glue-up row', () => {
     const boards = dcl.cuts.filter((c) => c.partNo === 'transom-rear');
-    expect(boards).toHaveLength(3);
-    expect(boards.map((c) => c.label)).toEqual(['Rear transom, board 1 of 3', 'Rear transom, board 2 of 3', 'Rear transom, board 3 of 3']);
+    expect(boards).toHaveLength(4); // D-110: the transom is 18-1/8 in tall (down to the rail bottoms)
+    expect(boards.map((c) => c.label)).toEqual(['Rear transom, board 1 of 4', 'Rear transom, board 2 of 4', 'Rear transom, board 3 of 4', 'Rear transom, board 4 of 4']);
     const transom = dparts.find((x) => x.id === 'transom-rear')!;
     for (const c of boards) {
       expect(c.piece).toBe('board');
-      expect(c.of).toBe(3);
-      expect(c.roughExact.w).toBeCloseTo(transom.stock!.w / 3 + 0.375, 9);
+      expect(c.of).toBe(4); // D-110
+      expect(c.roughExact.w).toBeCloseTo(transom.stock!.w / 4 + 0.375, 9);
       expect(c.rough.w).toBeLessThanOrEqual(6);
       expect(c.glueUp).toBe('Rear transom panel');
-      expect(c.roughText).toMatch(/^5\/8 \u00d7 5-7\/8 \u00d7 26$/);
+      expect(c.roughText).toMatch(/^5\/8 \u00d7 5 \u00d7 26$/); // D-110: 18-1/8 / 4 + 3/8, rounded up to 1/8
     }
     const g = dcl.glueUps.find((x) => x.partNo === 'transom-rear')!;
     expect(g.label).toBe('Rear transom panel');
-    expect(g.from).toBe(3);
+    expect(g.from).toBe(4); // D-110
     expect(g.kind).toBe('edge');
     expect(g.roughBlock.w).toBeCloseTo(boards.reduce((a, c) => a + c.rough.w, 0), 9);
     expect(g.finalText).toBe(`${finalFrac(transom.stock!.t).replace('"', '')} \u00d7 ${finalFrac(transom.stock!.w).replace('"', '')} \u00d7 ${finalFrac(transom.stock!.l).replace('"', '')}`);
@@ -519,7 +519,7 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
     const t = dcl.finished.find((f) => f.partNo === 'transom-rear')!;
     expect(t.from).toBe('glue-up');
     expect(t.final.w).toBeCloseTo(dparts.find((x) => x.id === 'transom-rear')!.stock!.w, 9);
-    expect(t.finalText).toBe('1/2 \u00d7 16-3/8 \u00d7 24');
+    expect(t.finalText).toBe('1/2 \u00d7 18-1/8 \u00d7 24'); // D-110
     expect(dcl.finished.find((f) => f.partNo === 'joist')!.from).toBe('board');
     expect(dcl.finished.find((f) => f.partNo === 'rail')!.final.t).toBeCloseTo(0.75, 9); // two 3/8 plies
     expect(dcl.csv.cuts.split('\r\n')[0]).toContain('Glued into');
