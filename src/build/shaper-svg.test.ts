@@ -380,7 +380,7 @@ describe('D-106: the bow bulkhead cut to the hull as measured (bowAsMeasured on)
       expect(m.u1 - m.u0).toBeCloseTo(p.bowDominoSlotIn, 4);
       expect(deckUnder - m.v1).toBeCloseTo(p.bowDominoTopIn, 4);
       expect(deckUnder - m.v0).toBeCloseTo(p.bowDominoBottomIn, 4);
-      expect(m.depth).toBeCloseTo(p.bowDominoDepthIn, 4);
+      expect(m.depth).toBeCloseTo(p.bowDominoDepthIn, 3); // the joint text carries 3 decimals
       expect(Math.abs((m.u0 + m.u1) / 2 - W / 2)).toBeCloseTo(p.bowWebGapIn / 2 + p.bowWebEndThickIn / 2, 4);
     }
   });

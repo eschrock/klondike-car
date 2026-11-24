@@ -51,7 +51,7 @@ describe('hull checks (D-43)', () => {
     const xr = ctx.L.xRear + ctx.L.transom / 2;
     expect(xr).toBeCloseTo(-9.75, 9);
     const xf = (ctx.L.hold.x0 + ctx.L.hold.x1) / 2;
-    expect(xf).toBeCloseTo(50, 9); // the 1-1/2 in bulkhead (D-60) from 49.25 to 50.75
+    expect(xf).toBeCloseTo(49.75, 9); // the 1 in bulkhead (D-109) from 49.25 to 50.25
     const rear = massLb * (xf - xCg) / (xf - xr);
     expect(rear / massLb).toBeGreaterThan(0.5);
     expect(rear / massLb).toBeLessThan(0.62);
@@ -72,13 +72,13 @@ describe('hull checks (D-43)', () => {
     // the front lifter: Pf = (m - rear) x 3 lbf on one hand; the bar above the hand-hold is the bulkhead's crown, 1.5 in thick (D-60) with barIn of oak over the 4.5 in hold
     const Pf = (massLb - rear) * 3;
     const bh = bowHold(ctx);
-    expect(bh.thickIn).toBeCloseTo(1.5, 9);
+    expect(bh.thickIn).toBeCloseTo(1, 9); // D-109 (1.5 at D-60)
     expect(bh.barIn).toBeCloseTo(0.75, 6); // D-69: the hand-hold hangs under the crown (12.875) with liftBarMinIn (0.75 in) of oak above it (it was 1.5 in under the 5.75 in peak, 3c-5)
     const fb = c.details!.find((d) => d.name.includes('bow bulkhead') && /bending/.test(d.name))!;
     expect(fb.value).toBeCloseTo(liftBarStressPsi(bh, Pf), 6);
     const fs = c.details!.find((d) => d.name.includes('bow bulkhead') && /shear/.test(d.name))!;
     expect(fs.value).toBeCloseTo((1.5 * (Pf / 2)) / (bh.thickIn * bh.barIn), 6);
-    expect(fb.util).toBeLessThan(0.3); // the front bar is still far from its limit (0.24 with the D-60 1-1/2 in bulkhead; it was under 0.1 at 1-3/4 in)
+    expect(fb.util).toBeLessThan(0.35); // the front bar is still far from its limit (0.31 with the D-109 1 in bulkhead; 0.24 with the D-60 1-1/2 in bulkhead; it was under 0.1 at 1-3/4 in)
     // the rear bar is the tightest (util 0.67, D-60; was 0.54)
     expect(c.details!.reduce((m, d) => (d.util > m.util ? d : m)).name).toBe('rear slot bar bending');
     expect(Math.abs(bend.util / 0.67 - 1)).toBeLessThan(0.1); // 0.54 with the 3/4 in transom; the 1/2 in transom (D-60) is a weaker bar, and the sled is lighter
@@ -101,12 +101,12 @@ describe('hull checks (D-43)', () => {
     expect(span).toBeCloseTo(20.25, 9);
     expect(k.F).toBeCloseTo(240, 9);
     expect(k.span).toBeCloseTo(span, 6);
-    expect(k.t).toBeCloseTo(1.5, 6);
+    expect(k.t).toBeCloseTo(1, 6); // D-109
     expect(k.h).toBeCloseTo(2.875, 6);
     expect(k.M).toBeCloseTo((240 * span) / 4, 6);
     expect(k.M).toBeCloseTo(1215, 6);
-    expect(k.S).toBeCloseTo(2.875 * 2.25 / 6, 9);
-    expect(k.sigma).toBeCloseTo(1215 / (2.875 * 2.25 / 6), 6);
+    expect(k.S).toBeCloseTo(2.875 * 1 / 6, 9); // D-109: t = 1
+    expect(k.sigma).toBeCloseTo(1215 / (2.875 * 1 / 6), 6);
     // the push pulls the bulkhead off: the deck tongue's glue (2 faces x the dado depth x 20.25 in) and the Dominos into the rail, chine and gunwale ends
     const dd = ctx.p.deckCaptureDepthIn;
     expect(k.dadoArea).toBeCloseTo(2 * dd * 20.25, 9);
@@ -128,8 +128,8 @@ describe('hull checks (D-43)', () => {
     expect(goal.status).toBe('pass');
     const k = footStopLoads(ctx, 200, 1.4735)!; // the seat factor 1 + V_rear / W at 3 mph
     expect(Math.abs(k.F / 176.8 - 1)).toBeLessThan(0.1);
-    expect(Math.abs(k.sigma / 795 - 1)).toBeLessThan(0.1); // 585 psi with the 1-3/4 in bulkhead: sigma scales with 1/t^2
-    expect(goal.util).toBeLessThan(0.3);
+    expect(Math.abs(k.sigma / 1789 - 1)).toBeLessThan(0.1); // D-109: 1,789 psi in the 1 in bulkhead (795 at 1-1/2 in, 585 at 1-3/4 in): sigma scales with 1/t^2
+    expect(goal.util).toBeLessThan(0.35); // D-109: about 0.33 at 1 in
     expect(fs.details!.find((d) => d.name.includes('HARD'))!.name).toMatch(/seat factor 2\.\d\d/);
     expect(fs.cases!.operating!.util).toBeLessThan(goal.util);
   });

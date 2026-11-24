@@ -518,7 +518,7 @@ describe('signs (D-9, D-35, D-57)', () => {
 });
 
 describe('mass bookkeeping (D-35…D-37, D-54)', () => {
-  const BODY_LB = 37.9;
+  const BODY_LB = 36.1; // D-109: the 1 in bulkhead, -1.8 lb (37.9 before)
   it('the body and frame groups stay near the build numbers (body about 36 lb and frame about 13.4 lb after the D-60 weight package: 4 mm ply, 1/2 in transom, 1-1/2 in bulkhead, 5/8 in joists, no foot-block cleats; pinned from the build)', () => {
     const parts = buildModel(defaults);
     const sum = (g: string) => parts.filter((x) => x.group === g && !x.payload).reduce((m, x) => m + x.massLb, 0);

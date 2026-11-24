@@ -344,10 +344,15 @@ const defs = {
     default: 0.125, min: 0, max: 0.25, step: 0.0156, status: 'assumed', ref: 'D-107',
     note: 'D-107: the stopped web dado in the bow bulkhead ends this far above the notched web\'s top, so the bit\'s round end clears the web\'s square corners; thickened epoxy fills the gap.',
   },
+  bowHullEndBackIn: {
+    label: 'Hull end (bulkhead rear face) behind the bow reference', group: 'body', unit: 'in',
+    default: 1.5, min: 0.75, max: 3, step: 0.125, status: 'locked', ref: 'D-109',
+    note: 'D-109: the deck, sides and rails end this far behind the bow reference (wheelbaseIn + frontOverhangIn), where the hull is built; the bow bulkhead\'s rear face (the foot brace) stands there. It was the bulkhead thickness (1-1/2 in) until the bulkhead went to 1 in: the hull stays put and the bulkhead\'s front face is 1/2 in behind the reference.',
+  },
   bowBulkheadThickIn: {
     label: 'Bow bulkhead thickness', group: 'body', unit: 'in',
-    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-57, D-60',
-    note: 'The shaped oak bulkhead at the bow replaces the D-54 bow curl and the separate foot-stop bar: it is the rider\'s foot brace and the structural front of the hull. One piece of 8/4 oak planed to its thickness (two thinner boards glued face to face are the alternative), so there is no cross-grain break at the hand-hold. D-60: 1-1/2 in (was 1-3/4 in): the foot-stop row was at 0.10, it goes to about 0.14.',
+    default: 1, min: 0.75, max: 3, step: 0.125, status: 'assumed', ref: 'D-57, D-60, D-109',
+    note: 'The shaped oak bulkhead at the bow replaces the D-54 bow curl and the separate foot-stop bar: it is the rider\'s foot brace and the structural front of the hull. One piece of 8/4 oak planed to its thickness (two thinner boards glued face to face are the alternative), so there is no cross-grain break at the hand-hold. D-60: 1-1/2 in (was 1-3/4 in): the foot-stop row was at 0.10, it goes to about 0.14. D-109 (Eric, 2026-11-24): 1 in (was 1-1/2 in), 1.7 lb lighter: the foot-stop row goes from about 0.12 to 0.28, the front hand-hold bar from 0.24 to 0.31, and nothing else moves more than 0.02; Eric\'s blank is planed down from 1-5/8 in.',
   },
   showSideSigns: {
     label: 'Show the side signs', group: 'body', unit: '',
@@ -398,8 +403,8 @@ const defs = {
   },
   bowDominoDepthIn: {
     label: 'Bow: Domino mortise depth', group: 'body', unit: 'in',
-    default: 0.827, min: 0.25, max: 1, step: 0.001, status: 'assumed', ref: 'D-106',
-    note: 'D-106: 21 mm, half the 40 mm Domino plus 1 mm so it bottoms on the rail end, not the mortise.',
+    default: 0.6875, min: 0.25, max: 1, step: 0.001, status: 'locked', ref: 'D-106, D-109',
+    note: 'D-109 (Eric, 2026-11-24): the Dominos stand a tad over 5/8 in out of the rail ends, so the mortise is 11/16 in deep (they bottom on the rail end, not the mortise), leaving 5/16 in of oak behind it in the 1 in bulkhead.',
   },
   deckSideClearIn: {
     label: 'Deck side clearance to each web', group: 'body', unit: 'in',
@@ -2548,7 +2553,9 @@ export function footZoneX(p: Params): [number, number] {
 export function bowBulkhead(p: Params) {
   const thick = p.bowBulkheadThickIn;
   const xTip = p.wheelbaseIn + p.frontOverhangIn;
-  return { thick, xTip, xFlatEnd: xTip - thick };
+  // D-109: the hull (deck, sides, rails) ends bowHullEndBackIn behind the tip, where it is built; the bulkhead's rear face stands there and its front face is one thickness ahead.
+  const xFlatEnd = xTip - p.bowHullEndBackIn;
+  return { thick, xTip, xFlatEnd, xFace: xFlatEnd + thick };
 }
 export const bowCurl = bowBulkhead;
 

@@ -40,13 +40,13 @@ A **Klondike Derby sled on wheels** for Boy Scout Troop 455: a solid, wide, reus
 ### Overall
 | | Default |
 |---|---|
-| Body length, rear transom to bow | 60-3/4" (65-3/4" with the tongue) |
+| Body length, rear transom to bow | 60-1/4" with the 1" bow bulkhead (65-3/4" with the tongue) |
 | Body width | 24" outside, narrowing to 18-1/2" at the bow over a gradual 22" taper |
 | Overall width over the wheels | 34-1/4" |
 | Wheels | 10" pneumatic, 4 of them, wheelbase 44", both tracks 30" |
 | Deck height | 8" |
 | Side height | 4" at the bow rising in a concave sweep to 14" at the rear |
-| Empty mass (Standard spec) | **121.8 lb** (about 112.7 lb in Transport mode with the removable knees off, 56.4 lb per person for the two-person lift; 115.9 lb and 58.0 lb with knees that stay on) |
+| Empty mass (Standard spec) | **120.1 lb** (about 111.0 lb in Transport mode with the removable knees off, 55.5 lb per person for the two-person lift; 114.2 lb and 57.1 lb with knees that stay on) |
 
 ### Construction
 - **Body.** The two sides are sandwiches: a thin plywood web with oak bands glued on both faces at the top (gunwale) and bottom (chine). No grooves. The gunwale bands are sawn to the sheer from flat blanks with a template, then bent only to the plan S (D-105). The bow bulkhead is a shaped oak board that is the foot brace and a hand-hold. A 13 mm okoume deck rides on oak rails (each three 1/4" strips glued and bent on a form, D-101) and 8-1/2" joists. The rear transom is 1/2" oak. Four oak **ribs** per side stand on the inside face of the web (rear, box, mid and bow-post stations). Their heads carry the eight D-ring tie-downs (zinc-plated steel Standard, 316 stainless Extreme), through-bolted on two bolts each (D-83), and they stiffen the sides sideways (D-76).
@@ -75,8 +75,8 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | Stain (`stainShowFaces`, D-99) | TransTint Golden Brown water dye on the show faces, under the first coat | the same |
 | Thin sheet (as bought, D-96) | 5 mm white oak plywood | 5 mm white oak plywood |
 | Drains | drilled holes | stainless nipples |
-| Empty mass | 121.8 lb | 122.1 lb |
-| BOM total (no shipping or tax) | **$1,594** | **$2,299** |
+| Empty mass | 120.1 lb | 120.4 lb |
+| BOM total (no shipping or tax) | **$1,572** | **$2,277** |
 
 ### Brake knees (`kneeMount`, D-78)
 Default **Removable knees (bolts, ratchet)** (a checkbox in the viewer toolbar beside Transport mode, and the Brake knees dropdown in Advanced): the knee is fitted dry and held by four 3/8" bolts. The option **Knees stay on (bolted, glued)** keeps the same four bolts, washers, nylock nuts and backer, and epoxies the knee to the rail and chine band:
@@ -124,8 +124,8 @@ Sheets are always full 4' × 8' (D-68). Solid parts up to 1-3/4" thick come from
 - **Resting load.** A 250 lb adult sitting or standing on one foot anywhere on the deck passes (capacity 348 lb).
 - **Stability.** Straight tip 45° against a 35° limit; full-lock tip the same; slides before it tips (0.78 of limit).
 - **Sides.** A 50 lbf push moves a gunwale about 0.12" (under the 1/8" "feels solid" mark; reported, not judged).
-- **Cost.** BOM **$1,594** Standard ($2,299 Extreme; 8/4 oak for the solid blocks is +$96 over laminating them, D-95; the 5 mm white oak sheet as bought, D-96; the Golden Brown dye, D-99), excluding shipping and tax; about 8% of the Standard total is estimates (the $30 ratchet-and-wrench pouch for the removable knees and the $20 dye are most of it), the rest quoted from listings ([docs/price-research/price-research-cost-pass-2026-10.md](docs/price-research/price-research-cost-pass-2026-10.md) and the earlier files). Owned shop stock (beech Dominos, sandpaper, supplies, Titebond III, mineral spirits, contact cement, paracord) is listed at $0 (D-79).
-- **Materials by section (Standard BOM).** Lumber $539 (Peach State 4/4, 5/4 and 8/4), plywood $203, metal $107, purchased parts $277, fasteners $144, consumables $185, finishing touches $139. Parts sold in packs far larger than the sled needs are priced by the whole pack in their own section (there is no separate bulk section).
+- **Cost.** BOM **$1,572** Standard ($2,277 Extreme; 8/4 oak for the solid blocks is +$96 over laminating them, D-95; the 5 mm white oak sheet as bought, D-96; the Golden Brown dye, D-99), excluding shipping and tax; about 8% of the Standard total is estimates (the $30 ratchet-and-wrench pouch for the removable knees and the $20 dye are most of it), the rest quoted from listings ([docs/price-research/price-research-cost-pass-2026-10.md](docs/price-research/price-research-cost-pass-2026-10.md) and the earlier files). Owned shop stock (beech Dominos, sandpaper, supplies, Titebond III, mineral spirits, contact cement, paracord) is listed at $0 (D-79).
+- **Materials by section (Standard BOM).** Lumber $518 (Peach State 4/4, 5/4 and 8/4), plywood $203, metal $107, purchased parts $277, fasteners $144, consumables $185, finishing touches $139. Parts sold in packs far larger than the sled needs are priced by the whole pack in their own section (there is no separate bulk section).
 
 ## 6. How the app is organized
 

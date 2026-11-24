@@ -595,7 +595,7 @@ describe('glue-up and layer-cut labels never say the kind twice (cost pass round
   it('the edge-glued layers of a laminate are unequal and mirrored: neighboring seams sit at least 1-1/2" apart', () => {
     const pp = { ...defaultParams(), boardYield84In: 1 }; // as above: the wide blocks are layered again
     const cl = cutList(buildModel(pp), pp);
-    for (const id of ['bridle-tongue', 'bow-bulkhead']) {
+    for (const id of ['bridle-tongue']) { // D-109: the 1 in bulkhead is one board thick, no longer layered
       const first = (layer: number): number => cl.cuts.filter((c) => c.piece === 'layer' && c.ids.includes(id) && c.layer === layer).sort((a, b) => a.index - b.index)[0].roughExact.w;
       expect(Math.abs(first(1) - first(2)), id).toBeGreaterThanOrEqual(1.5);
       const sum = (layer: number): number => cl.cuts.filter((c) => c.piece === 'layer' && c.ids.includes(id) && c.layer === layer).reduce((a, c) => a + c.roughExact.w, 0);

@@ -46,10 +46,10 @@ describe('PARAM_DEFS', () => {
     for (const k of ['tongueThickIn', 'steerStopBoltDiaIn', 'endJoistThickIn', 'steerStopPadThickIn']) expect(keys, k).not.toContain(k);
     for (const k of added) expect(keys, k).toContain(k);
   });
-  it('the design defaults (D-54, D-56, D-57): 24 in body, 44 in wheelbase, 10 in wheels, 8 in deck, a sheer from 4 in at the bow to 14 in at the rear, the 1-1/2 in bow bulkhead (D-60), pivoting front axle at matched 30 in front and rear tracks (D-66) and 20 deg lock', () => {
+  it('the design defaults (D-54, D-56, D-57): 24 in body, 44 in wheelbase, 10 in wheels, 8 in deck, a sheer from 4 in at the bow to 14 in at the rear, the 1 in bow bulkhead (D-109; 1-1/2 in at D-60), pivoting front axle at matched 30 in front and rear tracks (D-66) and 20 deg lock', () => {
     expect(defaults).toMatchObject({
       bodyWidthIn: 24, wheelbaseIn: 44, wheelDiameterIn: 10, deckHeightIn: 8, sideHeightBowIn: 4, sideHeightRearIn: 14, sheerCurveIn: 2.5, bowWidthIn: 18.5, bowTaperStartIn: 20, bowTaperSlackIn: 0.125,
-      bowBulkheadThickIn: 1.5, bowHoldMinClearIn: 2.5, crossmemberSpacingIn: 8.5, standDeflectionRatio: 240, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.75, // D-60: 1/4 in more, the thinner bulkhead's face is 1/4 in further forward
+      bowBulkheadThickIn: 1, bowHoldMinClearIn: 2.5, crossmemberSpacingIn: 8.5, standDeflectionRatio: 240, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.75, // D-60: 1/4 in more, the thinner bulkhead's face is 1/4 in further forward
        seatDepthIn: 14.5, storageVolumeIn3: 2000,
       frontTrackIn: 30, rearTrackIn: 30, steerLockDeg: 20, // D-66: matched 30 in tracks
       steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5, kingBeamLengthIn: 3,
@@ -143,8 +143,9 @@ describe('validateParams', () => {
   it('bow bulkhead and taper (D-57, D-66): the bulkhead sits one thickness behind the tip; the taper is 0 behind bowTaperStartIn, a smootherstep (curvature-continuous) to (bodyWidthIn - bowWidthIn) / 2 at its derived end, then parallel; the bend radius must meet the cold-bend limit; the feet must reach the face', () => {
     const b = bowBulkhead(defaults);
     expect(b.xTip).toBeCloseTo(50.75, 9);
-    expect(b.xFlatEnd).toBeCloseTo(49.25, 9); // D-60: the bulkhead is 1-1/2 in, so its face is 1/4 in further forward
-    expect(b.thick).toBe(1.5);
+    expect(b.xFlatEnd).toBeCloseTo(49.25, 9); // D-109: the hull ends bowHullEndBackIn (1-1/2 in) behind the tip, where it is built
+    expect(b.thick).toBe(1); // D-109 (1-1/2 in at D-60)
+    expect(b.xFace).toBeCloseTo(50.25, 9);
     const t = bowTaper(defaults);
     expect(t.x0).toBe(defaults.bowTaperStartIn);
     expect(t.turnIn).toBeCloseTo((defaults.bodyWidthIn - defaults.bowWidthIn) / 2, 9); // 2.75 in a side: 18.5 in outside at the bow

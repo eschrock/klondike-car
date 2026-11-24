@@ -1376,7 +1376,7 @@ describe('D-79..D-83: the cost-pass build text', () => {
     const partsThin = buildModel(pThin);
     const std = assemblySteps(partsThin, pThin);
     const cl = cutList(partsThin, pThin);
-    for (const id of ['bridle-tongue', 'bow-bulkhead']) {
+    for (const id of ['bridle-tongue']) { // D-109: the 1 in bulkhead is one board thick, no longer layered
       const cuts = cl.cuts.filter((q) => q.piece === 'layer' && q.ids.includes(id));
       const seam = (layer: number): number => cuts.filter((q) => q.layer === layer).sort((a, b) => a.index - b.index)[0].rough.w; // the first board's width: where the seam sits from the board-1 edge
       expect(Math.abs(seam(1) - seam(2)), id).toBeGreaterThanOrEqual(1.5);

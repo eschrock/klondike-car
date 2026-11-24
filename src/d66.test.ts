@@ -42,7 +42,7 @@ describe('D-66 matched tracks', () => {
     expect(m).toBeLessThan(123); // 2026-10-24: 122.81 lb (13 mm deck, 5 mm combi-core white oak sides as bought); D-85: 122.80 lb (the rear ribs and rings, +0.72 lb); D-80/D-83: 121.64 lb (the 6 mm Baltic birch thin sheet is heavier than the 1/4 in white oak ply, the 2 in clamp plates, less the lighter EVA seat pads); D-77: 121.09 lb (the pivot straps and the knee roofs, +0.87)
     // with the D-71 tube and the 4 mm okoume (PRE_D72) the D-66 / D-71 mass is back
     const old = totalMass(buildModel({ ...defaults, ...PRE_D72, deckPlyIn: 0.472, seatBackPlyIn: 0.472, seatBackThickIn: 0.472 } as Params, { rider: 'none', cargo: false })); // 2026-10-24: and the 12 mm deck (the defaults are the 13 mm sheet as bought)
-    expect(old).toBeGreaterThan(114.9); // D-76: 115.5 lb (the side ribs); D-74: 114.5 lb (the 2-1/8 in laminated parts), 115.5 before
+    expect(old).toBeGreaterThan(113.5); // D-109: 114.0 lb (the 1 in bulkhead); D-76: 115.5 lb (the side ribs); D-74: 114.5 lb (the 2-1/8 in laminated parts), 115.5 before
     expect(old).toBeLessThan(117.4); // D-85: 116.81 lb (+0.75); D-77: 116.40 lb (the pivot straps and the knee roofs, +0.87)
   });
 });
@@ -89,7 +89,7 @@ describe('D-66 the numbers that moved', () => {
   it('cargo: the load-height rule is 10 in and the 200 lb cargo tips well past the 35 deg limit (the capacity is pinned in d72.test.ts)', () => {
     expect(defaults.cargoCgHeightIn).toBe(10);
     const tip = row('tip-straight');
-    expect(tip.cases!.cargo!.value).toBeCloseTo(40.99, 1); // 2026-10-24: 40.99 (13 mm deck, 5 mm combi-core white oak sides as bought); D-84: 40.93 (the 1/2 in grab-board caps); D-76: 40.88 (the ribs, 0.96 lb, mostly low and forward); 40.8 after D-74 (the 1.3 lb lighter sled) // unchanged by D-67: the limit moved, not the sled (40.65 before D-71: the 0.36 lb heavier sled; 40.9 with the D-72/D-73 4.7 lb heavier sled)
+    expect(tip.cases!.cargo!.value).toBeCloseTo(40.91, 1); // D-109: 40.91 (the 1 in bulkhead, lighter at the nose); // 2026-10-24: 40.99 (13 mm deck, 5 mm combi-core white oak sides as bought); D-84: 40.93 (the 1/2 in grab-board caps); D-76: 40.88 (the ribs, 0.96 lb, mostly low and forward); 40.8 after D-74 (the 1.3 lb lighter sled) // unchanged by D-67: the limit moved, not the sled (40.65 before D-71: the 0.36 lb heavier sled; 40.9 with the D-72/D-73 4.7 lb heavier sled)
     expect(tip.cases!.cargo!.limit).toBe(35);
     expect(tip.cases!.cargo!.value).toBeGreaterThan(35 * 1.1); // outside the 10% marginal band (38.5)
     expect(tip.statusCargo).toBe('pass'); // marginal at the 40 deg limit
@@ -109,7 +109,7 @@ describe('D-66 the numbers that moved', () => {
     const high = cs.filter((c) => c.status !== 'info' && ((c.util ?? 0) > 0.9 || (c.utilCargo ?? 0) > 0.9)).map((c) => c.id).sort();
     expect(high).toEqual(['park-hold', 'seat-stow', 'side-web', 'turn-radius']); // 2026-10-24: side-web 0.96 marginal on the 5 mm combi-core white oak sides as bought (0.33 on the 6 mm Baltic birch); D-85: the ring count is no longer above 0.9 (8 rings); // D-71 tube: axle-stress 0.925 at the 200 lb rider, 0.957 on the cargo; the solid rod brings it to 0.79 / 0.82
     expect(row('rest-load').status).toBe('pass'); // the resting 250 lb adult still passes: holds up to 348 lb, the heavier wheel is the tightest member (73%)
-    expect(row('rest-load').how).toMatch(/holds up to 36\d lb/); // (2026-10-24: D-96/97/98) 360 lb with the stiffer 13 mm deck as bought (34x lb with the 12 mm deck)
+    expect(row('rest-load').how).toMatch(/holds up to 359 lb/); // (2026-11-24: D-109) 359 lb with the 1 in bulkhead; // (2026-10-24: D-96/97/98) 360 lb with the stiffer 13 mm deck as bought (34x lb with the 12 mm deck)
   });
   it('front end at the narrow bow: the roll pads (9-3/4 in out, D-83) are under the rails at every angle, the chain eyes stay inside the rails, the king beam is 17 in between the rails; every front row passes', () => {
     for (const id of ['king-bearing', 'kingpin', 'front-beam', 'front-stub', 'steer-stops', 'king-beam', 'steer-clear', 'bridle-eye']) {

@@ -638,7 +638,7 @@ describe('validator rules', () => {
   it('the foot brace (the bulkhead face) must be reached by the rider and stand on the flat deck: seatX + leg reach <= the end of the flat deck', () => {
     const feetErr = (p: Params) => errorsOf(p).some((i) => /feet would reach past the bow bulkhead/.test(i.message));
     expect(feetErr(defaults)).toBe(false);
-    const face = defaults.wheelbaseIn + defaults.frontOverhangIn - defaults.bowBulkheadThickIn;
+    const face = defaults.wheelbaseIn + defaults.frontOverhangIn - defaults.bowHullEndBackIn;
     expect(defaults.seatXIn + defaults.riderLegReachIn).toBeLessThanOrEqual(face + 1e-9);
     expect(feetErr({ ...defaults, riderLegReachIn: face - defaults.seatXIn + 0.5 })).toBe(true);
     expect(feetErr({ ...defaults, riderLegReachIn: face - defaults.seatXIn })).toBe(false);
