@@ -3,7 +3,8 @@ import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import { bowAsMeasuredFiles } from './as-measured';
 import { BuildData } from './package';
-import { shaperFiles } from './shaper-svg';
+import { analyzeShaperPart, shaperFiles } from './shaper-svg';
+import { distToPoly } from './svg-util';
 
 describe('D-106: the as-measured bow bulkhead is an extra file; the design stays the default', () => {
   const p = defaultParams();
@@ -31,6 +32,15 @@ describe('D-106: the as-measured bow bulkhead is an extra file; the design stays
     const a = shaperFiles(buildModel(p), p).find((f) => f.fileName === 'bow-bulkhead.svg')!;
     const b = shaperFiles(buildModel(zero), zero).find((f) => f.fileName === 'bow-bulkhead.svg')!;
     expect(a.features.map((f) => f.label)).toEqual(b.features.map((f) => f.label));
+  });
+  it('D-111: the as-measured ends are cut to the measured outside widths plus the sanding allowance, centered on the measured webs, with at least 5/32 in of oak beside every slot', () => {
+    for (const [id, q, w] of [['bow-bulkhead', { ...p, bowAsMeasured: 1 }, p.bowOutsideWidthIn], ['transom-rear', { ...p, rearAsMeasured: 1 }, p.rearOutsideWidthIn]] as const) {
+      const parts = buildModel(q);
+      const d = analyzeShaperPart(parts.find((x) => x.id === id)!, parts, q)!;
+      expect(d.f.widthIn, id).toBeCloseTo(w + p.asMeasuredWidthOverIn, 6);
+      for (const it of d.items) if (it.k === 'pocket') expect(Math.min(...it.loop.map((pt) => distToPoly(pt, d.f.outer))), `${id} ${it.label}`).toBeGreaterThanOrEqual(5 / 32);
+    }
+    expect(p.bowWebNotchIn).toBe(0.375);
   });
   it('no extra file for an end that is not measured, or already as measured in the model', () => {
     const names = (q: typeof p) => bowAsMeasuredFiles(q).shaper.map((f) => f.fileName);

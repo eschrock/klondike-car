@@ -142,7 +142,7 @@ describe('sign knobs and dado text', () => {
     for (const id of ['transom-rear', 'bow-bulkhead']) {
       const dados = get(id).joints!.filter((j) => j.type === 'dado');
       expect(dados.find((j) => j.to === 'deck')!.size, id).toMatch(/into the web dados/);
-      for (const j of dados.filter((q) => /web/.test(q.to))) expect(j.size, `${id} ${j.to}`).toMatch(id === 'transom-rear' ? /stopped 0\.125" above the web's top after its 0\.500" notch/ : /stopped 0\.125" above the web's top after its 0\.250" notch/);
+      for (const j of dados.filter((q) => /web/.test(q.to))) expect(j.size, `${id} ${j.to}`).toMatch(id === 'transom-rear' ? /stopped 0\.125" above the web's top after its 0\.500" notch/ : /stopped 0\.125" above the web's top after its 0\.375" notch/); // D-111: the bow notch is 3/8 in
     }
   });
 });

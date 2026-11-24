@@ -289,6 +289,16 @@ const defs = {
     default: 22.795, min: 0, max: 26, step: 0.0156, status: 'locked', ref: 'D-108',
     note: 'D-108 (Eric, 2026-11-24, measured on the glued hull): the inside gap between the two web ends at the rear, 57.9 cm. The as-measured transom\'s web dados are cut straight to it. 0 = no as-measured file.',
   },
+  asMeasuredWidthOverIn: {
+    label: 'As-measured ends: extra width to sand flush', group: 'body', unit: 'in',
+    default: 0.0625, min: 0, max: 0.25, step: 0.0156, status: 'assumed', ref: 'D-111',
+    note: 'D-111 (Eric, 2026-11-24): the as-measured bulkhead and transom are cut this much wider than the measured outside width (about 1/32 in a side), and sanded flush with the outer bands after the glue-up.',
+  },
+  rearOutsideWidthIn: {
+    label: 'Rear: measured outside width over the bands', group: 'body', unit: 'in',
+    default: 23.8125, min: 0, max: 26, step: 0.0156, status: 'locked', ref: 'D-111',
+    note: 'D-111 (Eric, 2026-11-24): the hull measures 23-13/16 in over the outer faces at the rear (the design 24 in). The as-measured transom is cut to it, centered on the measured web ends. 0 = the design width.',
+  },
   rearWebEndThickIn: {
     label: 'Rear: measured web end thickness', group: 'body', unit: 'in',
     default: 0.248, min: 0, max: 0.5, step: 0.001, status: 'locked', ref: 'D-108',
@@ -321,8 +331,8 @@ const defs = {
   },
   bowWebNotchIn: {
     label: 'Bow web stubs notched at the top', group: 'body', unit: 'in',
-    default: 0.25, min: 0, max: 0.5, step: 0.0625, status: 'explore', ref: 'D-107',
-    note: 'D-107 (Eric, 2026-11-24): the top of each web stub (the web end standing past the band ends at the bow) is sawn off this far, so the bulkhead\'s web dados stop inside the oak and its top edge is whole; the bulkhead\'s corners stay at the side tops. 0 = no notch, the dados run out through the top edge.',
+    default: 0.375, min: 0, max: 0.75, step: 0.0625, status: 'explore', ref: 'D-107',
+    note: 'D-107 (Eric, 2026-11-24): the top of each web stub (the web end standing past the band ends at the bow) is sawn off this far, so the bulkhead\'s web dados stop inside the oak and its top edge is whole; the bulkhead\'s corners stay at the side tops. 3/8 in (Eric, 2026-11-24, D-111; was 1/4 in) for more oak over the slots. 0 = no notch, the dados run out through the top edge.',
   },
   bowBulkheadCornerRadiusIn: {
     label: 'Bow bulkhead top corner radius', group: 'body', unit: 'in',
@@ -375,6 +385,11 @@ const defs = {
     label: 'Bow: measured gap between the web ends', group: 'body', unit: 'in',
     default: 17.375, min: 0, max: 22, step: 0.0156, status: 'locked', ref: 'D-106',
     note: 'D-106 (Eric, 2026-11-23, measured on the glued hull): the inside gap between the two web ends at the bow (17-3/8" at the deck, 44.1 cm at the top: the ends are pushed straight into the dados). The as-measured bulkhead\'s web dados are cut straight to it (bowAsMeasured); its template is tried on the hull before the oak is cut. 0 = no as-measured file.',
+  },
+  bowOutsideWidthIn: {
+    label: 'Bow: measured outside width over the bands', group: 'body', unit: 'in',
+    default: 18.375, min: 0, max: 24, step: 0.0156, status: 'locked', ref: 'D-111',
+    note: 'D-111 (Eric, 2026-11-24): the hull measures 18-3/8 in over the outer faces at the bow (the design 18-1/2 in). The as-measured bulkhead is cut to it, centered on the measured web ends. 0 = the design width.',
   },
   bowWebEndThickIn: {
     label: 'Bow: measured web end thickness', group: 'body', unit: 'in',
