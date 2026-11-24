@@ -291,8 +291,8 @@ const defs = {
   },
   asMeasuredWidthOverIn: {
     label: 'As-measured ends: extra width to sand flush', group: 'body', unit: 'in',
-    default: 0.0625, min: 0, max: 0.25, step: 0.0156, status: 'assumed', ref: 'D-111',
-    note: 'D-111 (Eric, 2026-11-24): the as-measured bulkhead and transom are cut this much wider than the measured outside width (about 1/32 in a side), and sanded flush with the outer bands after the glue-up.',
+    default: 0.09375, min: 0, max: 0.25, step: 0.0156, status: 'assumed', ref: 'D-111',
+    note: 'D-111 (Eric, 2026-11-24): the as-measured bulkhead and transom are cut this much wider than the measured outside width (3/32 in, about 3/64 in a side), and sanded flush with the outer bands after the glue-up.',
   },
   rearOutsideWidthIn: {
     label: 'Rear: measured outside width over the bands', group: 'body', unit: 'in',

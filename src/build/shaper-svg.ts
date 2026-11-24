@@ -99,7 +99,10 @@ export interface ShaperFile {
   qty: number;
   partIds: string[];
   fileName: string;
+  /** The file with its guides: drill marks, glue footprints, tags and the title and notes below the part (the preview). */
   svg: string;
+  /** The same file with only the cut paths: what is downloaded and put on the Shaper. */
+  cutSvg: string;
   widthIn: number;
   heightIn: number;
   features: ShaperFeature[];
@@ -669,7 +672,7 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
 
 
 /** The SVG body (shapes, no title) for a drawing, in the part's own coordinates. */
-export function renderBody(d: PartDrawing): string {
+export function renderBody(d: PartDrawing, cutOnly = false): string {
   const { f } = d;
   const W = f.widthIn, H = f.heightIn;
   const xf: Xf = ([u, v]) => [d.mirror ? W - u : u, H - v];
@@ -689,10 +692,12 @@ export function renderBody(d: PartDrawing): string {
     const cxI = (eb.u0 + eb.u1) / 2, cyI = (eb.v0 + eb.v1) / 2;
     const exf: Xf = ([x, y]) => [W / 2 + (x - cxI), H / 2 - (y - cyI)]; // engraving is laid out in the view (what you see on the face), so it reads correctly
     out.push(`<g id="engrave">${e.strokes.map((s) => pathEl({ cutType: 'online', d: polyD(s, exf, false), depthIn: e.depthIn, label: `engrave ${e.text}` })).join('')}</g>`);
+    if (cutOnly) return out.join('\n');
     // On-line paths are black strokes, so they cannot be seen on the black outline: a guide box and a label show where the lettering is.
     g0.push(guideEl(polyD(rectLoop(eb.u0 - 0.15, eb.v0 - 0.15, eb.u1 + 0.15, eb.v1 + 0.15), exf), { dashed: true, label: 'engraving area' }));
     texts.push(textEl(exf([eb.u0 - 0.15, eb.v1 + 0.3]), `ENGRAVE "${e.text}" ${fmt(e.depthIn)} in deep (on-line, black strokes)`, 0.14, { guide: true }));
   }
+  if (cutOnly) return out.join('\n'); // only what the Shaper cuts: no guides, drill marks or text
   const g: string[] = [...g0];
   for (const i of d.items) {
     if (i.k === 'line') g.push(guideEl(polyD(i.pts, xf, !!i.closed), { dashed: i.dashed, label: i.label }));
@@ -752,6 +757,13 @@ export function renderDocument(d: PartDrawing, qty: number): string {
   return svgDocument({ widthIn: W, heightIn: H, title: `${f.name} (${f.partNo})`, desc, body });
 }
 
+/** The same file with only what the Shaper cuts (outline, pockets, inside cuts, engraving): no guides, drill marks, tags or title text. The title and features stay in the file's metadata. */
+export function renderCutDocument(d: PartDrawing, qty: number): string {
+  const { f } = d;
+  const desc = [...titleLines(d, qty), '', 'Cut paths only. The drill marks, glue footprints and notes are in the guide version of this file and the part drawing.', '', 'Features:', ...d.features.map((x) => `- ${x.label}${x.count > 1 ? ` (x${x.count})` : ''}`)].join('\n');
+  return svgDocument({ widthIn: f.widthIn, heightIn: f.heightIn, title: `${f.name} (${f.partNo})`, desc, body: renderBody(d, true) });
+}
+
 /** Strip the text-bearing, qty-dependent parts of a drawing to compare two parts for being the same cut. */
 const signature = (d: PartDrawing): string => `${d.mirror}|${renderBody(d)}`;
 
@@ -780,7 +792,7 @@ export function shaperFiles(parts: Part[], p: Params): ShaperFile[] {
       const d = members.length > 1 && !members[0].cutFaceMatters ? { ...members[0], cutFace: 'either face can go up (nothing is cut on a face)' } : members[0];
       files.push({
         partId: d.part.id, partNo, qty: members.length, partIds: members.map((m) => m.part.id),
-        fileName: `${separate ? d.part.id : partNo}.svg`, svg: renderDocument(d, members.length), widthIn: d.f.widthIn, heightIn: d.f.heightIn, features: d.features,
+        fileName: `${separate ? d.part.id : partNo}.svg`, svg: renderDocument(d, members.length), cutSvg: renderCutDocument(d, members.length), widthIn: d.f.widthIn, heightIn: d.f.heightIn, features: d.features,
         cutFace: d.cutFace, cutFaceMatters: d.cutFaceMatters, bits: [...new Set(d.features.map((x) => x.bit).filter((b): b is string => !!b))], deepCut: d.deepCut,
       });
     }
