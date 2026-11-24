@@ -36,7 +36,7 @@ describe('forms and templates', () => {
     expect(drawings.map((d) => d.id)).toEqual(['side-form', 'rail-form', 'crown-templates', 'brake-flap-template', 'brake-knee-template', 'end-templates', 'sheer-template']);
   });
 
-  it('D-94: the end templates copy the transom and the bulkhead with every dado and rail mortise cut through, grown to stay one piece, and fit the laser bed', () => {
+  it('D-94: the end templates copy the transom and the bulkhead: their own sides and bottom, a strip across the top to stay one piece, one slot for the dados, round-ended mortises, and fit the laser bed', () => {
     const d = byId('end-templates');
     const job = d.laser![0];
     expect(job.thicknessIn).toBeCloseTo(0.25, 6);
@@ -47,23 +47,30 @@ describe('forms and templates', () => {
     for (const [shape, id] of [[tr, 'transom-rear'], [bh, 'bow-bulkhead']] as const) {
       const f = flatPattern(parts.find((x) => x.id === id)!)!;
       const ob = box(shape.outer as Array<[number, number]>);
-      // the end's outline grown 3/4" all round, and its short side fits the 18-1/2" bed
-      expect(ob.u1 - ob.u0).toBeCloseTo(f.widthIn + 1.5, 3);
-      expect(ob.v1 - ob.v0).toBeCloseTo(f.heightIn + 1.5, 3);
+      // the end's own width and bottom, a 3/4" strip over its top, and the short side fits the 18-1/2" bed
+      expect(ob.u1 - ob.u0).toBeCloseTo(f.widthIn, 3);
+      expect(ob.v1 - ob.v0).toBeCloseTo(f.heightIn + 0.75, 3);
       expect(Math.min(ob.u1 - ob.u0, ob.v1 - ob.v0)).toBeLessThanOrEqual(18.5);
-      // every slot lies inside the template (closed, so the template is one piece)
+      // every slot lies inside the template (closed, so the template is one piece); nothing is scored
       for (const sl of shape.holes) { const b = box(sl as Array<[number, number]>); expect(b.u0).toBeGreaterThan(ob.u0); expect(b.u1).toBeLessThan(ob.u1); expect(b.v0).toBeGreaterThan(ob.v0); expect(b.v1).toBeLessThan(ob.v1); }
-      // the end's own outline is scored
-      expect(shape.score.length).toBeGreaterThan(0);
+      expect(shape.score.length).toBe(0);
+      // the two web dados and the deck dado are ONE slot, spanning both webs
+      const wide = shape.holes.map((h) => box(h as Array<[number, number]>)).filter((b) => b.u1 - b.u0 > f.widthIn / 2);
+      expect(wide.length).toBe(1);
+      expect(wide[0].u1 - wide[0].u0).toBeGreaterThan(f.widthIn - 1);
     }
-    // transom: 2 web dados, the deck dado and 2 rail mortises; bulkhead: 3 dados and 2 Domino places
-    expect(tr.holes.length).toBe(5);
-    expect(bh.holes.length).toBe(5);
-    // the bulkhead's Domino slots sit on the rail ends' Dominos: 8-7/8" either side of the center, 15/16" below the rail top (from the rail's joint)
+    // transom: the dado slot, 2 rail mortises and the hand hole; bulkhead: the dado slot, 2 Domino places and the hand hole
+    expect(tr.holes.length).toBe(4);
+    expect(bh.holes.length).toBe(4);
+    // the bulkhead's Domino slots sit on the rail ends' Dominos: 8-7/8" either side of the center (from the rail's joint), with round ends
     const W = flatPattern(parts.find((x) => x.id === 'bow-bulkhead')!)!.widthIn;
-    const doms = bh.holes.map((h) => box(h as Array<[number, number]>)).filter((b) => b.u1 - b.u0 < 0.3 && b.v1 - b.v0 > 0.8 && b.v1 - b.v0 < 1);
-    expect(doms.length).toBe(2);
-    for (const b of doms) expect(Math.abs((b.u0 + b.u1) / 2 - 0.75 - W / 2)).toBeCloseTo(8.875, 2);
+    const domLoops = bh.holes.filter((h) => { const b = box(h as Array<[number, number]>); return b.u1 - b.u0 < 0.3 && b.v1 - b.v0 > 0.8 && b.v1 - b.v0 < 1; });
+    expect(domLoops.length).toBe(2);
+    for (const l of domLoops) {
+      const b = box(l as Array<[number, number]>);
+      expect(Math.abs((b.u0 + b.u1) / 2 - W / 2)).toBeCloseTo(8.875, 2);
+      expect(l.length).toBeGreaterThan(4); // round ends, not a rectangle
+    }
     expect(d.build.map((q) => q.step).join(' ')).toMatch(/USE \(at the ends step, after the hull is glued\)/);
   });
 

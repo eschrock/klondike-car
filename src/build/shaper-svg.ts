@@ -31,7 +31,7 @@ import type { Part, Vec2, Vec3 } from '../model/types';
 import { worldAABB } from '../model/bounds';
 import { flatPattern, type FlatPattern } from './flat';
 import {
-  ANNOTATION_ATTRS, bbox, circleD, distToPoly, fmt, guideEl, parseInches, pathEl, pointInPoly, polyD, rectAlong, rectLoop, strokeText, svgDocument, textEl, type Xf,
+  ANNOTATION_ATTRS, bbox, circleD, distToPoly, fmt, guideEl, parseInches, pathEl, pointInPoly, polyD, rectAlong, rectLoop, roundEndSlot, strokeText, svgDocument, textEl, type Xf,
 } from './svg-util';
 
 /** Cut this much deeper than the stock so the bit breaks through cleanly (in). */
@@ -463,7 +463,7 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
             else if (wall < THIN_WALL_IN) notes.push(`${j.type} for ${j.to}: the pocket comes within ${fmt(wall)} in of the outline (a wall under ${THIN_WALL_IN} in); check it against the model.`);
           }
           pocketFaces.push(face);
-          const narrow = Math.min(...loops.loops.map((l) => Math.min(Math.hypot(l[1][0] - l[0][0], l[1][1] - l[0][1]), Math.hypot(l[2][0] - l[1][0], l[2][1] - l[1][1]))));
+          const narrow = loops.narrow ?? Math.min(...loops.loops.map((l) => Math.min(Math.hypot(l[1][0] - l[0][0], l[1][1] - l[0][1]), Math.hypot(l[2][0] - l[1][0], l[2][1] - l[1][1]))));
           // D-106: a Domino mortise in the file at least 1/4" wide is cut with the 1/4" bit (a 1/4" slot is one plunge along its centerline, no offset), not the 1/8" bit.
           const wideDomino = filePocket && narrow >= 0.25 - 1e-6;
           const pkFeature: ShaperFeature = { kind: 'pocket', label: `${j.type === 'dado' ? 'Dado' : 'Mortise'} for ${j.to}: ${loops.desc}${wideDomino && narrow < 0.25 + 1e-3 ? '; one plunge of the 1/4" bit along its centerline (no offset)' : ''}`, count: loops.loops.length, depthIn: loops.depth, bit: wideDomino ? BIT_LARGE : bitForPocket(narrow), to: j.to, joint: j.type, at: loops.loops.map((l) => { const b = bbox(l); return [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2; }) };
@@ -595,7 +595,7 @@ function facingWords(part: Part, fr: Frame, face: '+' | '-'): string {
 
 const d_pockets = (items: Item[]): Array<Extract<Item, { k: 'pocket' }>> => items.filter((i): i is Extract<Item, { k: 'pocket' }> => i.k === 'pocket');
 
-interface PocketResult { loops: Vec2[][]; depth: number; desc: string; runOut?: boolean; deckRun?: boolean; web?: boolean }
+interface PocketResult { loops: Vec2[][]; depth: number; desc: string; runOut?: boolean; deckRun?: boolean; web?: boolean; narrow?: number }
 
 /** The highest v the outline reaches within u0..u1 (to run a vertical pocket out through the top edge). */
 function topOfOutline(outer: Vec2[], u0: number, u1: number): number {
@@ -621,7 +621,9 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
     const thinOnU = Math.abs(dY[0]) >= Math.abs(dY[1]);
     const [c0, c1] = got.uv;
     const hu = (thinOnU ? mt.thin : mt.wide) / 2, hv = (thinOnU ? mt.wide : mt.thin) / 2;
-    return { loops: [rectLoop(c0 - hu, c1 - hv, c0 + hu, c1 + hv)], depth: mt.depth, desc: `${fmt(mt.thin)} x ${fmt(mt.wide)} x ${fmt(mt.depth)} deep ${j.type === 'domino' ? 'Domino mortise (thin across the hull, long up and down)' : 'loose-tenon mortise'}` };
+    // A Domino mortise has round ends (the cutter's radius, D-106); a loose-tenon mortise is drawn square (its tenon is rounded to it).
+    const box = { u0: c0 - hu, v0: c1 - hv, u1: c0 + hu, v1: c1 + hv };
+    return { loops: [j.type === 'domino' ? roundEndSlot(box) : rectLoop(box.u0, box.v0, box.u1, box.v1)], narrow: mt.thin, depth: mt.depth, desc: `${fmt(mt.thin)} x ${fmt(mt.wide)} x ${fmt(mt.depth)} deep ${j.type === 'domino' ? 'Domino mortise (thin across the hull, long up and down)' : 'loose-tenon mortise'}` };
   }
   const dd = parseDadoSize(size);
   if (!dd || !mate) return null;
