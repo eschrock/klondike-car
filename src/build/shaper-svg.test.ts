@@ -138,7 +138,7 @@ describe('Shaper SVG files', () => {
     }
   });
 
-  it('runs the deck dado into the web dados (one pocket at each corner) and the web dados out through the top edge: no thin walls left', () => {
+  it('runs the deck dado into the web dados (one pocket at each corner) and stops the web dados inside the oak over the notched webs: no thin walls left', () => {
     for (const id of ['transom-rear', 'bow-bulkhead']) {
       const d = analyzeShaperPart(parts.find((x) => x.id === id)!, parts, p)!;
       const pk = d.items.filter((i): i is Extract<typeof i, { k: 'pocket' }> => i.k === 'pocket');
@@ -151,9 +151,10 @@ describe('Shaper SVG files', () => {
         // the deck pocket spans the whole width of the web pocket at its end, and shares its rows: one continuous pocket
         expect(deck.u0 <= b.u0 + 1e-9 && deck.u1 >= b.u1 - 1e-9 || deck.u0 <= b.u0 + 1e-9 || deck.u1 >= b.u1 - 1e-9, `${id} ${w.label}`).toBe(true);
         expect(Math.max(deck.v0, b.v0) < Math.min(deck.v1, b.v1), `${id} ${w.label} rows overlap`).toBe(true);
-        // open at the top: the pocket ends above the outline there
+        // D-107, D-108: stopped inside the oak, over the notched web: the pocket's top is under the outline by about the notch, less the 1/8 in bit clearance, plus the web's cap
         const top = Math.max(...d.f.outer.filter((q) => q[0] >= b.u0 - 1e-6 && q[0] <= b.u1 + 1e-6).map((q) => q[1]));
-        expect(b.v1, `${id} ${w.label} top`).toBeGreaterThanOrEqual(top - 0.5);
+        expect(b.v1, `${id} ${w.label} top`).toBeGreaterThanOrEqual(top - 0.875);
+        expect(b.v1, `${id} ${w.label} top`).toBeLessThan(top);
         expect(b.v1).toBeGreaterThan(Math.min(...d.f.outer.map((q) => q[1]))); // sanity
       }
       const deckSpan = [deck.u0, deck.u1], webSpan = [Math.min(...webs.map((w) => bb(w.loop).u0)), Math.max(...webs.map((w) => bb(w.loop).u1))];

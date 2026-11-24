@@ -321,8 +321,8 @@ const defs = {
   },
   rearWebNotchIn: {
     label: 'Rear web ends notched at the top', group: 'body', unit: 'in',
-    default: 0.25, min: 0, max: 0.5, step: 0.0625, status: 'explore', ref: 'D-108',
-    note: 'D-108: as at the bow (D-107), the top of each web end standing past the band ends at the rear is sawn off this far, so the transom\'s web dados stop inside the oak and its top edge is whole. 0 = no notch, the dados run out through the top edge.',
+    default: 0.5, min: 0, max: 0.75, step: 0.0625, status: 'explore', ref: 'D-108',
+    note: 'D-108: as at the bow (D-107), the top of each web end standing past the band ends at the rear is sawn off this far, so the transom\'s web dados stop inside the oak and its top edge is whole. 1/2" (Eric, 2026-11-24: the as-measured template broke over the 1/4" notch\'s slots; the tall rear web has height to spare). 0 = no notch, the dados run out through the top edge.',
   },
   bowWebNotchIn: {
     label: 'Bow web stubs notched at the top', group: 'body', unit: 'in',
