@@ -14,7 +14,7 @@
  *  R6  Dados and mortises on a face (the normal coordinate is in the outer part of the thickness) are pockets of the parsed width and depth. A web's stopped dado follows the web's
  *      end (its lateral station and its z range at the end x, from the web mesh); a deck dado runs the deck's width at that end; a mortise is thin across the rail (model Y). The face
  *      they are on is the face that is cut (the part is drawn from that face, mirrored in u when it is the back of the pattern's plain view).
- *      Three joint-text flags change the pocket shape: a web dado "stopped X above the web's top" runs X past the web's top end (D-107); a web dado "out through the top edge" is open at the top (the pocket runs out through the rounded corner, no thin wall), and a deck
+ *      Three joint-text flags change the pocket shape: a web dado "stopped X above the web's top after its N notch" ends X above the notched web (D-107); a web dado "out through the top edge" is open at the top (the pocket runs out through the rounded corner, no thin wall), and a deck
  *      dado "into the web dados" is extended at each end across the neighboring web dado, so the two make one continuous pocket at the corner.
  *  R7  Edge joints (glue, Domino, scarf, bevel, rabbet, half-lap, dado cut in the mate, anything at mid-thickness) are not Shaper features. Glue footprints of lumber / sheet mates are
  *      dashed guides; the rest become text notes (below the part and in <desc>).
@@ -638,9 +638,9 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
     const zs = mg.profile.filter((q) => Math.abs(q[0] - xEnd) < 1e-6).map((q) => q[1]);
     if (!zs.length) return null;
     const z0 = Math.min(...zs), z1 = Math.max(...zs);
-    // D-107 "stopped X above the web's top": the dado runs on past the web's top end by X, so the bit's round end clears the web's square corners.
-    const sm = new RegExp(String.raw`stopped ${NUM}"? above the web's top`).exec(size);
-    const over = sm ? parseInches(sm[1]) : 0;
+    // D-107 "stopped X above the web's top after its N notch": the web stub is sawn N down at its top, and the dado runs X past that, so the bit's round end clears the web's square corners.
+    const sm = new RegExp(String.raw`stopped ${NUM}"? above the web's top after its ${NUM}"? notch`).exec(size);
+    const over = sm ? parseInches(sm[1]) - parseInches(sm[2]) : 0;
     const a = fr.modelToPattern([modelAt[0], modelAt[1], z0]);
     let b = fr.modelToPattern([modelAt[0], modelAt[1], z1 + (Number.isFinite(over) ? over : 0)]);
     // "out through the top edge": the dado is open at the top, so it runs 0.03 in past the outline there instead of stopping short of a thin wall at the rounded corner.

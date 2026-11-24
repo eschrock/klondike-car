@@ -278,20 +278,25 @@ const defs = {
     default: 0.125, min: 0, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-66',
     note: 'The taper is derived so the tire clears the body by steerClearIn PLUS this much through the whole +-lock sweep (the steer-clear row then reads 1/8 in better than its limit, not exactly at it).',
   },
-  bowBulkheadRaiseIn: {
-    label: 'Bow bulkhead stands above the side top', group: 'body', unit: 'in',
-    default: 0.25, min: 0, max: 0.75, step: 0.0625, status: 'explore', ref: 'D-107',
-    note: 'D-107 (Eric, 2026-11-24): the whole top of the bow bulkhead, corners and crown, stands this far above the side tops at the bow, so the web dados stop inside the oak instead of running out through the top edge. 0 = the corners at the side tops, the dados open at the top.',
+  bowWebNotchIn: {
+    label: 'Bow web stubs notched at the top', group: 'body', unit: 'in',
+    default: 0.25, min: 0, max: 0.5, step: 0.0625, status: 'explore', ref: 'D-107',
+    note: 'D-107 (Eric, 2026-11-24): the top of each web stub (the web end standing past the band ends at the bow) is sawn off this far, so the bulkhead\'s web dados stop inside the oak and its top edge is whole; the bulkhead\'s corners stay at the side tops. 0 = no notch, the dados run out through the top edge.',
   },
   bowBulkheadCornerRadiusIn: {
     label: 'Bow bulkhead top corner radius', group: 'body', unit: 'in',
     default: 0.375, min: 0, max: 2, step: 0.125, status: 'explore', ref: 'D-107',
-    note: 'D-107: the bulkhead\'s own rounded top corners (the transom keeps transomCornerRadiusIn). 3/8" keeps the top edge up over the web dados, which sit within about 1/2" of the outer edge.',
+    note: 'D-107: the bulkhead\'s own rounded top corners in the design (the transom keeps transomCornerRadiusIn). 3/8" keeps the top edge up over the design web dados, which sit within 1/2" of the outer edge.',
+  },
+  bowAsMeasuredCornerRadiusIn: {
+    label: 'As-measured bow bulkhead: top corner radius', group: 'body', unit: 'in',
+    default: 0.75, min: 0, max: 2, step: 0.125, status: 'explore', ref: 'D-107',
+    note: 'D-107: the as-measured webs sit about 5/16" in from the bulkhead\'s edge, far enough in for the 3/4" corner of the transom (7/32" of oak over the notched web\'s dado).',
   },
   bowWebDadoOverIn: {
     label: 'Bow web dado runs past the web top', group: 'body', unit: 'in',
     default: 0.125, min: 0, max: 0.25, step: 0.0156, status: 'assumed', ref: 'D-107',
-    note: 'D-107: the stopped web dado in the bow bulkhead ends this far above the web\'s top, so the bit\'s round end clears the web\'s square corners; thickened epoxy fills the gap.',
+    note: 'D-107: the stopped web dado in the bow bulkhead ends this far above the notched web\'s top, so the bit\'s round end clears the web\'s square corners; thickened epoxy fills the gap.',
   },
   bowBulkheadThickIn: {
     label: 'Bow bulkhead thickness', group: 'body', unit: 'in',

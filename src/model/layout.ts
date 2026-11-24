@@ -38,7 +38,7 @@ export interface Layout {
   turnIn: (x: number) => number;
   /** The derived bow taper (D-66): where the S starts and ends, the turn-in per side at the bow and its tightest radius. */
   taper: BowTaper;
-  /** The shaped oak bow bulkhead (D-57): rear face `x0` (= the foot brace), front face `x1` (the bow tip), bottom z, the top z at the corners (the sheer height at the bow plus bowBulkheadRaiseIn, D-107) and at the center, and its half width. */
+  /** The shaped oak bow bulkhead (D-57): rear face `x0` (= the foot brace), front face `x1` (the bow tip), bottom z, the top z at the corners (the sheer height at the bow) and at the center, and its half width. */
   bulkhead: { x0: number; x1: number; thick: number; bot: number; zCorner: number; zCenter: number; halfW: number };
   /** The lift hand-hold through the bulkhead (D-57; the nose is lifted by the body, not the tongue): slot x range (the bulkhead thickness), half length across, z range and its center. */
   hold: { x0: number; x1: number; halfLen: number; zBot: number; zTop: number; zMid: number };
@@ -246,7 +246,7 @@ export function computeLayout(input: Params): Layout {
   // ── Bow bulkhead and its lift hand-hold (D-57) ──
   const bulkhead = {
     x0: bh.xFlatEnd, x1: bh.xTip, thick: bh.thick, bot: deckTop - ply - steer.railDepthFront, // D-69: bottom at the bottom of the stepped front rail (the visible bottom of the side), corners at the side top at the bow, crown = the handlebow's
-    zCorner: deckTop + p.sideHeightBowIn + p.bowBulkheadRaiseIn, zCenter: deckTop + p.sideHeightBowIn + p.bowBulkheadRaiseIn + p.handleBowCrownIn, halfW: p.bodyWidthIn / 2 - turnIn(bh.xFlatEnd),
+    zCorner: deckTop + p.sideHeightBowIn, zCenter: deckTop + p.sideHeightBowIn + p.handleBowCrownIn, halfW: p.bodyWidthIn / 2 - turnIn(bh.xFlatEnd),
   };
   // D-69: the hand-hold hangs under the crown with `liftBarMinIn` of oak above it; the bow has no box behind it, so the hand room is whatever is left above the deck (bowHoldMinClearIn is the floor).
   const holdTop = bulkhead.zCenter - p.liftBarMinIn;

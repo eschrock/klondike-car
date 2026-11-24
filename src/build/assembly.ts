@@ -2117,10 +2117,16 @@ const TEMPLATES_2: Template[] = [
         goal: 'Try a plywood template of each end on the hull, cut the transom and the bulkhead to it, then push both ends on dry before any epoxy is mixed.',
         items: [
           I('Cut the end templates on the laser (Forms section: end templates), with the crown templates (handlebow and bulkhead crown), about 20 minutes.', [
-            '1/4" plywood copies of the transom and the bulkhead, cut to each end\'s own sides and bottom with a strip across the top that holds them in one piece, their dados, mortises and hand holes cut right through.',
+            c.p.bowWebNotchIn > 0 ? '1/4" plywood copies of the transom and the bulkhead, their dados, mortises and hand holes cut right through. The bulkhead\'s is cut to its own outline; the transom\'s has a strip across the top that holds it in one piece.' : '1/4" plywood copies of the transom and the bulkhead, cut to each end\'s own sides and bottom with a strip across the top that holds them in one piece, their dados, mortises and hand holes cut right through.',
             'Keep them until both ends are glued on: they are the record of where the dados went. The handlebow template waits for [[step:handle]].',
           ]),
           ...(tm ? [I(`Make ${plural(nTenon, 'loose tenon')} from rounded-edge tenon stock, ${tm[1]}" × ${tm[2]}" × just under ${fin(2 * parseFrac(tm[3]))} long: they go into the rails' rear mortises dry now, and are glued in at [[step:transom]].`, ['Tenon stock: rip a strip from a 4/4 oak offcut, plane it to a snug fit in the mortise, and round its edges to match the mortise ends.'])] : []),
+          ...(c.p.bowWebNotchIn > 0 ? [I(`Notch the two web ends at the bow: saw the top ${fin(c.p.bowWebNotchIn)} off each web end where it stands past the band ends, so the bulkhead's web dados can stop inside the oak and its top edge stays whole.`, [
+            'The hull is upside down, so the top of the web end is the end nearest the bench.',
+            `Mark ${fin(c.p.bowWebNotchIn)} down from the web's top end on the part that stands out, square across it.`,
+            'Saw down along the band ends with a flush-cut saw, then across at the mark; pare the corner square with a chisel. Do not nick the band ends or the cap strip.',
+            'The rear web ends are not notched: the transom\'s dados run out through its top edge.',
+          ])] : []),
           I('Before you cut: try the end templates on the hull, once the lower glue-up has cured (12-24 h).', [
             'The hull is still upside down: "up" and "down" below mean as on the finished sled.',
             `Push a dry loose tenon into each rail's rear mortise and a dry ${dj ? `${dominoKey(dj)} ` : ''}Domino into each bow mortise, half of each standing out.`,
@@ -2141,7 +2147,7 @@ const TEMPLATES_2: Template[] = [
           ])] : []),
           ...(bh ? [I(`Cut the {{bow-bulkhead}} on the Shaper from its file, from its edge-glued panel (planed to ${thick(bh.stock?.t ?? 1.5)} at [[step:mill]]).`, [
             deep ? 'The block is deeper than the bit: the Shaper cuts the outline and the hand hole as deep as it reaches from the dado face; then bandsaw outside the line and flush-trim with a pattern bit riding the Shaper-cut edge.' : false,
-            c.p.bowBulkheadRaiseIn > 0 ? `The file cuts both web dados (stopped ${fin(c.p.bowWebDadoOverIn)} above the web tops: the bulkhead stands ${fin(c.p.bowBulkheadRaiseIn)} above the side tops, so its top edge is whole), the deck dado running into them and the hand hole. Check the crown with the bulkhead crown template.` : 'The file cuts both web dados (open at the top edge), the deck dado running into them and the hand hole. Check the crown with the bulkhead crown template.',
+            c.p.bowWebNotchIn > 0 ? `The file cuts both web dados (stopped ${fin(c.p.bowWebDadoOverIn)} above the notched web tops, so its top edge is whole), the deck dado running into them and the hand hole. Check the crown with the bulkhead crown template.` : 'The file cuts both web dados (open at the top edge), the deck dado running into them and the hand hole. Check the crown with the bulkhead crown template.',
             dj && bowDomFile ? `The file also cuts the two ${dominoKey(dj)} Domino mortises in its rear face, set to the Dominos as cut in the rail ends: ${fin(c.p.bowDominoSlotIn)} wide, ${fin(c.p.bowDominoTopIn)} to ${fin(c.p.bowDominoBottomIn)} below the deck's underside (${Math.round(c.p.bowDominoTopIn * 25.4)} mm to ${Math.round(c.p.bowDominoBottomIn * 25.4)} mm: a little play up and down, so the bulkhead can settle onto its dados), ${fin(c.p.bowDominoDepthIn)} deep, in line with the web dados. Check them against the Domino slots of the template before the glue-up.` : dj ? `Then the two ${dominoKey(dj)} Domino mortises in its rear face (the dado face): lay the bulkhead template on it, its slots over the dados, and mark the two Domino slots through it. Cut them at the marks on the Domino's middle width setting (a little play up and down, so the bulkhead can settle onto its dados); the rail-end mortises stay on the tight setting.` : false,
           ])] : []),
           I('Seal the two ends before any glue-up: one coat of unthickened epoxy on the transom\'s and the bulkhead\'s edges (their side edges are end grain) and in their hand holes.', [

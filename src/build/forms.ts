@@ -15,7 +15,7 @@
 import type { Params } from '../params';
 import { computeLayout, outerHalfWidth, samples, sideTopAt, type Layout } from '../model/layout';
 import { bowGeometry } from '../model/handle';
-import { sheerBlank, transomTopOutline } from '../model/body';
+import { bulkheadCornerRadius, sheerBlank, transomTopOutline } from '../model/body';
 import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
 import { epoxyTimeFactor } from './finishing';
@@ -24,7 +24,7 @@ import { brakeOf, cutListFor } from './part-drawings';
 import { analyzeShaperPart } from './shaper-svg';
 import { LASER_MAX_WIDTH_IN, clipShape, emptyShape, fitToBed, type LaserItem, type LaserShape } from './laser-svg';
 import {
-  ANNOTATION_ATTRS, bbox, checkSquareEls, circleD, dimensionEls, esc, fmt, frac, guideEl, hash6, pathEl, polyD, rectLoop, roundEndSlot, svgDocument, textEl, type Xf,
+  ANNOTATION_ATTRS, bbox, checkSquareEls, circleD, dimensionEls, distToPoly, esc, fmt, frac, guideEl, hash6, pathEl, pointInPoly, polyD, rectLoop, roundEndSlot, svgDocument, textEl, type Xf,
 } from './svg-util';
 import { transformPoint, worldAABB } from '../model/bounds';
 
@@ -790,7 +790,7 @@ function crownPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const b = L.bulkhead;
   if (!barFlat) return null;
   const crown = Math.max(0, b.zCenter - b.zCorner);
-  const rc = Math.min(p.bowBulkheadCornerRadiusIn, (b.zCorner - b.bot) / 2);
+  const rc = Math.min(bulkheadCornerRadius(p), (b.zCorner - b.bot) / 2);
   // Bulkhead top: right corner foot, over the crown, to the left corner foot (y, z). Template = the top chain with a band under it.
   const chain = transomTopOutline(b.halfW, b.zCorner, crown, rc);
   const zLow = Math.min(...chain.map((q) => q[1])) - CROWN_BAND_IN;
@@ -1013,6 +1013,8 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
  * dado runs between them, so a template cut to the bare outline would fall in two; the strip closes the slots and holds it in one piece.
  */
 export const END_TEMPLATE_MARGIN_IN = 0.75;
+/** The least plywood (in) between a slot and the template's edge for a template cut to the end's own outline (no strip). */
+export const END_TEMPLATE_MIN_BRIDGE_IN = 0.125;
 /** Play of a tenon or Domino slot in the end template, a side (in): about the dados' own play, so a tenon that enters its slot enters the real mortise. */
 export const END_TEMPLATE_SLOT_CLEAR_IN = 1 / 64;
 /** A 6 mm Domino tenon's section (in): its 6 mm thickness across the rail, its 20 mm width up and down. The template slot adds the slot play all round. */
@@ -1061,7 +1063,7 @@ export function unionRects(boxes: Box[]): Vec2[][] {
   return loops;
 }
 
-interface EndTemplate { id: string; label: string; partId: string; outer: Vec2[]; part: Vec2[]; slots: Vec2[][]; marks: Array<{ c: Vec2; dia: number }>; w: number; h: number; slotText: string[]; filedDominos: boolean }
+interface EndTemplate { id: string; label: string; partId: string; outer: Vec2[]; part: Vec2[]; slots: Vec2[][]; marks: Array<{ c: Vec2; dia: number }>; w: number; h: number; slotText: string[]; filedDominos: boolean; closed: boolean }
 
 function endTemplate(parts: Part[], p: Params, partId: string, id: string, label: string): EndTemplate | null {
   const part = parts.find((x) => x.id === partId);
@@ -1105,8 +1107,11 @@ function endTemplate(parts: Part[], p: Params, partId: string, id: string, label
   for (const i of d.items) if (i.k === 'cutLoop') slots.push(i.loop.map(shift));
   const marks = d.items.flatMap((i) => (i.k === 'drill' || i.k === 'cutHole' ? [{ c: shift(i.c), dia: Math.max(i.dia, 0.19) }] : []));
   const H = b.v1 - b.v0;
-  const outer = rectLoop(0, 0, W, H + M);
-  return { id, label, partId, outer, part: f.outer.map(shift), slots, marks, w: W, h: H + M, slotText, filedDominos };
+  // Where every slot stops inside the end's outline (the bow's stopped dados, D-107), the template is the end's own outline; where a dado runs out through the top edge, a strip across the top.
+  const own = f.outer.map(shift);
+  const closed = slots.every((l) => l.every((q) => pointInPoly(q, own) && distToPoly(q, own) >= END_TEMPLATE_MIN_BRIDGE_IN));
+  const outer = closed ? own : rectLoop(0, 0, W, H + M);
+  return { id, label, partId, outer, part: own, slots, marks, w: W, h: closed ? H : H + M, slotText, filedDominos, closed };
 }
 
 function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
@@ -1119,7 +1124,7 @@ function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
   const M = END_TEMPLATE_MARGIN_IN;
   const dims: FormDim[] = ts.flatMap((t) => [lenDim(`${t.id}-width`, `${t.label}: width`, t.w), lenDim(`${t.id}-height`, `${t.label}: height`, t.h), countDim(`${t.id}-slots`, `${t.label}: slots cut through`, t.slots.length, 'slot')]);
   const notes = [
-    `Fit-check templates, not routing templates: each is cut to the end's own outline at the sides and the bottom, with a ${inch(M)} strip across the top that holds it in one piece (the web dados run out through the end's top edge, so without it the slots would cut it in two). The web dados and the deck dado are one slot; the rail mortises (and at the bow the two Domino places) are round-ended slots; the hand hole is cut through.`,
+    `Fit-check templates, not routing templates. ${ts.map((t) => t.closed ? `The ${t.label.toLowerCase()} is cut to the end's own outline (its web dados stop inside the oak).` : `The ${t.label.toLowerCase()} is cut to the end's own sides and bottom, with a ${inch(M)} strip across the top that holds it in one piece (its web dados run out through the top edge, so without the strip the slots would cut it in two).`).join(' ')} The web dados and the deck dado are one slot; the rail mortises (and at the bow the two Domino places) are round-ended slots; the hand hole is cut through.`,
     `The tenon and Domino slots are ${inch64(END_TEMPLATE_SLOT_CLEAR_IN)} over a side, about the play of the dados (the laser's kerf adds a hair): a template that goes on by hand is the first check; the oak end's dry fit is the last.`,
     'Push each straight onto its end of the built hull, by hand, with dry tenons and Dominos in the rail ends. If a slot binds, measure how far it is off and move that dado or mortise in the file, then cut a new template: plywood is cheap, the glued oak panels are not.',
   ];
@@ -1141,16 +1146,16 @@ function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
     laser: [{
       id: 'end-templates', title: 'End templates: rear transom and bow bulkhead', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
       items: ts.map((t) => ({ shape: { ...emptyShape(t.id, t.label, t.outer), holes: t.slots, marks: t.marks }, qty: 1 })),
-      notes: [`Everything red is cut through: the outline (the end's own sides and bottom, a ${inch(M)} strip across the top), the dados as one slot, the round-ended mortise and Domino slots, and the hand hole.${ts.some((t) => t.marks.length) ? ' Drilled holes are marked (blue), not cut.' : ''}`],
+      notes: [`Everything red is cut through: the outline (${ts.map((t) => `the ${t.label.toLowerCase()}: ${t.closed ? 'the end\'s own outline' : `the end's own sides and bottom, a ${inch(M)} strip across the top`}`).join('; ')}), the dados as one slot, the round-ended mortise and Domino slots, and the hand hole.${ts.some((t) => t.marks.length) ? ' Drilled holes are marked (blue), not cut.' : ''}`],
     }],
-    subtitle: [`Each end's own sides and bottom, a ${inch(M)} strip across the top; dados, mortises and hand hole cut through; ${ts.map((t) => `${t.label.toLowerCase()} ${inch(t.w)} × ${inch(t.h)}`).join(', ')}.`],
+    subtitle: [`${ts.map((t) => `${t.label}: ${t.closed ? 'the end\'s own outline' : `its sides and bottom, a ${inch(M)} strip across the top`}`).join('; ')}; dados, mortises and hand hole cut through; ${ts.map((t) => `${t.label.toLowerCase()} ${inch(t.w)} × ${inch(t.h)}`).join(', ')}.`],
     draw: (place) => {
       const out: string[] = [];
       const g: string[] = [];
       ts.forEach((t, i) => {
         const T: Xf = ([u, v]) => place([u, v + yOf(i)]);
         out.push(`<g id="${t.id}">${outsideCut(t.outer, T, TEMPLATE_STOCK_IN, `${t.label} (outline)`)}${t.slots.map((sl) => pathEl({ cutType: 'inside', d: polyD(sl, T), depthIn: TEMPLATE_STOCK_IN + BREAKTHROUGH_IN })).join('')}</g>`);
-        g.push(guideEl(polyD(t.part, T), { dashed: true, label: `${t.label}: the end's own outline (the strip above its top edge holds the template together)` }));
+        if (!t.closed) g.push(guideEl(polyD(t.part, T), { dashed: true, label: `${t.label}: the end's own outline (the strip above its top edge holds the template together)` }));
         for (const m of t.marks) g.push(guideEl(circleD(m.c, m.dia, T)));
         g.push(label(T, [0, t.h + 0.2], `${t.label.toUpperCase()} (dashed line: the end itself)`, 0.2));
         g.push(dimTo(T, [0, 0], [t.w, 0], `width ${inch(t.w)}`, -0.5), dimTo(T, [t.w, 0], [t.w, t.h], `height ${inch(t.h)}`, 0.5));

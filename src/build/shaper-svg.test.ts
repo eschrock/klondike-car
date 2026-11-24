@@ -3,6 +3,7 @@ import { buildModel } from '../model';
 import { THIN_SHEET, defaultParams } from '../params';
 import { SHAPER_MAX_DEPTH_IN, analyzeShaperPart, grainWords, shaperCutDepth, shaperFiles } from './shaper-svg';
 import { flatPattern } from './flat';
+import { distToPoly } from './svg-util';
 
 const p = defaultParams();
 // D-86: the signs, storage walls and lid panel are sawn by default; they go back on the Shaper here so its drill marks, mirror sharing and engraving stay covered.
@@ -391,5 +392,32 @@ describe('D-106: the bow bulkhead cut to the hull as measured (bowAsMeasured on)
     expect(webs.length).toBe(2);
     expect(deck.u0).toBeCloseTo(Math.min(...webs.map((w) => w.u0)), 4);
     expect(deck.u1).toBeCloseTo(Math.max(...webs.map((w) => w.u1)), 4);
+  });
+});
+
+describe('D-107: the bow web stubs are notched, so the bulkhead\'s web dados stop inside the oak', () => {
+  for (const [name, q] of [['design', defaultParams()], ['as measured', { ...defaultParams(), bowAsMeasured: 1 }]] as const) {
+    it(`${name}: each web dado stops 1/8" above the notched web, with at least 3/16" of oak straight over it and 1/8" at the thinnest`, () => {
+      const parts = buildModel(q);
+      const d = analyzeShaperPart(parts.find((x) => x.id === 'bow-bulkhead')!, parts, q)!;
+      const webs = d.items.filter((i): i is Extract<typeof i, { k: 'pocket' }> => i.k === 'pocket' && /web/.test(i.label));
+      expect(webs.length).toBe(2);
+      for (const w of webs) {
+        expect(w.runOut).toBeFalsy();
+        const o = d.f.outer;
+        const topAt = (u: number) => Math.max(...o.flatMap((a, k) => { const c = o[(k + 1) % o.length]; return (a[0] - u) * (c[0] - u) <= 0 && a[0] !== c[0] ? [a[1] + ((c[1] - a[1]) * (u - a[0])) / (c[0] - a[0])] : []; }));
+        const vTop = Math.max(...w.loop.map((pt) => pt[1]));
+        const us = w.loop.map((pt) => pt[0]);
+        expect(Math.min(topAt(Math.min(...us)), topAt(Math.max(...us))) - vTop).toBeGreaterThanOrEqual(3 / 16);
+        expect(Math.min(...w.loop.map((pt) => distToPoly(pt, o)))).toBeGreaterThanOrEqual(1 / 8);
+      }
+      expect(d.notes.some((n) => /pocket comes within|outside the outline/.test(n))).toBe(false);
+    });
+  }
+  it('with no notch the bow dados run out through the top edge again', () => {
+    const q = { ...defaultParams(), bowWebNotchIn: 0 };
+    const parts = buildModel(q);
+    const d = analyzeShaperPart(parts.find((x) => x.id === 'bow-bulkhead')!, parts, q)!;
+    expect(d.items.filter((i) => i.k === 'pocket' && i.runOut).length).toBe(2);
   });
 });
