@@ -2121,11 +2121,11 @@ const TEMPLATES_2: Template[] = [
             'Keep them until both ends are glued on: they are the record of where the dados went. The handlebow template waits for [[step:handle]].',
           ]),
           ...(tm ? [I(`Make ${plural(nTenon, 'loose tenon')} from rounded-edge tenon stock, ${tm[1]}" × ${tm[2]}" × just under ${fin(2 * parseFrac(tm[3]))} long: they go into the rails' rear mortises dry now, and are glued in at [[step:transom]].`, ['Tenon stock: rip a strip from a 4/4 oak offcut, plane it to a snug fit in the mortise, and round its edges to match the mortise ends.'])] : []),
-          ...(c.p.bowWebNotchIn > 0 ? [I(`Notch the two web ends at the bow: saw the top ${fin(c.p.bowWebNotchIn)} off each web end where it stands past the band ends, so the bulkhead's web dados can stop inside the oak and its top edge stays whole.`, [
-            'The hull is upside down, so the top of the web end is the end nearest the bench.',
-            `Mark ${fin(c.p.bowWebNotchIn)} down from the web's top end on the part that stands out, square across it.`,
+          ...(c.p.bowWebNotchIn > 0 || c.p.rearWebNotchIn > 0 ? [I(`Notch the web ends: saw the top off each web end where it stands past the band ends${c.p.bowWebNotchIn > 0 && c.p.rearWebNotchIn > 0 ? (c.p.bowWebNotchIn === c.p.rearWebNotchIn ? `, ${fin(c.p.bowWebNotchIn)} at both ends of the hull` : `, ${fin(c.p.rearWebNotchIn)} at the rear and ${fin(c.p.bowWebNotchIn)} at the bow`) : c.p.bowWebNotchIn > 0 ? `, ${fin(c.p.bowWebNotchIn)} at the bow` : `, ${fin(c.p.rearWebNotchIn)} at the rear`}, so the web dados can stop inside the oak and the top edges of the transom and the bulkhead stay whole.`, [
+            'The hull is upside down, so the top of each web end is the end nearest the bench.',
+            'Mark the depth down from the web\'s top end on the part that stands out, square across it.',
             'Saw down along the band ends with a flush-cut saw, then across at the mark; pare the corner square with a chisel. Do not nick the band ends or the cap strip.',
-            'The rear web ends are not notched: the transom\'s dados run out through its top edge.',
+            ...(c.p.bowWebNotchIn > 0 && c.p.rearWebNotchIn > 0 ? [] : [c.p.bowWebNotchIn > 0 ? 'The rear web ends are not notched: the transom\'s dados run out through its top edge.' : 'The bow web ends are not notched: the bulkhead\'s dados run out through its top edge.']),
           ])] : []),
           I('Before you cut: try the end templates on the hull, once the lower glue-up has cured (12-24 h).', [
             'The hull is still upside down: "up" and "down" below mean as on the finished sled.',
@@ -2142,7 +2142,7 @@ const TEMPLATES_2: Template[] = [
             'If it is off by more than 1/16" a side: make a COPY of the design, enter the hull width you measured in the copy, export only the transom and bulkhead files from it, and cut a new template from the copy to prove them. Keep the original design for everything else. An end cut wider than its band ends is planed flush after the glue-up.',
           ], ['transom-rear', 'bow-bulkhead']),
           ...(tr ? [I(`Cut the {{transom-rear}} on the Shaper from its file, from the edge-glued panel (planed to ${thick(tr.stock?.t ?? 0.5)} at [[step:mill]]).`, [
-            'The file cuts the outline, both web dados (open at the top edge), the deck dado running into them, the two rail mortises, the hand hole and the socket screw holes. The vent holes and the cord-eye pilots are only marked: they are drilled at the transom step.',
+            `The file cuts the outline, both web dados (${c.p.rearWebNotchIn > 0 ? `stopped ${fin(c.p.bowWebDadoOverIn)} above the notched web tops, so the top edge is whole` : 'open at the top edge'}), the deck dado running into them, the two rail ${tr && (tr.joints ?? []).some((q) => q.type === 'domino' && /cut in the file/.test(q.size ?? '')) ? 'Domino mortises' : 'mortises'}, the hand hole and the socket screw holes. The vent holes and the cord-eye pilots are only marked: they are drilled at the transom step.`,
             'Cut it with the dados on the face the file says is up: that face goes against the hull.',
           ])] : []),
           ...(bh ? [I(`Cut the {{bow-bulkhead}} on the Shaper from its file, from its edge-glued panel (planed to ${thick(bh.stock?.t ?? 1.5)} at [[step:mill]]).`, [

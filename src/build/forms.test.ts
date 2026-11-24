@@ -36,7 +36,7 @@ describe('forms and templates', () => {
     expect(drawings.map((d) => d.id)).toEqual(['side-form', 'rail-form', 'crown-templates', 'brake-flap-template', 'brake-knee-template', 'end-templates', 'sheer-template']);
   });
 
-  it('D-94: the end templates copy the transom and the bulkhead: their own outline (a strip across the transom\'s top to stay one piece), one slot for the dados, round-ended mortises, and fit the laser bed', () => {
+  it('D-94: the end templates copy the transom and the bulkhead: their own outline, one slot for the dados, round-ended mortises, and fit the laser bed', () => {
     const d = byId('end-templates');
     const job = d.laser![0];
     expect(job.thicknessIn).toBeCloseTo(0.25, 6);
@@ -47,10 +47,10 @@ describe('forms and templates', () => {
     for (const [shape, id] of [[tr, 'transom-rear'], [bh, 'bow-bulkhead']] as const) {
       const f = flatPattern(parts.find((x) => x.id === id)!)!;
       const ob = box(shape.outer as Array<[number, number]>);
-      // the end's own width and bottom; the transom has a 3/4" strip over its top (its web dados run out through the top edge), the bulkhead is its own outline (its dados stop, D-107)
+      // the end's own outline: both ends' web dados stop inside the oak (D-107, D-108), so no strip is needed to hold the template together
       expect(ob.u1 - ob.u0).toBeCloseTo(f.widthIn, 3);
-      expect(ob.v1 - ob.v0).toBeCloseTo(f.heightIn + (id === 'transom-rear' ? 0.75 : 0), 3);
-      expect(shape.outer.length).toBe(id === 'transom-rear' ? 4 : f.outer.length);
+      expect(ob.v1 - ob.v0).toBeCloseTo(f.heightIn, 3);
+      expect(shape.outer.length).toBe(f.outer.length);
       expect(Math.min(ob.u1 - ob.u0, ob.v1 - ob.v0)).toBeLessThanOrEqual(18.5);
       // every slot lies inside the template (closed, so the template is one piece); nothing is scored
       for (const sl of shape.holes) { const b = box(sl as Array<[number, number]>); expect(b.u0).toBeGreaterThan(ob.u0); expect(b.u1).toBeLessThan(ob.u1); expect(b.v0).toBeGreaterThan(ob.v0); expect(b.v1).toBeLessThan(ob.v1); }

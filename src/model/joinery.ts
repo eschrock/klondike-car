@@ -8,7 +8,7 @@
  * and threaded inserts + knobs for everything that comes off (D-9).
  */
 import { joistId } from './frame';
-import { bowWebAsBuilt, thinSheet, WEATHER_SPEC, type Params } from '../params';
+import { bowWebAsBuilt, rearWebAsBuilt, thinSheet, WEATHER_SPEC, type Params } from '../params';
 import { frac64, SIDES, type Ctx, stainless, insertMat, INSERT_DRILL_IN } from './build-utils';
 export { frac64 };
 import { sideTopAt } from './layout';
@@ -205,9 +205,13 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     if (L.webCap > 1e-9) add({ a: `${id}-gunwale-cap`, b: web1, typeA: 'glue', size: 'thickened epoxy bed, on the web\'s top edge and against both gunwale bands, full length', pts: [[xm, s * (hw + L.side / 2), topAt(xm) - L.webCap]], noteA: 'Bedded in thickened epoxy in the slot over the web, between the two gunwale bands; planed flush with the band tops after the cure.', noteB: 'Oak cap strip bedded on this top edge.' });
     // The deck edge rises into the gap under the inner chine band, against the web.
     add({ a: `${id}-chine-in`, b: deck, typeA: 'rabbet', size: `${frac(ddS)}" × ${rabbetZ.toFixed(3)}" gap under the inner chine band (deck + ${frac64(ds)}" clearance, thickened epoxy fills it; no routing); the deck edge is cut ${frac(p.deckSideClearIn)}" short of the web on each side (D-63), the slot is filled with thickened epoxy`, pts: [[xj, s * (hw + ddS / 2), L.deckBot + L.ply / 2]], noteB: 'Edge of the deck, in the gap against the web.' });
-    // Web end into a dado in the transom (full web height now). The dado runs from the chine up and OUT through the top edge: the web top is within about 0.02 in of the rounded top corner, so a
-    // stopped dado would leave a wall thinner than 1/8 in (it poked through by 0.015 in); open at the top it is one simple cut with no relief needed on the web (Phase 4 finding).
-    add({ a: 'transom-rear', b: web1, typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" dado up from the chine and out through the top edge (open at the top: no thin wall at the rounded corner; the epoxy fillet fills the run-out), ${frac(p.ventHoleIn)}" vent hole through the transom mid-height`, pts: [[rearTx - dd / 2, s * (hw + L.side / 2), webZMid(rearTx)]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: 'End of the web, captured (rear); it enters the dado with the transom\'s slide in X. The deck dado runs into this dado at the corner.' });
+    // Web end into a dado in the transom (full web height now). D-108: the web end is notched rearWebNotchIn at its top, so the dado stops rearWebDadoOverIn above the notch inside the oak
+    // (bowWebDadoOverIn, the same bit clearance as the bow); with no notch it runs OUT through the top edge (the web top is within about 0.02 in of the rounded corner, Phase 4 finding).
+    // As measured (D-108), the dado is at the measured web spacing and thickness.
+    const abR = rearWebAsBuilt(p);
+    const yeR = abR ? s * abR.centerIn : s * (hw + L.side / 2);
+    const runR = p.rearWebNotchIn > 0 ? `stopped ${p.bowWebDadoOverIn.toFixed(3)}" above the web's top after its ${p.rearWebNotchIn.toFixed(3)}" notch (the web end is sawn down so the transom's top edge is whole; thickened epoxy fills the end)` : 'out through the top edge (open at the top: no thin wall at the rounded corner; the epoxy fillet fills the run-out)';
+    add({ a: 'transom-rear', b: web1, typeA: 'dado', size: `${((abR?.webIn ?? pl) + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" dado up from the chine and ${runR}, ${frac(p.ventHoleIn)}" vent hole through the transom mid-height`, pts: [[rearTx - dd / 2, yeR, webZMid(rearTx)]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: 'End of the web, captured (rear); it enters the dado with the transom\'s slide in X. The deck dado runs into this dado at the corner.' });
     // Band ends butt the transom face (a band is 0.234 in thick: too thin for a Domino); the web in its dado and the epoxy fillet inside carry the corner.
     const bandEnds: [string, number, number][] = [
       [`${id}-chine`, cBot + L.chineH / 2, yOutBand], [`${id}-chine-in`, cBot + rabbetZ + (L.chineH - rabbetZ) / 2, yInBand],
@@ -298,7 +302,13 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     const bandZ = L.deckBot - (L.deckTop - jD);
     if (bandZ >= MIN_BAND_IN + 0.2) {
       const ej = endJoint(p, railT, L.transom, bandZ - 0.2);
-      add({ a: `rail-${tag}`, b: 'transom-rear', typeA: ej.type, size: ej.size, pts: [[rearTx, s * (hw + L.side - railT / 2), (L.deckTop - jD + L.deckBot) / 2]], noteA: 'Rail end into the transom face (the transom hangs jD below the deck).' });
+      // D-108: as measured, the rail rear ends carry 6 mm Dominos (as cut, in line with the webs), trimmed to stand out a hair under the transom mortise's depth, which its Shaper file cuts.
+      const abRr = rearWebAsBuilt(p), dmR = abRr && p.rearDominoBottomIn > p.rearDominoTopIn && p.rearDominoTopIn > 0;
+      if (dmR) {
+        const size = `6×40 (DF 500), trimmed to stand ${frac64(p.rearDominoDepthIn - 1 / 32)}" out of the rail end`;
+        const sizeB = `${size}; mortise cut in the file: ${p.bowDominoSlotIn.toFixed(3)} × ${(p.rearDominoBottomIn - p.rearDominoTopIn).toFixed(3)} × ${p.rearDominoDepthIn.toFixed(3)} deep, ${frac64(p.rearDominoTopIn)}" to ${frac64(p.rearDominoBottomIn)}" below the deck's underside, on the web line (as built)`;
+        add({ a: `rail-${tag}`, b: 'transom-rear', typeA: 'domino', size, sizeB, pts: [[rearTx, s * abRr.centerIn, L.deckBot - (p.rearDominoTopIn + p.rearDominoBottomIn) / 2]], noteA: 'Rail end into the transom face on a Domino (as built, D-108).' });
+      } else add({ a: `rail-${tag}`, b: 'transom-rear', typeA: ej.type, size: ej.size, pts: [[rearTx, s * (hw + L.side - railT / 2), (L.deckTop - jD + L.deckBot) / 2]], noteA: 'Rail end into the transom face (the transom hangs jD below the deck).' });
     } else add({ a: `rail-${tag}`, b: 'transom-rear', typeA: 'glue', size: 'epoxy + fillet', pts: [[rearTx, s * (hw + L.side / 2), L.deckBot - 0.5]] });
     // The rail's front end into the bow bulkhead's rear face (D-57, D-69): the bulkhead's bottom is the bottom of the stepped front rail (the visible bottom of the side), so the whole
     // front rail depth is the band. The foot load pulls the bulkhead forward off these ends, so each rail takes a Domino (or a loose tenon) and a glue fillet.

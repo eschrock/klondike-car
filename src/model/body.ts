@@ -14,7 +14,7 @@ import { innerHalfWidth, samples, sideSlopeAt, sideTopAt, type Layout } from './
 import { planWallGeometry } from './plan-wall';
 import { SIGN_X_MAX_IN, brakeGeometry } from './brake-layout';
 import { compose } from './mat4';
-import { bowWebAsBuilt, STORAGE_LOCATION, thinSheet, WEATHER_SPEC, type Params } from '../params';
+import { bowWebAsBuilt, rearWebAsBuilt, STORAGE_LOCATION, thinSheet, WEATHER_SPEC, type Params } from '../params';
 import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
 /** Shop clearance: the rear transom backers stop this far in from the inner band's face, so a band end standing a hair proud does not hold the transom off (round 2 fix). */
@@ -300,9 +300,9 @@ export function bowHold(ctx: Pick<Ctx, 'p' | 'L'>): LiftSlot {
 }
 
 /** Top outline of the bulkhead, right to left, and the half width at its rear face. */
-/** D-107: the bow bulkhead's top corner radius: its own in the design, the transom's 3/4" for the as-measured webs (they sit farther in from the edge). */
+/** D-107: the bow bulkhead's top corner radius: its own in the design, asMeasuredCornerRadiusIn for the as-measured webs (they sit farther in from the edge). */
 export function bulkheadCornerRadius(p: Params): number {
-  return bowWebAsBuilt(p) ? p.bowAsMeasuredCornerRadiusIn : p.bowBulkheadCornerRadiusIn;
+  return bowWebAsBuilt(p) ? p.asMeasuredCornerRadiusIn : p.bowBulkheadCornerRadiusIn;
 }
 
 export function bulkheadOutline(ctx: Pick<Ctx, 'p' | 'L'>): { outline: Vec2[]; halfW: number } {
@@ -531,22 +531,25 @@ export function buildBody(ctx: Ctx): Part[] {
   }
 
   // ── Rear transom (full width, wrapping the side ends) with its lift hand-hold (M9, D-37) ──
-  const tT = L.transom;
+  // D-108: the as-measured transom is the panel as made (rearTransomThickIn), its front face still on the band ends (the extra thickness is outside), and reaches lower to cover the rail Dominos.
+  const abR = rearWebAsBuilt(p);
+  const tT = abR ? p.rearTransomThickIn : L.transom;
+  const xT0 = L.xRear + L.transom - tT;
   const ventR = p.ventHoleIn / 2;
   const vent = (y: number, z: number): Vec2[] => cw(circleLoop(y, z, ventR, 8));
   {
     const rs = liftSlot(ctx);
     const w0 = L.hwC + L.side;
-    const zb = L.deckTop - p.crossmemberDepthIn, zt = rs.transomTop;
-    const topR = transomTopOutline(w0, zt, p.transomCrownIn, Math.min(p.transomCornerRadiusIn, (zt - zb) / 2));
+    const zb = abR ? L.deckBot - p.rearTransomBottomIn : L.deckTop - p.crossmemberDepthIn, zt = rs.transomTop;
+    const topR = transomTopOutline(w0, zt, p.transomCrownIn, Math.min(abR ? p.asMeasuredCornerRadiusIn : p.transomCornerRadiusIn, (zt - zb) / 2)); // D-108
     const outline = ccw([[w0, zb], ...topR, [-w0, zb]]);
     const dadoLb = oakLb(ctx, 2 * (L.hwC + dd) * (L.ply + ds) * dd) + 2 * oakLb(ctx, (pl + slop) * (sideTopAt(L, rearTx) - L.webCap - L.chineBot) * dd);
     const webY = L.hwC + L.side / 2, webZ = (L.chineBot + sideTopAt(L, rearTx) - L.webCap) / 2, deckVentY = L.hwC + dd - 0.15;
     const ventHoles = [vent(webY, webZ), vent(-webY, webZ), vent(deckVentY, L.deckBot + L.ply / 2), vent(-deckVentY, L.deckBot + L.ply / 2)];
     parts.push(extPart(ctx, {
-      id: 'transom-rear', name: 'Rear transom', group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'x', center: [L.xRear, 0, (zb + zt) / 2],
+      id: 'transom-rear', name: 'Rear transom', group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'x', center: [xT0, 0, (zb + zt) / 2],
       outline, holes: [slotHole(0, (rs.zBot + rs.zTop) / 2, rs.lengthIn, p.liftSlotHeightIn), ...ventHoles], depth: tT,
-      transform: frameMat([0, 1, 0], [0, 0, 1], [1, 0, 0], [L.xRear, 0, 0]), extraLb: -dadoLb,
+      transform: frameMat([0, 1, 0], [0, 0, 1], [1, 0, 0], [xT0, 0, 0]), extraLb: -dadoLb,
       notes: `${tT}" oak, edge-glued from boards (the cut list gives how many; no board is ${(zt - zb).toFixed(0)}" wide; keep the glue lines clear of the slot), as tall as the rear side of the sheer (${p.sideHeightRearIn}" above the deck, D-54, D-57). Lift hand-hold ${rs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${rs.barIn}" of oak above it; routed 3/8" roundovers both faces. The top edge is a ${p.transomCrownIn}" crown (arc) with ${p.transomCornerRadiusIn}" rounded corners (D-44). Deck dado ${dd}" deep × ${(L.ply + ds).toFixed(3)}" (deck + ${ds}" clearance) on the front face, run out at each end into the dados for the side panels (one continuous pocket at each corner, D-35, D-37); those web dados start at the chine and run out through the top edge (open at the top, so no thin wall is left at the rounded corner); the dados are vented with ${p.ventHoleIn}" holes through the transom (4 holes: bung or epoxy-fill them after the glue-up). `
         + `THE TRANSOM IS CLOSED FIRST (M4, 3c S1; the bulkhead follows with a second batch): it slides in X onto the deck edge, both web ends (in their dados) and the rail tenons, and the chine and gunwale band ends butt against it with an epoxy fillet (a 0.234" band takes no Domino) in one glue-up of about a dozen joints (use 120-minute slow epoxy, rehearse twice); the corner backers and the handle-socket holes are done on the bench first.`,
     }));

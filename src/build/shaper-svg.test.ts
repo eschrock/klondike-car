@@ -395,11 +395,11 @@ describe('D-106: the bow bulkhead cut to the hull as measured (bowAsMeasured on)
   });
 });
 
-describe('D-107: the bow web stubs are notched, so the bulkhead\'s web dados stop inside the oak', () => {
-  for (const [name, q] of [['design', defaultParams()], ['as measured', { ...defaultParams(), bowAsMeasured: 1 }]] as const) {
+describe('D-107, D-108: the web ends are notched at both ends, so the bulkhead\'s and the transom\'s web dados stop inside the oak', () => {
+  for (const [name, q, id] of [['bulkhead, design', defaultParams(), 'bow-bulkhead'], ['bulkhead, as measured', { ...defaultParams(), bowAsMeasured: 1 }, 'bow-bulkhead'], ['transom, design', defaultParams(), 'transom-rear'], ['transom, as measured', { ...defaultParams(), rearAsMeasured: 1 }, 'transom-rear']] as const) {
     it(`${name}: each web dado stops 1/8" above the notched web, with at least 3/16" of oak straight over it and 1/8" at the thinnest`, () => {
       const parts = buildModel(q);
-      const d = analyzeShaperPart(parts.find((x) => x.id === 'bow-bulkhead')!, parts, q)!;
+      const d = analyzeShaperPart(parts.find((x) => x.id === id)!, parts, q)!;
       const webs = d.items.filter((i): i is Extract<typeof i, { k: 'pocket' }> => i.k === 'pocket' && /web/.test(i.label));
       expect(webs.length).toBe(2);
       for (const w of webs) {

@@ -278,6 +278,52 @@ const defs = {
     default: 0.125, min: 0, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-66',
     note: 'The taper is derived so the tire clears the body by steerClearIn PLUS this much through the whole +-lock sweep (the steer-clear row then reads 1/8 in better than its limit, not exactly at it).',
   },
+  rearAsMeasured: {
+    label: 'Rear transom: cut to the hull as measured', group: 'body', unit: '',
+    default: 0, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-108',
+    options: [{ value: 0, label: 'Design (the as-measured file is an extra download)' }, { value: 1, label: 'As measured' }],
+    note: 'D-108: at Design the model and the build book keep the design transom (1/2" oak, loose tenons), and the Shaper and Laser tabs carry an extra transom file and template cut to the measurements below. As measured puts them in the model itself.',
+  },
+  rearWebGapIn: {
+    label: 'Rear: measured gap between the web ends', group: 'body', unit: 'in',
+    default: 22.795, min: 0, max: 26, step: 0.0156, status: 'locked', ref: 'D-108',
+    note: 'D-108 (Eric, 2026-11-24, measured on the glued hull): the inside gap between the two web ends at the rear, 57.9 cm. The as-measured transom\'s web dados are cut straight to it. 0 = no as-measured file.',
+  },
+  rearWebEndThickIn: {
+    label: 'Rear: measured web end thickness', group: 'body', unit: 'in',
+    default: 0.248, min: 0, max: 0.5, step: 0.001, status: 'locked', ref: 'D-108',
+    note: 'D-108 (Eric, 2026-11-24): 6.3 mm, as at the bow. The as-measured transom\'s web dados are this plus grooveSlopIn. 0 = the thin sheet\'s thickness.',
+  },
+  rearTransomThickIn: {
+    label: 'Rear: transom panel thickness as made', group: 'body', unit: 'in',
+    default: 0.625, min: 0.5, max: 1, step: 0.0625, status: 'locked', ref: 'D-108',
+    note: 'D-108 (Eric, 2026-11-24): the edge-glued panel is 5/8" and too wide for the planer, so the as-measured transom is 5/8" (its front face stays on the band ends; the extra is on the outside). It lets the Domino mortises go 3/8" deep with 1/4" of oak behind.',
+  },
+  rearTransomBottomIn: {
+    label: 'Rear: as-measured transom bottom, below the deck underside', group: 'body', unit: 'in',
+    default: 2.25, min: 1, max: 3, step: 0.0625, status: 'locked', ref: 'D-108',
+    note: 'D-108: the as-measured transom reaches this far below the deck\'s underside (the design 1-1/4"), so it covers the rail Dominos at 27 to 50 mm with about 1/4" of oak under them. About 17-3/8" tall, from Eric\'s 17-5/8" panel.',
+  },
+  rearDominoTopIn: {
+    label: 'Rear: Domino mortise top, below the deck underside', group: 'body', unit: 'in',
+    default: 1.063, min: 0, max: 2.5, step: 0.0156, status: 'locked', ref: 'D-108',
+    note: 'D-108 (Eric, 2026-11-24): the 6 mm Dominos cut in the rail rear ends sit 27 mm to 50 mm below the deck\'s underside, in line with the webs. The as-measured transom\'s mortises are cut in its Shaper file over that range.',
+  },
+  rearDominoBottomIn: {
+    label: 'Rear: Domino mortise bottom, below the deck underside', group: 'body', unit: 'in',
+    default: 1.969, min: 0, max: 3, step: 0.0156, status: 'locked', ref: 'D-108',
+    note: 'D-108: 50 mm; see rearDominoTopIn.',
+  },
+  rearDominoDepthIn: {
+    label: 'Rear: Domino mortise depth in the transom', group: 'body', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0156, status: 'assumed', ref: 'D-108',
+    note: 'D-108: 3/8" in the 5/8" transom, leaving 1/4" behind the show face. Each Domino is trimmed to stand 11/32" out of the rail, so it bottoms on the rail end, not the mortise.',
+  },
+  rearWebNotchIn: {
+    label: 'Rear web ends notched at the top', group: 'body', unit: 'in',
+    default: 0.25, min: 0, max: 0.5, step: 0.0625, status: 'explore', ref: 'D-108',
+    note: 'D-108: as at the bow (D-107), the top of each web end standing past the band ends at the rear is sawn off this far, so the transom\'s web dados stop inside the oak and its top edge is whole. 0 = no notch, the dados run out through the top edge.',
+  },
   bowWebNotchIn: {
     label: 'Bow web stubs notched at the top', group: 'body', unit: 'in',
     default: 0.25, min: 0, max: 0.5, step: 0.0625, status: 'explore', ref: 'D-107',
@@ -288,10 +334,10 @@ const defs = {
     default: 0.375, min: 0, max: 2, step: 0.125, status: 'explore', ref: 'D-107',
     note: 'D-107: the bulkhead\'s own rounded top corners in the design (the transom keeps transomCornerRadiusIn). 3/8" keeps the top edge up over the design web dados, which sit within 1/2" of the outer edge.',
   },
-  bowAsMeasuredCornerRadiusIn: {
-    label: 'As-measured bow bulkhead: top corner radius', group: 'body', unit: 'in',
-    default: 0.75, min: 0, max: 2, step: 0.125, status: 'explore', ref: 'D-107',
-    note: 'D-107: the as-measured webs sit about 5/16" in from the bulkhead\'s edge, far enough in for the 3/4" corner of the transom (7/32" of oak over the notched web\'s dado).',
+  asMeasuredCornerRadiusIn: {
+    label: 'As-measured ends: top corner radius', group: 'body', unit: 'in',
+    default: 0.75, min: 0, max: 2, step: 0.125, status: 'explore', ref: 'D-107, D-108',
+    note: 'D-107, D-108: the as-measured webs sit about 5/16" in from the edge at both ends, far enough in for a 3/4" corner on the as-measured bulkhead and transom (at least 3/16" of oak straight over each notched web\'s dado, 5/32" at the thinnest).',
   },
   bowWebDadoOverIn: {
     label: 'Bow web dado runs past the web top', group: 'body', unit: 'in',
@@ -459,8 +505,8 @@ const defs = {
   },
   transomCornerRadiusIn: {
     label: 'Transom top corner radius', group: 'body', unit: 'in',
-    default: 0.75, min: 0, max: 2, step: 0.125, status: 'assumed', ref: 'D-44',
-    note: 'Rounded top corners of both transoms (profile cut on the CNC or bandsaw). Kept small so the gunwale ends stay captured beside the corner.',
+    default: 0.375, min: 0, max: 2, step: 0.125, status: 'assumed', ref: 'D-44, D-108',
+    note: 'Rounded top corners of the design rear transom (profile cut on the CNC or bandsaw). D-108: 3/8" (was 3/4") so the top edge stays up over the web dados, which stop inside the oak above the notched webs; the as-measured transom uses asMeasuredCornerRadiusIn.',
   },
   seatBackCornerRadiusIn: {
     label: 'Seat back corner radius', group: 'seat', unit: 'in',
@@ -2734,6 +2780,13 @@ export function bowWebAsBuilt(p: Params): { webIn: number; centerIn: number } | 
   if (p.bowAsMeasured !== 1 || p.bowWebGapIn <= 0) return null;
   const webIn = p.bowWebEndThickIn > 0 ? p.bowWebEndThickIn : thinSheet(p).thicknessIn;
   return { webIn, centerIn: p.bowWebGapIn / 2 + webIn / 2 };
+}
+
+/** D-108: the rear web ends as measured, for the as-measured transom's web dados (null unless rearAsMeasured is on and a gap is measured). */
+export function rearWebAsBuilt(p: Params): { webIn: number; centerIn: number } | null {
+  if (p.rearAsMeasured !== 1 || p.rearWebGapIn <= 0) return null;
+  const webIn = p.rearWebEndThickIn > 0 ? p.rearWebEndThickIn : thinSheet(p).thicknessIn;
+  return { webIn, centerIn: p.rearWebGapIn / 2 + webIn / 2 };
 }
 
 /** Derived quantities that many modules need; no geometry here. */
