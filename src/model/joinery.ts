@@ -166,6 +166,8 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   const add = (q: Pair) => { if (has(q.a) && has(q.b) && q.pts.length) pairs.push(q); };
 
   const dd = p.deckCaptureDepthIn;
+  // The end dados (transom and bulkhead) are cut endDadoClearIn deeper than the 1/4 in the web and deck ends stand out, so the end seats on the band ends, not on the stub tips (Eric, 2026-11-25).
+  const ddEnd = dd + p.endDadoClearIn;
   const ddS = L.deckEdge; // the deck edge's depth under the inner chine band: the band's thickness at most, less deckSideClearIn (D-62, D-63)
   const bandT = L.sideBand;
   const pl = ctx.d.thinPlyIn;
@@ -211,7 +213,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     const abR = rearWebAsBuilt(p);
     const yeR = abR ? s * abR.centerIn : s * (hw + L.side / 2);
     const runR = p.rearWebNotchIn > 0 ? `stopped ${p.bowWebDadoOverIn.toFixed(3)}" above the web's top after its ${p.rearWebNotchIn.toFixed(3)}" notch (the web end is sawn down so the transom's top edge is whole; thickened epoxy fills the end)` : 'out through the top edge (open at the top: no thin wall at the rounded corner; the epoxy fillet fills the run-out)';
-    add({ a: 'transom-rear', b: web1, typeA: 'dado', size: `${((abR?.webIn ?? pl) + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" dado up from the chine and ${runR}, ${frac(p.ventHoleIn)}" vent hole through the transom mid-height`, pts: [[rearTx - dd / 2, yeR, webZMid(rearTx)]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: 'End of the web, captured (rear); it enters the dado with the transom\'s slide in X. The deck dado runs into this dado at the corner.' });
+    add({ a: 'transom-rear', b: web1, typeA: 'dado', size: `${((abR?.webIn ?? pl) + p.grooveSlopIn).toFixed(3)}" × ${frac64(ddEnd)}" dado up from the chine and ${runR}, ${frac(p.ventHoleIn)}" vent hole through the transom mid-height`, pts: [[rearTx - dd / 2, yeR, webZMid(rearTx)]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: 'End of the web, captured (rear); it enters the dado with the transom\'s slide in X. The deck dado runs into this dado at the corner.' });
     // Band ends butt the transom face (a band is 0.234 in thick: too thin for a Domino); the web in its dado and the epoxy fillet inside carry the corner.
     const bandEnds: [string, number, number][] = [
       [`${id}-chine`, cBot + L.chineH / 2, yOutBand], [`${id}-chine-in`, cBot + rabbetZ + (L.chineH - rabbetZ) / 2, yInBand],
@@ -224,7 +226,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       // D-106: the bulkhead is cut to the hull as built (the measured web end thickness and spacing), the design where a measurement is 0.
       const ab = bowWebAsBuilt(p);
       const xe = L.xSideEnd, ye = ab ? s * ab.centerIn : s * (hwAt(xe) + L.side / 2);
-      add({ a: web1, b: 'bow-bulkhead', typeA: 'dado', size: `${((ab?.webIn ?? pl) + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" dado in the bulkhead's rear face, up from the chine and ${p.bowWebNotchIn > 0 ? `stopped ${p.bowWebDadoOverIn.toFixed(3)}" above the web's top after its ${p.bowWebNotchIn.toFixed(3)}" notch (the web stub is sawn down so the bulkhead's top edge is whole; thickened epoxy fills the end)` : 'out through the top edge (open at the top: no thin wall at the rounded corner; the epoxy fillet fills the run-out)'}`, pts: [[xe + dd / 2, ye, webZMid(xe)]], noteA: 'End of the web, captured (front); the bulkhead goes on after the rear transom (close one end first, S1).', noteB: 'Dado for the web end, open at the top. The deck dado runs into it at the corner.' });
+      add({ a: web1, b: 'bow-bulkhead', typeA: 'dado', size: `${((ab?.webIn ?? pl) + p.grooveSlopIn).toFixed(3)}" × ${frac64(ddEnd)}" dado in the bulkhead's rear face, up from the chine and ${p.bowWebNotchIn > 0 ? `stopped ${p.bowWebDadoOverIn.toFixed(3)}" above the web's top after its ${p.bowWebNotchIn.toFixed(3)}" notch (the web stub is sawn down so the bulkhead's top edge is whole; thickened epoxy fills the end)` : 'out through the top edge (open at the top: no thin wall at the rounded corner; the epoxy fillet fills the run-out)'}`, pts: [[xe + dd / 2, ye, webZMid(xe)]], noteA: 'End of the web, captured (front); the bulkhead goes on after the rear transom (close one end first, S1).', noteB: 'Dado for the web end, open at the top. The deck dado runs into it at the corner.' });
       const yb = (face: 'out' | 'in') => s * (hwAt(xe) + (face === 'out' ? L.side - bandT / 2 : bandT / 2));
       const fwdEnds: [string, number, number][] = [
         [`${id}-chine`, cBot + L.chineH / 2, yb('out')], [`${id}-chine-in`, cBot + rabbetZ + (L.chineH - rabbetZ) / 2, yb('in')],
@@ -235,8 +237,8 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   }
 
   // ── Deck: rear transom dado, bow bulkhead dado, glued to the frame ──
-  add({ a: 'transom-rear', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the front face (deck + ${frac64(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them), ${frac(p.ventHoleIn)}" vent holes through the transom at both ends`, pts: [[rearTx - dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Rear edge of the deck, captured; the dado joins the web dados at both corners.' });
-  add({ a: 'bow-bulkhead', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the rear face (deck + ${frac64(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them)`, pts: [[L.xFlatEnd + dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Front edge of the deck, captured (the dado joins the web dados at both corners); the foot load pulls the bulkhead off it, so the dado glue line is part of the foot-stop row.' });
+  add({ a: 'transom-rear', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac64(ddEnd)}" dado across the front face (deck + ${frac64(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them), ${frac(p.ventHoleIn)}" vent holes through the transom at both ends`, pts: [[rearTx - dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Rear edge of the deck, captured; the dado joins the web dados at both corners.' });
+  add({ a: 'bow-bulkhead', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac64(ddEnd)}" dado across the rear face (deck + ${frac64(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them)`, pts: [[L.xFlatEnd + dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Front edge of the deck, captured (the dado joins the web dados at both corners); the foot load pulls the bulkhead off it, so the dado glue line is part of the foot-stop row.' });
   for (const { s, tag } of SIDES) {
     add({ a: `rail-${tag}`, b: deck, typeA: 'glue', size: 'thickened epoxy, full face (the rail top is flush with the deck underside)', pts: [[(rearTx + L.railEnd) / 2, s * (hwAt((rearTx + L.railEnd) / 2) + L.side - railT / 2), L.railTop]], noteA: 'Deck bonded to the rail top (and the crossmember tops); weights or vacuum bag.' });
     // Side-to-frame tie (build review M6, D-43, D-81): the chine bears on the rail; a thickened-epoxy bed on the bearing face plus piloted screws up through the rail at even spacing.

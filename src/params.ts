@@ -503,6 +503,11 @@ const defs = {
     default: 90, min: 40, max: 200, step: 5, status: 'assumed', ref: 'D-43',
     note: 'NDS-style single-shear lateral value for a #10 (0.19") screw in white oak with wet-service and a safety factor; confirm against the fastener catalog.',
   },
+  endDadoClearIn: {
+    label: 'End dados: extra depth over the web and deck ends', group: 'body', unit: 'in',
+    default: 0.03125, min: 0, max: 0.125, step: 0.015625, status: 'assumed', ref: 'D-112',
+    note: 'D-112 (Eric, 2026-11-25): the web and deck dados in the transom and the bulkhead are cut this much deeper than the web and deck ends stand out (deckCaptureDepthIn, 1/4 in), so the end seats on the band ends and a stub a hair long or the epoxy squeeze-out cannot hold it off: 9/32 in (0.281 in). 0 = as deep as the stubs stand out.',
+  },
   deckCaptureDepthIn: {
     label: 'Deck / web-end capture depth (rabbet or dado)', group: 'body', unit: 'in',
     default: 0.25, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-35',

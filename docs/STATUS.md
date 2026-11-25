@@ -28,6 +28,7 @@ Where the design stands (2026-10-14). The sled itself is in [DESIGN.md](../DESIG
 - **1" bow bulkhead (D-109, 2026-11-24).** 1-1/2" to 1", 1.7 lb lighter: empty mass **120.1 lb** Standard (120.4 Extreme); BOM **$1,572** Standard, **$2,277** Extreme (the cut list now takes it from 5/4); cargo capacity 277 lb (was 275; 277 with glued knees, was 278); riders unchanged. The hull does not move: only the bulkhead's front face comes back 1/2". Its Domino mortises are 11/16" deep. Eric planes his 1-5/8" blank down to 1".
 - **Rear transom down to the rail bottoms (D-110, 2026-11-24).** Both the design and the as-measured transom: 18-1/8" tall, its bottom level with the rail bottoms (it hung 1-1/4" below the deck before). Empty mass **120.7 lb** Standard (121.0 Extreme), BOM unchanged ($1,572 / $2,277); cargo capacity 276 lb (276 with glued knees); riders unchanged.
 - **As-measured widths and a deeper bow notch (D-111, 2026-11-24).** The as-measured bulkhead and transom are cut to the hull's measured outside widths plus 3/32" to sand flush: 18-15/32" at the bow, 23-29/32" at the rear. The bow web ends are notched 3/8" (was 1/4"). At least 13/64" of oak around every slot.
+- **End dados 9/32" deep (D-112, 2026-11-25).** The web and deck dados in the transom and the bulkhead are 1/32" deeper than the 1/4" stubs (0.281"), so the ends seat on the band ends.
 - Waiting on Eric: the open choices below, measured Tacoma bed dimensions (Q-1), and the yard calls in the open items.
 
 ## Open items and parked ideas
