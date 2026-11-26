@@ -9,7 +9,7 @@
  * Strokes only, no fills, no text (a laser would engrave a filled glyph); names live in <title> and <desc>.
  */
 import type { Vec2 } from '../model/types';
-import { bbox, esc, fmt, polyArea } from './svg-util';
+import { arcD, bbox, esc, fmt, polyArea } from './svg-util';
 
 /** Widest piece the laser cuts (in): the S1 with the conveyor feeder has an 18.5 in (470 mm) processing width (material up to 21.5 in wide). Eric's figures from the maker's specs: verify on the machine. */
 export const LASER_MAX_WIDTH_IN = 18.5;
@@ -253,8 +253,8 @@ export function laserSvg(doc: LaserDoc): LaserSvg {
   const m = LASER_MARGIN_IN;
   // piece coordinates (u right, v up) -> sheet px (x right, y down)
   const at = (pl: Placed) => (p: Vec2): [number, number] => [p[0] + pl.x + m, H - (p[1] + pl.y + m)];
-  const d = (pts: Vec2[], f: (p: Vec2) => [number, number], closed: boolean): string =>
-    pts.map(f).map((q, i) => `${i ? 'L' : 'M'}${px(q[0])},${px(q[1])}`).join('') + (closed ? 'Z' : '');
+  // Round corners, slots and crowns go out as true arcs (fitArcs), so the laser cuts smooth curves, not the facets of the model's polylines.
+  const d = (pts: Vec2[], f: (p: Vec2) => [number, number], closed: boolean): string => arcD(pts, f, closed, px);
   const circle = (c: Vec2, dia: number, f: (p: Vec2) => [number, number]): string => {
     const [x, y] = f(c), r = dia / 2;
     return `M${px(x - r)},${px(y)}a${px(r)},${px(r)} 0 1,0 ${px(dia)},0a${px(r)},${px(r)} 0 1,0 ${px(-dia)},0Z`;
