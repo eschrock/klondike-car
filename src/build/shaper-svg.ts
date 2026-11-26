@@ -31,7 +31,7 @@ import type { Part, Vec2, Vec3 } from '../model/types';
 import { worldAABB } from '../model/bounds';
 import { flatPattern, type FlatPattern } from './flat';
 import {
-  ANNOTATION_ATTRS, bbox, circleD, distToPoly, fmt, guideEl, parseInches, pathEl, pointInPoly, polyD, rectAlong, rectLoop, roundEndSlot, strokeText, svgDocument, textEl, type Xf,
+  ANNOTATION_ATTRS, bbox, circleD, distToPoly, fmt, guideEl, parseInches, pathEl, pointInPoly, arcD, polyD, rectAlong, rectLoop, roundEndSlot, strokeText, svgDocument, textEl, type Xf,
 } from './svg-util';
 
 /** Cut this much deeper than the stock so the bit breaks through cleanly (in). */
@@ -680,11 +680,11 @@ export function renderBody(d: PartDrawing, cutOnly = false): string {
   const out: string[] = [];
   const g0: string[] = [];
   const texts: string[] = [];
-  out.push(`<g id="outside">${pathEl({ cutType: 'outside', d: polyD(f.outer, xf), depthIn: depth, label: d.deepCut ? `Outline (DEEP CUT: Shaper-cut ${fmt(depth)} in deep from one face, finish with a bandsaw and a flush-trim bit)` : 'Outline' })}</g>`);
+  out.push(`<g id="outside">${pathEl({ cutType: 'outside', d: arcD(f.outer, xf), depthIn: depth, label: d.deepCut ? `Outline (DEEP CUT: Shaper-cut ${fmt(depth)} in deep from one face, finish with a bandsaw and a flush-trim bit)` : 'Outline' })}</g>`);
   const pockets = d.items.filter((i): i is Extract<Item, { k: 'pocket' }> => i.k === 'pocket');
-  if (pockets.length) out.push(`<g id="pockets">${pockets.map((q) => pathEl({ cutType: 'pocket', d: polyD(q.loop, xf), depthIn: q.depth, label: q.label })).join('')}</g>`);
+  if (pockets.length) out.push(`<g id="pockets">${pockets.map((q) => pathEl({ cutType: 'pocket', d: arcD(q.loop, xf), depthIn: q.depth, label: q.label })).join('')}</g>`);
   const inside = d.items.filter((i) => i.k === 'cutHole' || i.k === 'cutLoop');
-  if (inside.length) out.push(`<g id="inside">${inside.map((i) => (i.k === 'cutHole' ? pathEl({ cutType: 'inside', d: circleD(i.c, i.dia, xf), depthIn: depth }) : i.k === 'cutLoop' ? pathEl({ cutType: 'inside', d: polyD(i.loop, xf), depthIn: depth }) : '')).join('')}</g>`);
+  if (inside.length) out.push(`<g id="inside">${inside.map((i) => (i.k === 'cutHole' ? pathEl({ cutType: 'inside', d: circleD(i.c, i.dia, xf), depthIn: depth }) : i.k === 'cutLoop' ? pathEl({ cutType: 'inside', d: arcD(i.loop, xf), depthIn: depth }) : '')).join('')}</g>`);
   if (d.engrave) {
     const e = d.engrave;
     // The ink, not the advance width, is centered on the panel (the last letter's side bearing made the old layout sit 0.1 in left).

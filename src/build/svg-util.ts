@@ -53,6 +53,106 @@ export function esc(s: string): string {
 /** Maps a drawing point (u right, v up) to SVG user units (x right, y down). */
 export type Xf = (p: Vec2) => Vec2;
 
+/** One piece of a path after arc fitting: a straight line, or a circular arc (SVG flags) to `p`. */
+export type PathSeg = { k: 'L'; p: Vec2 } | { k: 'A'; p: Vec2; r: number; large: 0 | 1; sweep: 0 | 1 };
+
+/** Largest turn at one vertex (rad) that can still be part of an arc: a corner of 30 degrees or more stays a corner. */
+const ARC_MAX_TURN = Math.PI / 6;
+
+/**
+ * Fit circular arcs to a polyline already in output coordinates (x right, y down): every run of 3 or more segments whose vertices lie on one circle within `tol`, turning the same way
+ * by less than 30 degrees at each vertex, becomes one arc; everything else stays straight. The model draws its round corners, slots and crowns as fine polylines with their vertices on
+ * the true curve, so the arcs are the true curves (a crown, which is a parabola, becomes a few arcs within `tol`). Starts a closed loop at a sharp corner where it has one.
+ */
+export function fitArcs(q0: Vec2[], closed: boolean, tol = 5e-4): { start: Vec2; segs: PathSeg[] } {
+  let q = q0.filter((p, i) => i === 0 || Math.hypot(p[0] - q0[i - 1][0], p[1] - q0[i - 1][1]) > 1e-9);
+  if (closed && q.length > 2 && Math.hypot(q[0][0] - q[q.length - 1][0], q[0][1] - q[q.length - 1][1]) < 1e-9) q = q.slice(0, -1);
+  const n0 = q.length;
+  const turnAt = (pts: Vec2[], k: number): number => {
+    const a = pts[k - 1], b = pts[k], c = pts[k + 1];
+    const u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]];
+    return Math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1]);
+  };
+  if (closed && n0 > 3) {
+    // start at the sharpest corner, so no arc is split by the start point
+    const ring = (k: number) => q[(k + n0) % n0];
+    let best = 0, bestT = -1;
+    for (let k = 0; k < n0; k++) { const t = Math.abs(turnAt([ring(k - 1), ring(k), ring(k + 1)], 1)); if (t > bestT) { bestT = t; best = k; } }
+    // no sharp corner (a stadium, a slot with round ends): start at the longest edge, a straight side, so no round end is split
+    if (bestT < ARC_MAX_TURN) { let len = -1; for (let k = 0; k < n0; k++) { const l = Math.hypot(ring(k + 1)[0] - ring(k)[0], ring(k + 1)[1] - ring(k)[1]); if (l > len) { len = l; best = k; } } }
+    q = [...q.slice(best), ...q.slice(0, best)];
+  }
+  const pts = closed ? [...q, q[0]] : q;
+  const N = pts.length;
+  const circle = (a: Vec2, b: Vec2, c: Vec2): { c: Vec2; r: number } | null => {
+    const d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+    if (Math.abs(d) < 1e-12) return null;
+    const a2 = a[0] * a[0] + a[1] * a[1], b2 = b[0] * b[0] + b[1] * b[1], c2 = c[0] * c[0] + c[1] * c[1];
+    const cx = (a2 * (b[1] - c[1]) + b2 * (c[1] - a[1]) + c2 * (a[1] - b[1])) / d, cy = (a2 * (c[0] - b[0]) + b2 * (a[0] - c[0]) + c2 * (b[0] - a[0])) / d;
+    return { c: [cx, cy], r: Math.hypot(a[0] - cx, a[1] - cy) };
+  };
+  const segs: PathSeg[] = [];
+  let i = 0;
+  while (i < N - 1) {
+    let best = -1, bestFit: { c: Vec2; r: number } | null = null, sign = 0, span = 0, bestSpan = 0;
+    for (let j = i + 1; j < N; j++) {
+      if (j > i + 1) {
+        const t = turnAt(pts, j - 1);
+        if (Math.abs(t) >= ARC_MAX_TURN || Math.abs(t) < 1e-9 || (sign && Math.sign(t) !== sign)) break;
+        sign = Math.sign(t);
+        span += Math.abs(t);
+        if (span > 1.5 * Math.PI) break;
+      }
+      if (j < i + 3) continue;
+      const fit = circle(pts[i], pts[(i + j) >> 1], pts[j]);
+      if (!fit || fit.r > 1e3) break;
+      let ok = true;
+      for (let k = i; k <= j && ok; k++) ok = Math.abs(Math.hypot(pts[k][0] - fit.c[0], pts[k][1] - fit.c[1]) - fit.r) <= tol;
+      if (!ok) break;
+      best = j; bestFit = fit; bestSpan = span;
+    }
+    if (best > 0 && bestFit) {
+      // the arc's own span: the turning between its first and last chords plus half a chord's central angle at each end
+      const half = (a: Vec2, b: Vec2) => Math.asin(Math.min(1, Math.hypot(b[0] - a[0], b[1] - a[1]) / (2 * bestFit!.r)));
+      const total = bestSpan + half(pts[i], pts[i + 1]) + half(pts[best - 1], pts[best]);
+      segs.push({ k: 'A', p: pts[best], r: bestFit.r, large: total > Math.PI ? 1 : 0, sweep: sign > 0 ? 1 : 0 });
+      i = best;
+    } else {
+      segs.push({ k: 'L', p: pts[i + 1] });
+      i++;
+    }
+  }
+  // A lone short chord left over between two gentle arcs, or between an arc and the loop's start (the last few points of a crown that no longer fit the arc beside it), takes the
+  // neighboring arc's radius when it turns the same gentle way at both ends: otherwise it would be a visible flat on the curve.
+  const ends: Vec2[] = [pts[0], ...segs.map((x) => x.p)];
+  const turnOf = (a: Vec2, b: Vec2, c: Vec2) => turnAt([a, b, c], 1);
+  for (let m = 0; m < segs.length; m++) {
+    const sg = segs[m];
+    if (sg.k !== 'L') continue;
+    const prevA = segs[m - 1]?.k === 'A' ? (segs[m - 1] as Extract<PathSeg, { k: 'A' }>) : null, nextA = segs[m + 1]?.k === 'A' ? (segs[m + 1] as Extract<PathSeg, { k: 'A' }>) : null;
+    // the neighbor to borrow from: the flatter one (a crown arc rather than a tight corner)
+    const nb = prevA && nextA ? (prevA.r >= nextA.r ? prevA : nextA) : prevA ?? nextA;
+    if (!nb) continue;
+    const a = ends[m], b = ends[m + 1], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len >= nb.r) continue;
+    const before = m > 0 ? ends[m - 1] : closed ? ends[ends.length - 2] : null, after = m + 2 < ends.length ? ends[m + 2] : closed ? ends[1] : null;
+    const want = nb.sweep ? 1 : -1;
+    // gentle where it meets the arc it borrows from; the other end only has to turn the same way (its neighbor's chord can sit well off that arc's tangent)
+    const tB = before ? turnOf(before, a, b) : want * 1e-3, tA = after ? turnOf(a, b, after) : want * 1e-3;
+    const [tNb, tOther] = nb === prevA ? [tB, tA] : [tA, tB];
+    if (Math.sign(tNb) !== want || Math.abs(tNb) >= ARC_MAX_TURN || Math.sign(tOther) !== want || Math.abs(tOther) >= Math.PI / 2) continue;
+    segs[m] = { k: 'A', p: sg.p, r: nb.r, large: 0, sweep: nb.sweep };
+  }
+  if (closed && segs.length && segs[segs.length - 1].k === 'L') segs.pop(); // the closing line is the Z
+  return { start: pts[0], segs };
+}
+
+/** Path data with the round parts as true arcs (fitArcs), through `xf` (it must keep distances: a mirror or a flip is fine). `num` formats one coordinate. */
+export function arcD(pts: Vec2[], xf: Xf, closed = true, num: (v: number) => string = fmt): string {
+  const { start, segs } = fitArcs(pts.map(xf), closed);
+  return `M${num(start[0])},${num(start[1])}` + segs.map((s) => (s.k === 'L' ? `L${num(s.p[0])},${num(s.p[1])}` : `A${num(s.r)},${num(s.r)} 0 ${s.large},${s.sweep} ${num(s.p[0])},${num(s.p[1])}`)).join('') + (closed ? 'Z' : '');
+}
+
 /** Path data for a polygon (closed) or polyline (open), through `xf`. */
 export function polyD(pts: Vec2[], xf: Xf, closed = true): string {
   const q = pts.map(xf);
